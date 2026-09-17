@@ -113,7 +113,7 @@ export function FoodHomeView({
 
   return (
     <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
-      <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-24">
+      <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[#2a231b] pb-6">
         <FoodHomeStatusSurface
           loadState={loadState}
           haul={nextHaul}

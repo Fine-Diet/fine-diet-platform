@@ -35,7 +35,7 @@ export function RecipeEntryMenu({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative mt-4 w-full">
+    <div ref={rootRef} className="relative mx-auto mt-4 w-full max-w-[600px]">
       <button
         type="button"
         aria-haspopup="menu"

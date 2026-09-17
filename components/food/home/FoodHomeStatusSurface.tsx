@@ -115,7 +115,7 @@ export function FoodHomeStatusSurface({
 
   return (
     <>
-      <StackedPageHero className="flex min-h-[90vh] items-start bg-gradient-to-b from-[#342b20] via-[#211b14] to-[#17120e] px-6 pb-20 pt-20 sm:px-12 sm:pt-20">
+      <StackedPageHero className="flex min-h-[90vh] items-center bg-gradient-to-b from-[#342b20] via-[#211b14] to-[#17120e] px-6 sm:px-12">
         <div className="mx-auto w-full max-w-[950px] text-center">
           <p className="text-2xl font-semibold text-brand-50">Food</p>
           <h1 className="mx-auto mt-1 max-w-md text-[2.5rem] font-normal leading-[0.95] tracking-tight text-brand-50 sm:text-[2.75rem]">
