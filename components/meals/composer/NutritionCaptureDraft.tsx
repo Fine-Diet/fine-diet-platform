@@ -322,7 +322,7 @@ export function NutritionCaptureDraft({
               className={cn(
                 'min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-white/35',
                 compact
-                  ? 'h-9 py-0 pl-9 pr-2 text-xs'
+                  ? 'h-9 py-0 pl-9 pr-2 text-xl'
                   : 'h-14 rounded-2xl py-0 pl-12 pr-4 text-base',
               )}
             />
