@@ -8,10 +8,10 @@ const hiddenScrollbarClassName =
   'overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 const manageCellClass =
-  'flex shrink-0 items-center justify-center border-r border-white/15 bg-brand-800 py-4 pl-4 pr-4 text-center text-xs font-semibold text-white antialiased';
+  'flex shrink-0 items-center justify-center self-stretch border-r border-white/20 bg-brand-800 px-4 text-center text-xs font-semibold text-white antialiased';
 
 const routeCellClassBase =
-  'flex min-h-10 min-w-[5.5rem] flex-1 items-center justify-center border-l border-white/15 px-4 py-3 text-center text-sm font-normal antialiased sm:min-w-0';
+  'flex min-h-10 min-w-[5.5rem] flex-1 items-center justify-center self-stretch border-l border-white/20 px-4 text-center text-sm font-normal antialiased sm:min-w-0';
 
 export type PlanningRouteSelection = 'day' | 'week' | 'month';
 
@@ -19,8 +19,10 @@ interface PlanningRouteRailProps {
   selected?: PlanningRouteSelection;
 }
 
-function routeCellClass(selected: boolean): string {
+function routeCellClass(selected: boolean, isLast = false): string {
   return `${routeCellClassBase} transition-colors ${
+    isLast ? 'border-r border-white/20 ' : ''
+  }${
     selected
       ? 'bg-white/10 font-semibold text-white'
       : 'bg-transparent text-white hover:bg-white/5 hover:text-white'
@@ -37,10 +39,10 @@ export function PlanningRouteRail({
     >
       <div className="grid grid-cols-[minmax(0,1fr)_min(100%,950px)_minmax(0,1fr)]">
         <div className="bg-brand-800" aria-hidden="true" />
-        <div className="flex w-full max-w-[950px] bg-[#463c2f]">
+        <div className="flex w-full max-w-[950px] items-stretch bg-[#463c2f]">
           <span className={manageCellClass}>Manage</span>
-          <div className={`min-w-0 flex-1 ${hiddenScrollbarClassName}`} data-plans-route-strip>
-            <div className="flex w-max min-w-full flex-nowrap sm:w-full">
+          <div className={`flex min-w-0 flex-1 items-stretch ${hiddenScrollbarClassName}`} data-plans-route-strip>
+            <div className="flex w-max min-w-full flex-nowrap items-stretch sm:w-full">
               <Link
                 href={APP_ROUTES.plansDay}
                 aria-current={selected === 'day' ? 'page' : undefined}
@@ -58,7 +60,7 @@ export function PlanningRouteRail({
               <Link
                 href={APP_ROUTES.plansMonth}
                 aria-current={selected === 'month' ? 'page' : undefined}
-                className={routeCellClass(selected === 'month')}
+                className={routeCellClass(selected === 'month', true)}
               >
                 Month
               </Link>

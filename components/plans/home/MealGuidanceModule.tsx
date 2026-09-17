@@ -220,7 +220,7 @@ export function MealGuidanceModule({
                 type="button"
                 aria-label="Previous week"
                 onClick={() => onShiftWeek(-1)}
-                className="grid shrink-0 place-items-center self-center pl-2 text-xl text-white/50 hover:text-white"
+                className="grid shrink-0 place-items-center self-center pr-2 text-xl text-white/50 hover:text-white"
               >
                 ‹
               </button>
@@ -239,8 +239,8 @@ export function MealGuidanceModule({
                           'min-w-[100px] flex-1 rounded-t-xl px-2 py-3 text-xl font-semibold transition-colors',
                           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-denim-500/60',
                           selected
-                            ? 'border border-b-0 border-white/20 bg-white text-black'
-                            : 'border border-white/50 text-white/75 hover:bg-white/[0.04] hover:text-white',
+                            ? 'border-x border-t border-b-0 border-white/15 bg-white text-black'
+                            : 'border-x border-t border-b-0 border-white/15 text-white/75 hover:bg-white/[0.04] hover:text-white',
                         )}
                       >
                         {day.weekdayShort} {day.dayOfMonth}
@@ -253,7 +253,7 @@ export function MealGuidanceModule({
                 type="button"
                 aria-label="Next week"
                 onClick={() => onShiftWeek(1)}
-                className="grid shrink-0 place-items-center self-center pr-2 text-xl text-white/50 hover:text-white"
+                className="grid shrink-0 place-items-center self-center pl-2 text-xl text-white/50 hover:text-white"
               >
                 ›
               </button>
@@ -285,7 +285,7 @@ export function MealGuidanceModule({
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start gap-2">
-                          <span className="mt-0.5 shrink-0 text-white/60">
+                          <span className="shrink-0 text-white/60">
                             <MealStateMarker planned={Boolean(row.mealId)} />
                           </span>
                           <div className="min-w-0">
@@ -398,7 +398,7 @@ export function MealGuidanceModule({
             </ul>
 
             <div
-              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-white/15 px-4 py-4 text-xs"
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-white/15 px-0 py-4 text-xs"
               data-plans-summary
             >
               <span className="font-semibold text-white/50">

@@ -33,14 +33,15 @@ describe('Plans Home overview layout', () => {
     expect(module).toContain('aria-label="Previous week"');
     expect(module).toContain('aria-label="Next week"');
     const tabsBlockStart = module.indexOf('data-plans-week-tabs');
-    const tabsBlock = module.slice(tabsBlockStart, tabsBlockStart + 1800);
+    const tabsBlockEnd = module.indexOf('</div>', module.indexOf('aria-label="Next week"'));
+    const tabsBlock = module.slice(tabsBlockStart, tabsBlockEnd);
     expect(tabsBlock.indexOf('Previous week')).toBeLessThan(tabsBlock.indexOf('role="tablist"'));
     expect(tabsBlock.indexOf('role="tablist"')).toBeLessThan(tabsBlock.indexOf('Next week'));
     expect(module).not.toMatch(/flex flex-1 items-center justify-between[\s\S]{0,200}Previous week/);
   });
 
-  it('styles inactive tabs with a white/50 border', () => {
-    expect(module).toContain('border border-white/50 text-white/75 hover:bg-white/[0.04] hover:text-white');
+  it('styles inactive tabs with a top/side outline and no bottom border', () => {
+    expect(module).toContain('border-x border-t border-b-0 border-white/15');
   });
 
   it('renders one text-base time line with lowercase am/pm and a text-xl meal label', () => {
@@ -90,6 +91,6 @@ describe('Plans Home overview layout', () => {
     expect(stripIndex).toBeGreaterThan(manageIndex);
     expect(rail).toContain('data-plans-route-strip');
     expect(rail).toContain('[scrollbar-width:none]');
-    expect(rail).toContain('flex w-max min-w-full flex-nowrap sm:w-full');
+    expect(rail).toContain('flex w-max min-w-full flex-nowrap items-stretch sm:w-full');
   });
 });
