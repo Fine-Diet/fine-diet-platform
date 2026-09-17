@@ -431,11 +431,11 @@ export default function DayPlanDesignerPage() {
                           onClick={() => setActionsMenuOpen((open) => !open)}
                           className="inline-flex h-8 w-8 items-center justify-center p-0 font-semibold leading-none"
                         >
-                          <span className="text-xl leading-none" aria-hidden>…</span>
+                          <span className="text-xl leading-none -mt-2" aria-hidden>…</span>
                         </button>
                         {actionsMenuOpen ? (
                           <div
-                            className="absolute right-0 top-full z-50 mt-1 min-w-[11rem] rounded-lg border border-white/15 bg-[#17130f] py-1 shadow-lg"
+                            className="absolute right-0 top-full z-50 mt-1 min-w-[8rem] rounded-lg border border-white/15 bg-[#17130f] py-1 shadow-lg"
                             role="menu"
                             aria-label="More Day Plan actions"
                           >
