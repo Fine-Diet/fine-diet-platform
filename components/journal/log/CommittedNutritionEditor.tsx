@@ -348,7 +348,7 @@ function SingleItemEditor({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search foods"
-            className="w-full rounded-full border border-white/20 bg-transparent px-4 py-2 text-sm outline-none"
+            className="w-full rounded-full border border-white/20 bg-transparent px-4 py-2 text-xl outline-none"
           />
           {searching && <p className="px-2 py-3 text-xs text-white/35">Searching…</p>}
           <div className="mt-2 max-h-52 overflow-y-auto">

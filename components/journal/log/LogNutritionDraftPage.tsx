@@ -916,7 +916,7 @@ export default function LogNutritionDraftPage() {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search"
-              className="h-11 min-w-0 flex-1 bg-transparent px-7 text-sm text-white/85 placeholder:text-white/35 focus:outline-none"
+              className="h-11 min-w-0 flex-1 bg-transparent px-7 text-xl text-white/85 placeholder:text-white/35 focus:outline-none"
             />
             <button
               type="button"

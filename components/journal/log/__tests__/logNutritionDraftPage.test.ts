@@ -72,6 +72,15 @@ describe('Packet 14 Log Nutrition Draft page boundary', () => {
     expect(source).not.toContain('addLogNutritionDraftEntry(current, committed');
   });
 
+  it('uses text-xl on the primary nutrition search input to prevent mobile zoom', () => {
+    expect(source).toMatch(
+      /placeholder="Search"[\s\S]{0,160}text-xl/,
+    );
+    expect(source).not.toMatch(
+      /placeholder="Search"[\s\S]{0,160}text-sm/,
+    );
+  });
+
   it('refreshes committed history after logging only the new draft entries', () => {
     const commitStart = source.indexOf('const commitDraft = async');
     const saveStart = source.indexOf('const saveAsMeal = async');

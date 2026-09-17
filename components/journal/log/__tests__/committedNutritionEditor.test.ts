@@ -36,6 +36,15 @@ describe('Packet 15 shared committed nutrition editor boundary', () => {
     expect(editor).not.toContain('onBlur=');
   });
 
+  it('uses text-xl on the Replace item search input to prevent mobile zoom', () => {
+    expect(editor).toMatch(
+      /placeholder="Search foods"[\s\S]{0,160}text-xl/,
+    );
+    expect(editor).not.toMatch(
+      /placeholder="Search foods"[\s\S]{0,160}text-sm/,
+    );
+  });
+
   it('uses exact payload replacement for coherent Single Item replacement', () => {
     expect(editor).toContain('buildCommittedSingleItemPayload');
     expect(editor).toContain('replacePayload: true');
