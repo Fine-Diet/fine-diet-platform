@@ -293,7 +293,7 @@ export default function MonthCalendarProjectionPage() {
     <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
       <main className="flex-1 overflow-x-hidden pb-[calc(8rem+env(safe-area-inset-bottom,0px))]">
         <div className="min-h-screen bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]">
-          <div className="mx-auto w-full max-w-[760px] px-4 pb-16 pt-12 sm:px-8 sm:pt-16">
+          <div className="mx-auto w-full max-w-[950px] px-4 pb-16 pt-12 sm:px-8 sm:pt-16">
             <MonthCalendarProjection
               loadState={loadState}
               monthKey={monthKey}

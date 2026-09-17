@@ -238,7 +238,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
     <>
       <header className="mb-8">
         <PlansViewSwitcher currentView="week" />
-        <h1 className="mt-5 text-4xl font-light tracking-tight sm:text-5xl">
+        <h1 className="mt-5 text-4xl font-regular tracking-tight sm:text-5xl">
           Schedule your meals ahead
         </h1>
       </header>

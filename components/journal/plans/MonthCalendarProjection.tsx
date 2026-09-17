@@ -177,7 +177,7 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
     <>
       <header className="mb-8">
         <PlansViewSwitcher currentView="month" />
-        <h1 className="mt-5 max-w-xl text-4xl font-light tracking-tight sm:text-5xl">
+        <h1 className="mt-5 max-w-xl text-4xl font-regular tracking-tight sm:text-5xl">
           Schedule your meals ahead
         </h1>
         <p className="mt-3 max-w-lg text-sm leading-6 text-white/55">
