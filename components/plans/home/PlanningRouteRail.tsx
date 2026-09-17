@@ -4,11 +4,14 @@ import Link from 'next/link';
 
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
+const hiddenScrollbarClassName =
+  'overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+
 const manageCellClass =
-  'flex min-h-10 items-center justify-center bg-brand-800 px-4 py-4 text-center text-xs antialiased';
+  'flex shrink-0 items-center justify-center border-r border-white/15 bg-brand-800 py-4 pl-4 pr-4 text-center text-xs font-semibold text-white antialiased';
 
 const routeCellClassBase =
-  'flex min-h-10 items-center justify-center px-4 py-3 text-center text-sm font-normal antialiased bg-transparent';
+  'flex min-h-10 min-w-[5.5rem] flex-1 items-center justify-center border-l border-white/15 px-4 py-3 text-center text-sm font-normal antialiased sm:min-w-0';
 
 export type PlanningRouteSelection = 'day' | 'week' | 'month';
 
@@ -17,10 +20,10 @@ interface PlanningRouteRailProps {
 }
 
 function routeCellClass(selected: boolean): string {
-  return `${routeCellClassBase} border-l border-white/15 transition-colors ${
+  return `${routeCellClassBase} transition-colors ${
     selected
       ? 'bg-white/10 font-semibold text-white'
-      : 'text-white hover:bg-white/5 hover:text-white'
+      : 'bg-transparent text-white hover:bg-white/5 hover:text-white'
   }`;
 }
 
@@ -30,33 +33,39 @@ export function PlanningRouteRail({
   return (
     <nav
       aria-label="Planning routes"
-      className="relative z-[1] border-y border-white/20 bg-[#463c2f]"
+      className="relative z-[1] border-y border-white/20"
     >
-      <div className="grid grid-cols-4">
-        <span className={`${manageCellClass} ${selected ? 'text-white/75' : 'font-semibold text-white'}`}>
-          Manage
-        </span>
-        <Link
-          href={APP_ROUTES.plansDay}
-          aria-current={selected === 'day' ? 'page' : undefined}
-          className={routeCellClass(selected === 'day')}
-        >
-          Day
-        </Link>
-        <Link
-          href={APP_ROUTES.plansWeek}
-          aria-current={selected === 'week' ? 'page' : undefined}
-          className={routeCellClass(selected === 'week')}
-        >
-          Week
-        </Link>
-        <Link
-          href={APP_ROUTES.plansMonth}
-          aria-current={selected === 'month' ? 'page' : undefined}
-          className={routeCellClass(selected === 'month')}
-        >
-          Month
-        </Link>
+      <div className="grid grid-cols-[minmax(0,1fr)_min(100%,950px)_minmax(0,1fr)]">
+        <div className="bg-brand-800" aria-hidden="true" />
+        <div className="flex w-full max-w-[950px] bg-[#463c2f]">
+          <span className={manageCellClass}>Manage</span>
+          <div className={`min-w-0 flex-1 ${hiddenScrollbarClassName}`} data-plans-route-strip>
+            <div className="flex w-max min-w-full flex-nowrap sm:w-full">
+              <Link
+                href={APP_ROUTES.plansDay}
+                aria-current={selected === 'day' ? 'page' : undefined}
+                className={routeCellClass(selected === 'day')}
+              >
+                Day
+              </Link>
+              <Link
+                href={APP_ROUTES.plansWeek}
+                aria-current={selected === 'week' ? 'page' : undefined}
+                className={routeCellClass(selected === 'week')}
+              >
+                Week
+              </Link>
+              <Link
+                href={APP_ROUTES.plansMonth}
+                aria-current={selected === 'month' ? 'page' : undefined}
+                className={routeCellClass(selected === 'month')}
+              >
+                Month
+              </Link>
+            </div>
+          </div>
+        </div>
+        <div className="bg-[#463c2f]" aria-hidden="true" />
       </div>
     </nav>
   );

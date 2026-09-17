@@ -138,11 +138,24 @@ export function MealGuidanceModule({
     }
   }
 
+  const breadcrumbRow = (
+    <div
+      className="overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      data-plans-breadcrumb
+    >
+      <div className="flex items-center gap-2 text-2xl font-semibold text-white">
+        <span>Plans</span>
+        <span aria-hidden className="text-4xl font-light leading-none text-white">›</span>
+        <span>Overview</span>
+      </div>
+    </div>
+  );
+
   if (model.status === 'no_schedule') {
     return (
       <section className="relative w-full px-5 sm:px-5" aria-labelledby="plans-heading">
         <PlansHomeColumn>
-          <p className="text-2xl font-semibold text-white">Plans</p>
+          {breadcrumbRow}
           <h1
             id="plans-heading"
             className="mt-1 text-[2.5rem] font-normal leading-none tracking-tight text-white sm:text-[2.75rem]"
@@ -170,15 +183,15 @@ export function MealGuidanceModule({
       aria-labelledby="plans-heading"
     >
       <PlansHomeColumn>
-        <p className="text-2xl font-semibold text-white">Plans</p>
+        {breadcrumbRow}
         <h1
           id="plans-heading"
           className="mt-1 text-[2.5rem] font-normal leading-none tracking-tight text-white sm:text-[2.75rem]"
         >
-          Your week overview
+          Your summary by week
         </h1>
-        <p className="mt-1 text-sm font-normal leading-relaxed text-white/50">
-          
+        <p className="mt-1 text-sm font-semibold text-white/50">
+          {monthLabel(model.selectedDate)}
         </p>
 
         {model.status === 'loading' && (
@@ -202,67 +215,48 @@ export function MealGuidanceModule({
 
         {model.status !== 'loading' && model.status !== 'error' && (
           <>
-            <div className="mt-4 -mx-1 overflow-x-auto border-b border-white/15 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex min-w-[700px]" role="tablist" aria-label="Planning week">
-                {model.days.map((day) => {
-                  const selected = day.date === model.selectedDate;
-                  return (
-                    <button
-                      key={day.date}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      onClick={() => onSelectDate(day.date)}
-                      className={cn(
-                        'min-w-[100px] flex-1 rounded-t-xl px-2 py-3 text-xl font-semibold transition-colors',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-denim-500/60',
-                        selected
-                          ? 'border border-b-0 border-white/20 bg-white text-black'
-                          : 'text-white/75 hover:bg-white/[0.04] hover:text-white',
-                      )}
-                    >
-                      {day.weekdayShort} {day.dayOfMonth}
-                    </button>
-                  );
-                })}
+            <div className="mt-4 flex items-stretch -mx-1 border-b border-white/15" data-plans-week-tabs>
+              <button
+                type="button"
+                aria-label="Previous week"
+                onClick={() => onShiftWeek(-1)}
+                className="grid shrink-0 place-items-center self-center pl-2 text-xl text-white/50 hover:text-white"
+              >
+                ‹
+              </button>
+              <div className="min-w-0 flex-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex min-w-[700px]" role="tablist" aria-label="Planning week">
+                  {model.days.map((day) => {
+                    const selected = day.date === model.selectedDate;
+                    return (
+                      <button
+                        key={day.date}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        onClick={() => onSelectDate(day.date)}
+                        className={cn(
+                          'min-w-[100px] flex-1 rounded-t-xl px-2 py-3 text-xl font-semibold transition-colors',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-denim-500/60',
+                          selected
+                            ? 'border border-b-0 border-white/20 bg-white text-black'
+                            : 'border border-white/50 text-white/75 hover:bg-white/[0.04] hover:text-white',
+                        )}
+                      >
+                        {day.weekdayShort} {day.dayOfMonth}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-
-            <div className="mt-0 flex flex-wrap justify-between items-center gap-x-3 gap-y-2 px-4 pt-4 text-xs">
-            <span className="text-white/50 font-semibold">{monthLabel(model.selectedDate)}</span>
-              <span className="text-white/50 font-semibold">
-                {model.plannedCount} of {model.totalCount}
-              </span>
-              <span className="text-white/50 font-semibold">
-                NDS {model.projectedNds == null ? '—' : Math.round(model.projectedNds)}
-              </span>
-              <span className="text-white/50 font-semibold">
-                {model.plannedCalories == null ? '—' : Math.round(model.plannedCalories)} cal
-                {' '}of {model.dailyCalorieGoal == null ? '—' : Math.round(model.dailyCalorieGoal)}
-              </span>
-            </div>
-
-            <div className="flex items-center -mx-1 border-white/15 px-2 pt-3 text-xs font-semibold text-white/50">
-              
-              <div className="flex flex-1 items-center justify-between">
-                <button
-                  type="button"
-                  aria-label="Previous week"
-                  onClick={() => onShiftWeek(-1)}
-                  className="grid h-7 w-7 place-items-center rounded-full text-xl hover:text-white"
-                >
-                  ‹
-                </button>
-                
-                <button
-                  type="button"
-                  aria-label="Next week"
-                  onClick={() => onShiftWeek(1)}
-                  className="grid h-7 w-7 place-items-center text-xl rounded-full hover:text-white"
-                >
-                  ›
-                </button>
-              </div>
+              <button
+                type="button"
+                aria-label="Next week"
+                onClick={() => onShiftWeek(1)}
+                className="grid shrink-0 place-items-center self-center pr-2 text-xl text-white/50 hover:text-white"
+              >
+                ›
+              </button>
             </div>
 
             <ul className="my-1 -mx-1" role="list">
@@ -278,7 +272,7 @@ export function MealGuidanceModule({
                   >
                     <div
                       className={cn(
-                        'relative flex min-h-12 items-center gap-8 px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/30 sm:gap-8',
+                        'relative flex min-h-12 items-center gap-4 px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/30',
                         active && 'bg-black/15',
                       )}
                       onClick={(event) => {
@@ -289,20 +283,17 @@ export function MealGuidanceModule({
                         }
                       }}
                     >
-                      <div className="flex w-[4.5rem] shrink-0 font-normal items-center text-xl text-white/50">
-                      <span className="text-white/60 mr-2">
-                        <MealStateMarker planned={Boolean(row.mealId)} />
-                      </span>
-                        <span>{row.targetTimeLabel}</span>
-                        <span className="ml-1 text-xs">
-                          {periodLabelFromTimeValue(row.targetTimeValue)}
-                        </span>
-                      </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 gap-4">
-                          <span className="w-28 shrink-0 font-normal text-xl text-white/50 sm:w-36">
-                            {row.label}
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 shrink-0 text-white/60">
+                            <MealStateMarker planned={Boolean(row.mealId)} />
                           </span>
+                          <div className="min-w-0">
+                            <p className="text-base text-white/50">
+                              {row.targetTimeLabel} {periodLabelFromTimeValue(row.targetTimeValue)}
+                            </p>
+                            <p className="text-xl text-white">{row.label}</p>
+                          </div>
                         </div>
                       </div>
                       <button
@@ -406,6 +397,23 @@ export function MealGuidanceModule({
               })}
             </ul>
 
+            <div
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-white/15 px-4 py-4 text-xs"
+              data-plans-summary
+            >
+              <span className="font-semibold text-white/50">
+                Planned meals {model.plannedCount} of {model.totalCount}
+              </span>
+              <span className="font-semibold text-white/50">
+                NDS: {model.projectedNds == null ? '—' : Math.round(model.projectedNds)}
+              </span>
+              <span className="font-semibold text-white/50">
+                kCal:{' '}
+                {model.plannedCalories == null ? '—' : Math.round(model.plannedCalories)}
+                /{model.dailyCalorieGoal == null ? '—' : Math.round(model.dailyCalorieGoal)}
+              </span>
+            </div>
+
             {rowError && (
               <p className="mt-3 text-sm text-semantic-error" role="alert">{rowError}</p>
             )}
@@ -416,9 +424,9 @@ export function MealGuidanceModule({
   );
 }
 
-function periodLabelFromTimeValue(hhmm: string): 'AM' | 'PM' {
+function periodLabelFromTimeValue(hhmm: string): 'am' | 'pm' {
   const hour = Number(hhmm.split(':')[0]);
-  return Number.isFinite(hour) && hour >= 12 ? 'PM' : 'AM';
+  return Number.isFinite(hour) && hour >= 12 ? 'pm' : 'am';
 }
 
 function weekOverviewDescription(model: PlansMealGuidanceViewModel): string {

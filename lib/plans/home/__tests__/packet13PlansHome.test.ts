@@ -177,7 +177,7 @@ describe('Packet 13 Plans Home contract', () => {
     const marker = read('components/plans/home/MealStateMarker.tsx');
 
     expect(view).not.toMatch(/PantryReadiness|usePantryReadiness|pantryHook|buildLivePlansNbaInput/);
-    expect(module).toContain('Planned {model.plannedCount} of {model.totalCount}');
+    expect(module).toContain('Planned meals {model.plannedCount} of {model.totalCount}');
     expect(module).toContain("row.state === 'eaten'");
     expect(module).toContain('Open Log entry');
     expect(marker).not.toMatch(/check|skipped|eaten/);

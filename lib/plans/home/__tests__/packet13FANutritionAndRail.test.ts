@@ -8,7 +8,7 @@ describe('Packet 13F-A final Plans Home reference corrections', () => {
   it('renders the local rail as exactly Manage, Day, Week, Month', () => {
     const rail = read('components/plans/home/PlanningRouteRail.tsx');
 
-    expect(rail).toContain('grid-cols-4');
+    expect(rail).toContain('max-w-[950px]');
     expect(rail).toContain('Manage');
     expect(rail).toContain('href={APP_ROUTES.plansDay}');
     expect(rail).toContain('href={APP_ROUTES.plansWeek}');

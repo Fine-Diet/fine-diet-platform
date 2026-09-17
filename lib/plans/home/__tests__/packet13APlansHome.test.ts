@@ -10,7 +10,7 @@ describe('Packet 13A founder remediation holds', () => {
     const guidance = read('lib/plans/home/buildGuidance.ts');
     const view = read('components/plans/home/PlansHomeView.tsx');
 
-    expect(module).toContain("NDS {model.projectedNds == null ? '—'");
+    expect(module).toContain("NDS: {model.projectedNds == null ? '—'");
     expect(module).toContain("model.dailyCalorieGoal == null ? '—'");
     expect(guidance).toContain('meal.meal_derived_data');
     expect(guidance).toContain('meal.payload');

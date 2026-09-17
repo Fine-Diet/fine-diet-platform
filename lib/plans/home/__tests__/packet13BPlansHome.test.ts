@@ -71,7 +71,7 @@ describe('Packet 13B capture-first Plans Add Meal contract', () => {
     expect(view).toContain('planService.resolvePlansHomeTarget');
     expect(view).toContain('<MealGuidanceModule');
     expect(view).toContain('buildPlansHomeLogHref');
-    expect(module).toContain('Planned {model.plannedCount} of {model.totalCount}');
+    expect(module).toContain('Planned meals {model.plannedCount} of {model.totalCount}');
     expect(module).toContain('model.projectedNds');
     expect(module).toContain('model.plannedCalories');
     expect(module).toContain('model.dailyCalorieGoal');
