@@ -26,7 +26,7 @@ function StatusCard({
   loading?: boolean;
 }) {
   return (
-    <section className="aspect-[3/2] flex flex-col items-center justify-between rounded-[18px] border border-white/20 px-6 py-4 text-center">
+    <section className="flex flex-col items-center justify-between rounded-[18px] border border-white/20 px-6 py-6 text-center">
       <h2 className="text-2xl font-semibold text-brand-50">{title}</h2>
       {loading ? (
         <div className="my-1 h-7 w-20 animate-pulse rounded-full bg-white/[0.06]" />
