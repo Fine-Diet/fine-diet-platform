@@ -1,11 +1,10 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-
 import { EmbeddedDayPlanner } from '@/components/journal/plans/EmbeddedDayPlanner';
 import { PlanContextModal } from '@/components/journal/plans/PlanContextModal';
 import { PlanLibraryBrowser } from '@/components/journal/plans/PlanLibraryBrowser';
+import { PlansViewSwitcher } from '@/components/journal/plans/PlansViewSwitcher';
 import type { CreateAndApplyResult, DayActionOutcome } from '@/lib/plans/dayPlanActions';
 import type { PlanDay, PlanDayTemplate, PlanSlot, PlannedMeal } from '@/lib/plans';
 import {
@@ -15,7 +14,6 @@ import {
 import { todayLocalDateKey } from '@/lib/plans/planDateRange';
 import { datedDayTemplate } from '@/lib/plans/weekWorkspace';
 import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
-import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const CONTROL =
@@ -64,7 +62,6 @@ export interface MonthCalendarProjectionProps {
 }
 
 export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
-  const [viewOpen, setViewOpen] = useState(false);
   const [contextModal, setContextModal] = useState<{
     activeTab: 'library' | 'create-edit';
     boundDate: string | null;
@@ -179,31 +176,7 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
   return (
     <>
       <header className="mb-8">
-        <div className="flex items-start gap-2 text-sm font-semibold text-white/80">
-          <Link href={APP_ROUTES.plans}>Plans</Link>
-          <span className="text-white/30">›</span>
-          <div className="group relative focus-within:z-30">
-            <button
-              type="button"
-              aria-haspopup="menu"
-              aria-current="page"
-              aria-expanded={viewOpen}
-              onClick={() => setViewOpen((open) => !open)}
-              className="rounded-md px-1 hover:bg-white/10 focus:bg-white/10 focus:outline-none"
-            >
-              Month <span aria-hidden>⌄</span>
-            </button>
-            <div
-              role="menu"
-              aria-label="Plans view"
-              className={`${viewOpen ? 'visible opacity-100' : 'invisible opacity-0'} absolute left-0 top-7 z-30 min-w-36 rounded-xl border border-white/15 bg-[#29231d] p-1 shadow-2xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100`}
-            >
-              <Link role="menuitem" href={APP_ROUTES.plansDay} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/10 focus:bg-white/10">Day</Link>
-              <Link role="menuitem" href={APP_ROUTES.plansWeek} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/10 focus:bg-white/10">Week</Link>
-              <Link role="menuitem" aria-current="page" href={APP_ROUTES.plansMonth} className="block rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/15 focus:bg-white/15">Month</Link>
-            </div>
-          </div>
-        </div>
+        <PlansViewSwitcher currentView="month" />
         <h1 className="mt-5 max-w-xl text-4xl font-light tracking-tight sm:text-5xl">
           Schedule your meals ahead
         </h1>

@@ -6,9 +6,10 @@ import Link from 'next/link';
 import { EmbeddedDayPlanner } from '@/components/journal/plans/EmbeddedDayPlanner';
 import { PlanContextModal } from '@/components/journal/plans/PlanContextModal';
 import { PlanLibraryBrowser } from '@/components/journal/plans/PlanLibraryBrowser';
+import { PlansViewSwitcher } from '@/components/journal/plans/PlansViewSwitcher';
 import { DisclosureTriangle } from '@/components/ui/DisclosureTriangle';
 import type { DayActionOutcome, CreateAndApplyResult } from '@/lib/plans/dayPlanActions';
-import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import {
   addDaysToDateKey,
   type DateRange,
@@ -105,8 +106,10 @@ export function getSevenCalendarDates(range: DateRange): string[] {
 const SMALL_BUTTON =
   'rounded-full border border-white/20 px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35';
 
+const FILE_ACTION_CLASSNAME =
+  'font-semibold px-2 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] sm:px-3';
+
 export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
-  const [viewOpen, setViewOpen] = useState(false);
   const [contextModal, setContextModal] = useState<{
     activeTab: 'library' | 'create-edit';
     boundDate: string | null;
@@ -234,44 +237,20 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
   return (
     <>
       <header className="mb-8">
-        <div className="flex items-start gap-2 text-sm font-semibold text-white/80">
-          <Link href={APP_ROUTES.plans}>Plans</Link>
-          <span className="text-white/30">›</span>
-          <div className="group relative focus-within:z-30">
-            <button
-              type="button"
-              aria-haspopup="menu"
-              aria-current="page"
-              aria-expanded={viewOpen}
-              onClick={() => setViewOpen((open) => !open)}
-              className="rounded-md px-1 hover:bg-white/10 focus:bg-white/10 focus:outline-none"
-            >
-              Week <span aria-hidden>⌄</span>
-            </button>
-            <div
-              role="menu"
-              aria-label="Plans view"
-              className={`${viewOpen ? 'visible opacity-100' : 'invisible opacity-0'} absolute left-0 top-7 z-30 min-w-36 rounded-xl border border-white/15 bg-[#29231d] p-1 shadow-2xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100`}
-            >
-              <Link role="menuitem" href={APP_ROUTES.plansDay} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/10 focus:bg-white/10">Day</Link>
-              <Link role="menuitem" aria-current="page" href={APP_ROUTES.plansWeek} className="block rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/15 focus:bg-white/15">Week</Link>
-              <Link role="menuitem" href={APP_ROUTES.plansMonth} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/10 focus:bg-white/10">Month</Link>
-            </div>
-          </div>
-        </div>
+        <PlansViewSwitcher currentView="week" />
         <h1 className="mt-5 text-4xl font-light tracking-tight sm:text-5xl">
           Schedule your meals ahead
         </h1>
       </header>
 
       <section className="border-y border-white/15">
-        <div className="py-3">
+        <div className="pt-3 pb-1">
           <div className="flex flex-wrap items-center gap-2">
           <input
             aria-label="Week Plan name"
             value={weekPlanName}
             onChange={(event) => setWeekPlanName(event.target.value)}
-            className="mr-auto min-w-0 basis-full border-0 bg-transparent px-2 py-2 text-base font-semibold outline-none focus:bg-white/[0.04] sm:basis-auto"
+            className="min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-base font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04] sm:min-w-48"
             placeholder={defaultWeekPlanName(props.selectedRange.start)}
           />
           <button
@@ -281,11 +260,11 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
               setWeekLibraryQuery('');
               setContextModal({ activeTab: 'library', boundDate: null });
             }}
-            className={SMALL_BUTTON}
+            className={FILE_ACTION_CLASSNAME}
           >
             Open
           </button>
-          <button type="button" onClick={() => void props.onNewWeekPlan(weekPlanName)} disabled={props.busy} className={SMALL_BUTTON}>New</button>
+          <button type="button" onClick={() => void props.onNewWeekPlan(weekPlanName)} disabled={props.busy} className={FILE_ACTION_CLASSNAME}>New</button>
           {props.selectedWeekPlan ? (
             <>
               <button type="button" onClick={() => void props.onCopyWeekPlan()} disabled={props.busy} className={SMALL_BUTTON}>Make a copy</button>
@@ -311,7 +290,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
             value={weekPlanDescription}
             onChange={(event) => setWeekPlanDescription(event.target.value)}
             placeholder="Add a description"
-            className="mt-1 h-[30px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+            className="mt-1 h-[38px] w-full resize-none overflow-y-auto scrollbar-hide border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
           />
         </div>
 
