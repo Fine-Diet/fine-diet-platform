@@ -27,7 +27,7 @@ describe('Food Home typography and width', () => {
   it('sizes status card titles, values, and CTAs', () => {
     expect(surface).toContain('text-2xl font-semibold text-brand-50">{title}</h2>');
     expect(surface).toContain('text-[2.5rem] font-normal leading-none text-white/50 sm:text-[2.75rem]');
-    expect(surface).toContain('text-xl font-medium text-brand-50');
+    expect(surface).toContain('text-xl font-semibold text-brand-50');
     expect(surface).not.toContain('text-[28px]');
   });
 
