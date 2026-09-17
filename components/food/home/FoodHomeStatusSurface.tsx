@@ -4,11 +4,12 @@ import Link from 'next/link';
 
 import { RecipeEntryMenu, type RecipeEntryAction } from './RecipeEntryMenu';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
-import { formatFoodHomeHaulTiming } from '@/lib/food/home/status';
-import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import {
+  buildEssentialsCardContent,
+  buildNextHaulCardContent,
+  type FoodHomeLoadState,
+} from '@/lib/food/home/status';
 import type { GroceryHaulCollectionItem } from '@/lib/plans/types';
-
-type LoadState = 'loading' | 'ready' | 'error';
 
 function StatusCard({
   title,
@@ -54,71 +55,42 @@ function StatusCard({
   );
 }
 
-function nextHaulCard(args: {
-  loadState: LoadState;
-  haul: GroceryHaulCollectionItem | null;
-  hasBuildableList: boolean;
-  todayKey: string;
-}) {
-  if (args.loadState === 'loading') {
-    return {
-      href: APP_ROUTES.foodLists,
-      action: 'Review Lists',
-      loading: true,
-    };
-  }
-  if (args.haul) {
-    return {
-      value: formatFoodHomeHaulTiming(args.haul.shopping_date, args.todayKey),
-      context: args.haul.status === 'active' ? 'Shopping in progress' : 'Draft preparation',
-      href: args.haul.status === 'active'
-        ? APP_ROUTE_BUILDERS.foodHaulShop(args.haul.id)
-        : APP_ROUTE_BUILDERS.foodHaul(args.haul.id),
-      action: 'Continue Haul',
-      loading: false,
-    };
-  }
-  if (args.loadState === 'ready' && args.hasBuildableList) {
-    return {
-      value: 'Lists ready',
-      context: 'Choose sources in Hauls',
-      href: APP_ROUTES.foodHauls,
-      action: 'Build a Haul',
-      loading: false,
-    };
-  }
-  return {
-    value: 'Plan ahead',
-    context: args.loadState === 'error' ? 'Status unavailable' : 'Prepare a List first',
-    href: APP_ROUTES.foodLists,
-    action: 'Review Lists',
-    loading: false,
-  };
-}
-
 export function FoodHomeStatusSurface({
   loadState,
+  pantryLoadState,
+  pantryOnHandCount,
   haul,
   hasBuildableList,
+  hasActiveList,
   todayKey,
   onRetry,
   onRecipeAction,
 }: {
-  loadState: LoadState;
+  loadState: FoodHomeLoadState;
+  pantryLoadState: FoodHomeLoadState;
+  pantryOnHandCount: number;
   haul: GroceryHaulCollectionItem | null;
   hasBuildableList: boolean;
+  hasActiveList: boolean;
   todayKey: string;
   onRetry: () => void;
   onRecipeAction: (action: RecipeEntryAction) => void;
 }) {
-  const nextHaul = nextHaulCard({ loadState, haul, hasBuildableList, todayKey });
+  const essentials = buildEssentialsCardContent({ pantryLoadState, pantryOnHandCount });
+  const nextHaul = buildNextHaulCardContent({
+    loadState,
+    haul,
+    hasBuildableList,
+    hasActiveList,
+    todayKey,
+  });
 
   return (
     <>
       <StackedPageHero className="flex min-h-[90vh] items-center bg-gradient-to-b from-[#342b20] via-[#211b14] to-[#17120e] px-6 sm:px-12">
         <div className="mx-auto w-full max-w-[950px] text-center">
           <p className="text-2xl font-semibold text-brand-50">Food</p>
-          <h1 className="mx-auto mt-1 max-w-md text-[2.5rem] font-normal leading-[0.95] tracking-tight text-brand-50 sm:text-[2.75rem]">
+          <h1 className="mx-auto mt-1 max-w-md text-[2.5rem] font-normal leading-[1] text-brand-50 sm:text-[2.75rem]">
             Remain prepared for
             <br />
             What&apos;s next
@@ -128,11 +100,7 @@ export function FoodHomeStatusSurface({
           </p>
 
           <div className="mx-auto mt-4 grid w-full max-w-[950px] gap-3 sm:grid-cols-2">
-            <StatusCard
-              title="Essentials Ready"
-              href={APP_ROUTES.foodPantry}
-              action="Open Pantry"
-            />
+            <StatusCard title="Essentials" {...essentials} />
             <StatusCard title="Your Next Haul" {...nextHaul} />
           </div>
 

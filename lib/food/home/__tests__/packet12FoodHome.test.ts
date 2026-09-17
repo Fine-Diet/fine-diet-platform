@@ -2,6 +2,9 @@ import fs from 'fs';
 import path from 'path';
 
 import {
+  buildEssentialsCardContent,
+  buildNextHaulCardContent,
+  countPositivePantryOnHand,
   formatFoodHomeHaulTiming,
   hasBuildableFoodHomeList,
   selectNextFoodHomeHaul,
@@ -12,6 +15,7 @@ import type {
   GeneratedGroceryList,
   GroceryHaulCollectionItem,
   GroceryItem,
+  PantryOnHandItem,
 } from '@/lib/plans/types';
 
 const read = (relativePath: string) =>
@@ -57,6 +61,18 @@ function list(): GeneratedGroceryList {
   };
 }
 
+function pantryItem(overrides: Partial<PantryOnHandItem> = {}): PantryOnHandItem {
+  return {
+    key: 'pantry-oats',
+    food_object_id: 'food-oats',
+    name: 'Oats',
+    quantity: 1,
+    unit: 'lb',
+    updated_at: '',
+    ...overrides,
+  };
+}
+
 function item(overrides: Partial<GroceryItem> = {}): GroceryItem {
   return {
     id: 'item-1',
@@ -84,10 +100,139 @@ describe('Packet 12 Food Home status surface', () => {
     expect(page).toContain('<FoodHomeView />');
     expect(page).not.toMatch(/FoodReadinessModule|ReadyAnytimeModule|BuildAheadModule/);
     expect(view).not.toMatch(/FoodReadinessModule|ReadyAnytimeModule|BuildAheadModule/);
-    expect(surface).toContain('Essentials Ready');
-    expect(surface).toContain('Open Pantry');
-    expect(surface).toContain('APP_ROUTES.foodPantry');
-    expect(`${view}\n${surface}`).not.toMatch(/80%|PantryReadinessSummary|coverage/);
+    const status = read('lib/food/home/status.ts');
+    expect(surface).toContain('title="Essentials"');
+    expect(status).toContain("action: 'Open Pantry'");
+    expect(status).toContain('APP_ROUTES.foodPantry');
+    expect(view).toContain('planService.listPantryOnHandItems()');
+    expect(`${view}\n${surface}\n${status}`).not.toMatch(/80%|PantryReadinessSummary|coverage/);
+    expect(surface).not.toContain('Prepare a List first');
+    expect(surface).not.toContain('Plan ahead');
+  });
+
+  it('uses final Food headline leading without tracking-tight', () => {
+    const surface = read('components/food/home/FoodHomeStatusSurface.tsx');
+    expect(surface).toContain('leading-[1]');
+    expect(surface).not.toMatch(
+      /Remain prepared[\s\S]{0,160}tracking-tight/,
+    );
+  });
+
+  it('counts positive Pantry inventory by entry, not summed quantities', () => {
+    expect(countPositivePantryOnHand([
+      pantryItem({ quantity: 2 }),
+      pantryItem({ key: 'pantry-rice', quantity: 0 }),
+      pantryItem({ key: 'pantry-salt', quantity: null }),
+    ])).toBe(1);
+  });
+
+  it('maps Essentials card states from real Pantry availability', () => {
+    expect(buildEssentialsCardContent({ pantryLoadState: 'loading', pantryOnHandCount: 0 })).toEqual({
+      href: APP_ROUTES.foodPantry,
+      action: 'Open Pantry',
+      loading: true,
+    });
+    expect(buildEssentialsCardContent({ pantryLoadState: 'ready', pantryOnHandCount: 8 })).toMatchObject({
+      value: 'Stocked',
+      context: '8 on hand',
+      action: 'Open Pantry',
+      href: APP_ROUTES.foodPantry,
+    });
+    expect(buildEssentialsCardContent({ pantryLoadState: 'ready', pantryOnHandCount: 0 })).toMatchObject({
+      value: 'Empty',
+      context: 'Add your essentials',
+      action: 'Open Pantry',
+      href: APP_ROUTES.foodPantry,
+    });
+    expect(buildEssentialsCardContent({ pantryLoadState: 'error', pantryOnHandCount: 0 })).toMatchObject({
+      value: '—',
+      context: 'Pantry unavailable',
+      action: 'Open Pantry',
+      href: APP_ROUTES.foodPantry,
+    });
+  });
+
+  it('maps Next Haul card states from haul and list facts', () => {
+    const active = haul('active-haul', 'active', '2026-09-08', '2026-09-08T12:00:00Z');
+    const planned = haul('planned-haul', 'planned', '2026-09-10', '2026-09-08T12:00:00Z');
+
+    expect(buildNextHaulCardContent({
+      loadState: 'ready',
+      haul: active,
+      hasBuildableList: false,
+      hasActiveList: true,
+      todayKey: '2026-09-08',
+    })).toMatchObject({
+      value: 'Today',
+      context: 'Shopping in progress',
+      action: 'Continue Haul',
+      href: APP_ROUTE_BUILDERS.foodHaulShop(active.id),
+    });
+
+    expect(buildNextHaulCardContent({
+      loadState: 'ready',
+      haul: planned,
+      hasBuildableList: true,
+      hasActiveList: true,
+      todayKey: '2026-09-08',
+    })).toMatchObject({
+      value: 'Thu',
+      context: 'Draft preparation',
+      action: 'Continue Haul',
+      href: APP_ROUTE_BUILDERS.foodHaul(planned.id),
+    });
+
+    expect(buildNextHaulCardContent({
+      loadState: 'ready',
+      haul: null,
+      hasBuildableList: true,
+      hasActiveList: true,
+      todayKey: '2026-09-08',
+    })).toMatchObject({
+      value: 'Ready',
+      context: 'Lists are ready',
+      action: 'Build a Haul',
+      href: APP_ROUTES.foodHauls,
+    });
+
+    expect(buildNextHaulCardContent({
+      loadState: 'ready',
+      haul: null,
+      hasBuildableList: false,
+      hasActiveList: true,
+      todayKey: '2026-09-08',
+    })).toMatchObject({
+      value: 'No Haul',
+      context: 'Lists need attention',
+      action: 'Review Lists',
+      href: APP_ROUTES.foodLists,
+    });
+
+    expect(buildNextHaulCardContent({
+      loadState: 'ready',
+      haul: null,
+      hasBuildableList: false,
+      hasActiveList: false,
+      todayKey: '2026-09-08',
+    })).toMatchObject({
+      value: 'No Haul',
+      context: 'No Lists yet',
+      action: 'Open Lists',
+      href: APP_ROUTES.foodLists,
+    });
+
+    expect(buildNextHaulCardContent({
+      loadState: 'error',
+      haul: null,
+      hasBuildableList: false,
+      hasActiveList: false,
+      todayKey: '2026-09-08',
+    })).toMatchObject({
+      value: '—',
+      context: 'Haul unavailable',
+      action: 'Open Hauls',
+      href: APP_ROUTES.foodHauls,
+    });
   });
 
   it('prioritizes active execution and routes each continuation state canonically', () => {
@@ -139,11 +284,13 @@ describe('Packet 12 Food Home status surface', () => {
     expect(hasBuildableFoodHomeList([list()], { 'list-1': unresolved })).toBe(false);
     expect(hasBuildableFoodHomeList([list()], {})).toBe(false);
 
-    const surface = read('components/food/home/FoodHomeStatusSurface.tsx');
-    expect(surface).toContain("href: APP_ROUTES.foodHauls");
-    expect(surface).toContain("action: 'Build a Haul'");
-    expect(surface).toContain("href: APP_ROUTES.foodLists");
-    expect(surface).toContain("action: 'Review Lists'");
+    const status = read('lib/food/home/status.ts');
+    expect(status).toContain("href: APP_ROUTES.foodHauls");
+    expect(status).toContain("action: 'Build a Haul'");
+    expect(status).toContain("href: APP_ROUTES.foodLists");
+    expect(status).toContain("action: 'Review Lists'");
+    expect(status).toContain("action: 'Open Lists'");
+    expect(status).toContain("action: 'Open Hauls'");
   });
 
   it('offers only supported recipe terminal paths from Home', () => {

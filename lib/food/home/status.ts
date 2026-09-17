@@ -1,9 +1,21 @@
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { resolveGroceryHaulCreateEligibility } from '@/lib/plans/groceryHaul/eligibility';
 import type { GroceryListReadinessDecision } from '@/lib/plans/groceryListReadiness/policy';
 import type {
   GeneratedGroceryList,
   GroceryHaulCollectionItem,
+  PantryOnHandItem,
 } from '@/lib/plans/types';
+
+export type FoodHomeLoadState = 'loading' | 'ready' | 'error';
+
+export type FoodHomeStatusCardContent = {
+  value?: string;
+  context?: string;
+  href: string;
+  action: string;
+  loading?: boolean;
+};
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -120,4 +132,100 @@ export function formatFoodHomeHaulTiming(
   if (days < 7) return weekday;
   if (days < 14) return `Next ${weekday}`;
   return `${Math.round(days / 7)} Wks`;
+}
+
+/** Counts Pantry entries with positive on-hand quantity; does not sum across units. */
+export function countPositivePantryOnHand(items: PantryOnHandItem[]): number {
+  return items.filter((item) => item.quantity != null && item.quantity > 0).length;
+}
+
+export function buildEssentialsCardContent(args: {
+  pantryLoadState: FoodHomeLoadState;
+  pantryOnHandCount: number;
+}): FoodHomeStatusCardContent {
+  if (args.pantryLoadState === 'loading') {
+    return {
+      href: APP_ROUTES.foodPantry,
+      action: 'Open Pantry',
+      loading: true,
+    };
+  }
+  if (args.pantryLoadState === 'error') {
+    return {
+      value: '—',
+      context: 'Pantry unavailable',
+      href: APP_ROUTES.foodPantry,
+      action: 'Open Pantry',
+    };
+  }
+  if (args.pantryOnHandCount > 0) {
+    return {
+      value: 'Stocked',
+      context: `${args.pantryOnHandCount} on hand`,
+      href: APP_ROUTES.foodPantry,
+      action: 'Open Pantry',
+    };
+  }
+  return {
+    value: 'Empty',
+    context: 'Add your essentials',
+    href: APP_ROUTES.foodPantry,
+    action: 'Open Pantry',
+  };
+}
+
+export function buildNextHaulCardContent(args: {
+  loadState: FoodHomeLoadState;
+  haul: GroceryHaulCollectionItem | null;
+  hasBuildableList: boolean;
+  hasActiveList: boolean;
+  todayKey: string;
+}): FoodHomeStatusCardContent {
+  if (args.loadState === 'loading') {
+    return {
+      href: APP_ROUTES.foodLists,
+      action: 'Review Lists',
+      loading: true,
+    };
+  }
+  if (args.loadState === 'error') {
+    return {
+      value: '—',
+      context: 'Haul unavailable',
+      href: APP_ROUTES.foodHauls,
+      action: 'Open Hauls',
+    };
+  }
+  if (args.haul) {
+    return {
+      value: formatFoodHomeHaulTiming(args.haul.shopping_date, args.todayKey),
+      context: args.haul.status === 'active' ? 'Shopping in progress' : 'Draft preparation',
+      href: args.haul.status === 'active'
+        ? APP_ROUTE_BUILDERS.foodHaulShop(args.haul.id)
+        : APP_ROUTE_BUILDERS.foodHaul(args.haul.id),
+      action: 'Continue Haul',
+    };
+  }
+  if (args.hasBuildableList) {
+    return {
+      value: 'Ready',
+      context: 'Lists are ready',
+      href: APP_ROUTES.foodHauls,
+      action: 'Build a Haul',
+    };
+  }
+  if (args.hasActiveList) {
+    return {
+      value: 'No Haul',
+      context: 'Lists need attention',
+      href: APP_ROUTES.foodLists,
+      action: 'Review Lists',
+    };
+  }
+  return {
+    value: 'No Haul',
+    context: 'No Lists yet',
+    href: APP_ROUTES.foodLists,
+    action: 'Open Lists',
+  };
 }

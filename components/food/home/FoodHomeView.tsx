@@ -10,14 +10,14 @@ import type { RecipeEntryAction } from '@/components/food/home/RecipeEntryMenu';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { CreateMealDocumentPanel } from '@/components/meals/CreateMealDocumentPanel';
 import {
+  countPositivePantryOnHand,
   hasBuildableFoodHomeList,
   selectNextFoodHomeHaul,
+  type FoodHomeLoadState,
 } from '@/lib/food/home/status';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans/planService';
 import type { GroceryHaulCollectionItem } from '@/lib/plans/types';
-
-type LoadState = 'loading' | 'ready' | 'error';
 
 function localTodayKey(): string {
   const now = new Date();
@@ -56,18 +56,24 @@ export function FoodHomeView({
 } = {}) {
   const router = useRouter();
   const todayKey = localTodayKey();
-  const [loadState, setLoadState] = useState<LoadState>(
+  const [loadState, setLoadState] = useState<FoodHomeLoadState>(
+    preferFixtures ? 'ready' : 'loading',
+  );
+  const [pantryLoadState, setPantryLoadState] = useState<FoodHomeLoadState>(
     preferFixtures ? 'ready' : 'loading',
   );
   const [hauls, setHauls] = useState<GroceryHaulCollectionItem[]>(
     preferFixtures ? [previewHaul(todayKey)] : [],
   );
   const [hasBuildableList, setHasBuildableList] = useState(false);
+  const [hasActiveList, setHasActiveList] = useState(preferFixtures);
+  const [pantryOnHandCount, setPantryOnHandCount] = useState(preferFixtures ? 3 : 0);
   const [composerOpen, setComposerOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (preferFixtures) return;
     setLoadState('loading');
+    setPantryLoadState('loading');
     try {
       const [haulRows, overview] = await Promise.all([
         planService.listGroceryHauls(),
@@ -80,11 +86,22 @@ export function FoodHomeView({
       setHasBuildableList(
         hasBuildableFoodHomeList(activeLists, overview.persistent_list_summaries),
       );
+      setHasActiveList(activeLists.length > 0);
       setLoadState('ready');
     } catch {
       setHauls([]);
       setHasBuildableList(false);
+      setHasActiveList(false);
       setLoadState('error');
+    }
+
+    try {
+      const pantryItems = await planService.listPantryOnHandItems();
+      setPantryOnHandCount(countPositivePantryOnHand(pantryItems));
+      setPantryLoadState('ready');
+    } catch {
+      setPantryOnHandCount(0);
+      setPantryLoadState('error');
     }
   }, [preferFixtures]);
 
@@ -116,8 +133,11 @@ export function FoodHomeView({
       <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[#2a231b] pb-6">
         <FoodHomeStatusSurface
           loadState={loadState}
+          pantryLoadState={pantryLoadState}
+          pantryOnHandCount={pantryOnHandCount}
           haul={nextHaul}
           hasBuildableList={hasBuildableList}
+          hasActiveList={hasActiveList}
           todayKey={todayKey}
           onRetry={() => void load()}
           onRecipeAction={handleRecipeAction}
