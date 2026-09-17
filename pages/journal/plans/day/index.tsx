@@ -19,6 +19,7 @@ import {
 import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import { planService, type PlanDayTemplate } from '@/lib/plans';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { cn } from '@/lib/utils';
 
 function localId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -368,7 +369,8 @@ export default function DayPlanDesignerPage() {
   const fileActionClassName =
     'font-semibold px-2 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] sm:px-3';
   const overflowActionClassName =
-    'block w-full px-3 py-2 text-left text-xs font-semibold text-white/85 hover:bg-white/10 hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35';
+    'block w-full px-4 py-2.5 text-right text-xs font-semibold text-white/85 hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35';
+  const saveActive = dirty && !busy;
 
   return (
     <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
@@ -383,7 +385,7 @@ export default function DayPlanDesignerPage() {
             {loading ? <p className="py-12 text-sm text-white/55">Preparing your Day Plan…</p> : null}
             {draft ? (
               <>
-                <section className="mb-0 py-3">
+                <section className="mb-0 pt-3 pb-1">
                   <div className="flex flex-nowrap items-center gap-1 sm:gap-2">
                     <input
                       aria-label="Day Plan name"
@@ -427,9 +429,9 @@ export default function DayPlanDesignerPage() {
                           aria-label="More Day Plan actions"
                           aria-expanded={actionsMenuOpen}
                           onClick={() => setActionsMenuOpen((open) => !open)}
-                          className={fileActionClassName}
+                          className={`${fileActionClassName} inline-flex items-center justify-center`}
                         >
-                          …
+                          <span className="text-xl leading-none" aria-hidden>…</span>
                         </button>
                         {actionsMenuOpen ? (
                           <div
@@ -507,7 +509,17 @@ export default function DayPlanDesignerPage() {
                   <div className="text-xs text-white/50">
                     Planned {plannedCount} of {draft.slots.length} · {countTemplateMeals(draft)} Meal{countTemplateMeals(draft) === 1 ? '' : 's'}
                   </div>
-                  <button type="button" disabled={!dirty || busy} onClick={() => void requestSave()} className="rounded-full bg-[#d7ecff] px-6 py-2 text-sm font-semibold text-black disabled:opacity-35">
+                  <button
+                    type="button"
+                    disabled={!dirty || busy}
+                    onClick={() => void requestSave()}
+                    className={cn(
+                      'rounded-full px-6 py-2 text-sm font-semibold transition-colors',
+                      saveActive
+                        ? 'bg-white/90 text-black hover:bg-white'
+                        : 'border border-white/15 bg-transparent text-white/15',
+                    )}
+                  >
                     {busy ? 'Saving…' : 'Save'}
                   </button>
                 </div>
