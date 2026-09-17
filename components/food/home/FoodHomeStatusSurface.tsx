@@ -96,7 +96,7 @@ export function FoodHomeStatusSurface({
             What&apos;s next
           </h1>
           <p className="mt-3 text-sm font-normal text-white/30">
-            Add meal windows in your profile so Plans can guide today.
+            Know what&apos;s on hand, what&apos;s needed, and what comes next.
           </p>
 
           <div className="mx-auto mt-4 grid w-full max-w-[950px] gap-3 sm:grid-cols-2">
