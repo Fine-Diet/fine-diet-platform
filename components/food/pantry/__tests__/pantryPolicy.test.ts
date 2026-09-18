@@ -1,7 +1,9 @@
 import type { PantryAcquisitionLot, PantryOnHandItem } from '@/lib/plans/types';
 import {
   expirationEvidence,
+  expirationEvidenceTense,
   filterAndSortPantryItems,
+  formatExpirationEvidenceLabel,
   sortAcquisitionLots,
 } from '../pantryPolicy';
 
@@ -73,6 +75,36 @@ describe('Pantry v2 deterministic policy', () => {
       inventory: 'positive',
     });
     expect(result.map((item) => item.name)).toEqual(['Spinach']);
+  });
+
+  it('formats exact expiration tense relative to today', () => {
+    const past = { date: '2026-09-15', kind: 'exact' as const };
+    const today = { date: '2026-09-18', kind: 'exact' as const };
+    const future = { date: '2026-09-22', kind: 'exact' as const };
+    const todayYmd = '2026-09-18';
+
+    expect(expirationEvidenceTense(past, todayYmd)).toBe('expired');
+    expect(expirationEvidenceTense(today, todayYmd)).toBe('today');
+    expect(expirationEvidenceTense(future, todayYmd)).toBe('future');
+    expect(formatExpirationEvidenceLabel(past, todayYmd)).toContain('Expired');
+    expect(formatExpirationEvidenceLabel(today, todayYmd)).toBe('Expires today');
+    expect(formatExpirationEvidenceLabel(future, todayYmd)).toContain('Expires');
+    expect(formatExpirationEvidenceLabel(future, todayYmd)).not.toContain('Expired');
+  });
+
+  it('keeps expected expiration evidence explicitly estimated', () => {
+    const past = { date: '2026-09-15', kind: 'expected' as const };
+    const today = { date: '2026-09-18', kind: 'expected' as const };
+    const future = { date: '2026-09-22', kind: 'expected' as const };
+    const todayYmd = '2026-09-18';
+
+    expect(expirationEvidenceTense(past, todayYmd)).toBe('expected');
+    expect(expirationEvidenceTense(today, todayYmd)).toBe('today');
+    expect(expirationEvidenceTense(future, todayYmd)).toBe('expected');
+    expect(formatExpirationEvidenceLabel(past, todayYmd)).toContain('Expected expiration');
+    expect(formatExpirationEvidenceLabel(past, todayYmd)).not.toContain('Expired');
+    expect(formatExpirationEvidenceLabel(today, todayYmd)).toBe('Expected expiration today');
+    expect(formatExpirationEvidenceLabel(future, todayYmd)).toContain('Expected expiration');
   });
 
   it('searches loaded product, brand, and retailer detail without changing data', () => {
