@@ -103,13 +103,13 @@ export function MealComposerRecipeSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search recipes…"
-        className="mb-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-brand-50 outline-none placeholder:text-white/30 focus:border-emerald-300/50"
+        className="mb-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-brand-50 outline-none placeholder:text-white/30 focus:border-emerald-300/50"
         autoFocus
       />
-      {error && <p className="mb-2 text-xs text-red-200/90">{error}</p>}
-      {loading && <p className="text-xs text-white/45">Searching…</p>}
+      {error && <p className="mb-2 text-xl text-red-200/90">{error}</p>}
+      {loading && <p className="text-xl text-white/45">Searching…</p>}
       {!loading && hits.length === 0 && (
-        <p className="text-xs text-white/45">No recipes found.</p>
+        <p className="text-xl text-white/45">No recipes found.</p>
       )}
       <ul className="max-h-56 space-y-1 overflow-y-auto">
         {hits.map((hit) => (
@@ -118,7 +118,7 @@ export function MealComposerRecipeSearch({
               type="button"
               disabled={hydratingId === hit.id}
               onClick={() => void selectHit(hit)}
-              className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-brand-50 transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+              className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xl text-brand-50 transition-colors hover:bg-white/[0.06] disabled:opacity-50"
             >
               <span className="min-w-0 truncate font-medium">{hit.title}</span>
               <span className="shrink-0 text-[11px] uppercase tracking-wide text-emerald-200/70">

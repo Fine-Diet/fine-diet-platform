@@ -124,7 +124,7 @@ export function WeekPatternDayControls({
             value={selectedTemplateId}
             onChange={(event) => setSelectedTemplateId(event.target.value)}
             disabled={busy || loadingTemplates}
-            className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+            className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
           >
             <option value="">
               {loadingTemplates ? 'Loading templates…' : 'Select a day template'}
@@ -139,7 +139,7 @@ export function WeekPatternDayControls({
             type="button"
             disabled={busy || !selectedTemplateId}
             onClick={handleChooseTemplate}
-            className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/85 disabled:opacity-40"
+            className="rounded-full border border-white/15 px-4 py-2 text-xl font-semibold text-white/85 disabled:opacity-40"
           >
             Apply template
           </button>
@@ -165,7 +165,7 @@ export function WeekPatternDayControls({
               value={duplicateFromIndex}
               onChange={(event) => setDuplicateFromIndex(event.target.value)}
               disabled={busy}
-              className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+              className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
             >
               <option value="">Select a day</option>
               {duplicateOptions.map(({ candidate, index }) => (
@@ -178,7 +178,7 @@ export function WeekPatternDayControls({
               type="button"
               disabled={busy || duplicateFromIndex === ''}
               onClick={handleDuplicateDay}
-              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/85 disabled:opacity-40"
+              className="rounded-full border border-white/15 px-4 py-2 text-xl font-semibold text-white/85 disabled:opacity-40"
             >
               Duplicate day
             </button>

@@ -391,7 +391,7 @@ export default function DayPlanDesignerPage() {
                       aria-label="Day Plan name"
                       value={draft.name}
                       onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                      className="min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-base font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04] sm:min-w-48"
+                      className="min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-xl font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04] sm:min-w-48"
                       placeholder={UNNAMED_DAY_PLAN}
                     />
                     <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2">
@@ -478,7 +478,7 @@ export default function DayPlanDesignerPage() {
                       })
                     }
                     placeholder="Add a description"
-                    className="mt-1 h-[38px] w-full resize-none overflow-y-auto scrollbar-hide border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+                    className="mt-1 h-[38px] w-full resize-none overflow-y-auto scrollbar-hide border-0 bg-transparent px-2 py-2 text-xl text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
                   />
                 </section>
 
@@ -492,7 +492,7 @@ export default function DayPlanDesignerPage() {
                 {draftRestoredNotice ? (
                   <div
                     role="status"
-                    className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/[0.04] px-4 py-3 text-sm text-white/70"
+                    className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/[0.04] px-4 py-3 text-xl text-white/70"
                   >
                     <p>Unsaved changes from your last session were restored.</p>
                     <button
@@ -557,8 +557,8 @@ export default function DayPlanDesignerPage() {
             <p className="mt-2 text-sm text-white/55">Choose the calendar date where this saved Day Plan should be placed.</p>
             <input type="date" value={applyDate} onChange={(event) => setApplyDate(event.target.value)} className="mt-5 w-full rounded-xl border border-white/15 bg-black/20 px-4 py-3 [color-scheme:dark]" />
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setApplyOpen(false)} className="rounded-full px-4 py-2 text-sm text-white/60 hover:bg-white/10">Cancel</button>
-              <button type="button" disabled={!applyDate || busy} onClick={() => void applyToDate()} className="rounded-full bg-[#d7ecff] px-5 py-2 text-sm font-semibold text-black disabled:opacity-40">Apply</button>
+              <button type="button" onClick={() => setApplyOpen(false)} className="rounded-full px-4 py-2 text-xl text-white/60 hover:bg-white/10">Cancel</button>
+              <button type="button" disabled={!applyDate || busy} onClick={() => void applyToDate()} className="rounded-full bg-[#d7ecff] px-5 py-2 text-xl font-semibold text-black disabled:opacity-40">Apply</button>
             </div>
           </section>
         </div>

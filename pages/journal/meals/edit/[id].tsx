@@ -71,7 +71,7 @@ function UnitPicker({
       <select
         value={selectValue}
         onChange={handleSelectChange}
-        className="flex-1 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-white/20 appearance-none cursor-pointer"
+        className="flex-1 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-xl focus:outline-none focus:ring-1 focus:ring-white/20 appearance-none cursor-pointer"
         style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.25em 1.25em', paddingRight: '2rem' }}
       >
         {COMMON_UNITS.map((u) => (
@@ -87,7 +87,7 @@ function UnitPicker({
           value={otherValue}
           onChange={handleOtherChange}
           placeholder="custom unit"
-          className="w-24 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-white/20"
+          className="w-24 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-xl focus:outline-none focus:ring-1 focus:ring-white/20"
           autoFocus
         />
       )}
@@ -297,7 +297,7 @@ export default function JournalMealEditPage() {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-white placeholder-white/40 text-sm focus:outline-none focus:ring-2 focus:ring-white/20"
+            className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-white placeholder-white/40 text-xl focus:outline-none focus:ring-2 focus:ring-white/20"
             placeholder="Meal name"
           />
         </div>
@@ -370,7 +370,7 @@ export default function JournalMealEditPage() {
                         onChange={(e) =>
                           handleUpdateItem(item.id, 'quantity', parseFloat(e.target.value) || 1)
                         }
-                        className="w-16 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-white/20"
+                        className="w-16 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-xl focus:outline-none focus:ring-1 focus:ring-white/20"
                       />
                     </div>
                     <UnitPicker
@@ -387,7 +387,7 @@ export default function JournalMealEditPage() {
           {/* Add items button */}
           <button
             onClick={() => setShowAddPanel(true)}
-            className="w-full mt-3 py-3 rounded-xl border border-dashed border-white/20 text-white/50 text-sm hover:border-white/40 hover:text-white/70 hover:bg-white/5 transition-colors"
+            className="w-full mt-3 py-3 rounded-xl border border-dashed border-white/20 text-white/50 text-xl hover:border-white/40 hover:text-white/70 hover:bg-white/5 transition-colors"
           >
             + Add items
           </button>

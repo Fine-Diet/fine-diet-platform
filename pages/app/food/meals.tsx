@@ -951,7 +951,7 @@ export default function MealLibraryPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search by title..."
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-xl text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50"
               />
 
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -964,7 +964,7 @@ export default function MealLibraryPage() {
                         type="button"
                         onClick={() => setFilter(option.id)}
                         aria-pressed={isActive}
-                        className={`rounded-full px-3.5 py-1.5 text-xs font-semibold antialiased transition-colors ${
+                        className={`rounded-full px-3.5 py-1.5 text-xl font-semibold antialiased transition-colors ${
                           isActive
                             ? 'bg-brand-50 text-black'
                             : 'border border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white'

@@ -221,7 +221,7 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
           value={mealType}
           onChange={(e) => setMealType(e.target.value as PlannedMealType)}
           disabled={submitting}
-          className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
+          className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
         >
           {MEAL_TYPE_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>

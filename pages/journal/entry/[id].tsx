@@ -271,7 +271,7 @@ export default function JournalEntryPage() {
               type="time"
               value={timeStr}
               onChange={(e) => handleNonIntakeTimeChange(e.target.value)}
-              className="w-full min-w-0 max-w-full rounded-full bg-white/10 px-4 py-2.5 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 time-input-light-icon box-border"
+              className="w-full min-w-0 max-w-full rounded-full bg-white/10 px-4 py-2.5 text-brand-50 text-xl focus:outline-none focus:ring-2 focus:ring-white/30 time-input-light-icon box-border"
             />
           </div>
 
@@ -378,7 +378,7 @@ export default function JournalEntryPage() {
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             onBlur={handleQuantityBlur}
-            className="w-full rounded-full bg-white/10 px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
+            className="w-full rounded-full bg-white/10 px-4 py-2.5 text-white text-xl focus:outline-none focus:ring-2 focus:ring-white/30"
           />
         </div>
 
@@ -389,7 +389,7 @@ export default function JournalEntryPage() {
               <select
                 value={unit}
                 onChange={(e) => handleUnitChange(e.target.value)}
-                className="w-full rounded-full bg-white/10 pl-4 pr-10 py-2.5 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 appearance-none"
+                className="w-full rounded-full bg-white/10 pl-4 pr-10 py-2.5 text-brand-50 text-xl focus:outline-none focus:ring-2 focus:ring-white/30 appearance-none"
                 style={{ backgroundImage: 'none' }}
               >
                 {validUnits.map((u) => (
@@ -419,7 +419,7 @@ export default function JournalEntryPage() {
             value={timeStr}
             onChange={(e) => handleTimeChange(e.target.value)}
             onBlur={() => applyUpdates({ quantity, unit, timeStr })}
-            className="w-full min-w-0 max-w-full rounded-full bg-white/10 px-4 py-2.5 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 time-input-light-icon box-border"
+            className="w-full min-w-0 max-w-full rounded-full bg-white/10 px-4 py-2.5 text-brand-50 text-xl focus:outline-none focus:ring-2 focus:ring-white/30 time-input-light-icon box-border"
           />
           <p className="text-white/50 text-xs mt-5 px-5">
             Moving time may change which block (Morning / Midday / Evening) this appears in.

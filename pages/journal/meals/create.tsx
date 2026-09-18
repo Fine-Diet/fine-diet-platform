@@ -101,13 +101,13 @@ export default function JournalMealsCreatePage() {
                 placeholder="e.g. Breakfast usual"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
+                className="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/50 text-xl focus:outline-none focus:ring-2 focus:ring-white/30"
               />
             </div>
 
             <div>
-              <h2 className="text-white/80 text-sm font-medium mb-2">Included items</h2>
-              <p className="text-white/50 text-xs mb-2">Uncheck to remove from this meal template.</p>
+              <h2 className="text-white/80 text-xl font-medium mb-2">Included items</h2>
+              <p className="text-white/50 text-xl mb-2">Uncheck to remove from this meal template.</p>
               <ul className="space-y-2">
                 {entries.map((entry) => {
                   const p = entry.payload as { name?: string; quantity?: number; unit?: string };
@@ -123,7 +123,7 @@ export default function JournalMealsCreatePage() {
                     <label htmlFor={`inc-${entry.id}`} className="flex-1 text-white cursor-pointer">
                       {formatFoodNameString(p.name ?? 'Untitled')}
                       {p.quantity != null && (
-                        <span className="text-white/60 text-sm ml-1">
+                        <span className="text-white/60 text-xl ml-1">
                           {p.quantity} {p.unit ?? ''}
                         </span>
                       )}
