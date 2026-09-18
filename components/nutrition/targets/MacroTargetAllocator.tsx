@@ -89,7 +89,7 @@ export function MacroTargetAllocator({
         <input
           type="number"
           inputMode="numeric"
-          className="w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 text-sm text-brand-50 placeholder-brand-50/35 shadow-inner focus:outline-none focus:ring-2 focus:ring-brand-200/20"
+          className="w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 text-xl text-brand-50 placeholder-brand-50/35 shadow-inner focus:outline-none focus:ring-2 focus:ring-brand-200/20"
           placeholder="Enter a target"
           value={calorie ?? ''}
           onChange={(event) =>
@@ -121,7 +121,7 @@ export function MacroTargetAllocator({
                     type="number"
                     inputMode="numeric"
                     min={0}
-                    className="w-full min-w-0 bg-transparent text-sm text-brand-50 focus:outline-none"
+                    className="w-full min-w-0 bg-transparent text-xl text-brand-50 focus:outline-none"
                     value={gramValue[column.key]}
                     onChange={(event) => onGramsChange(column.key, event.target.value)}
                     onBlur={(event) => onGramsBlur(column.key, event.target.value)}
@@ -134,7 +134,7 @@ export function MacroTargetAllocator({
                     type="number"
                     inputMode="numeric"
                     min={0}
-                    className="w-full min-w-0 bg-transparent text-sm text-brand-50 focus:outline-none"
+                    className="w-full min-w-0 bg-transparent text-xl text-brand-50 focus:outline-none"
                     key={`${column.key}-${gramValue[column.key]}-${calorie ?? ''}`}
                     defaultValue={percent === '' ? '' : String(percent)}
                     onBlur={(event) => onPercentChange(column.key, event.target.value)}

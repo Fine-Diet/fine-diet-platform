@@ -23,7 +23,7 @@ export interface NutritionTargetsEditorProps {
 }
 
 const inputClass =
-  'w-full rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-white/25 disabled:opacity-40';
+  'w-full rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-xl text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-white/25 disabled:opacity-40';
 const labelClass = 'block text-white/45 text-xs font-medium mb-1.5';
 
 export function NutritionTargetsEditor({

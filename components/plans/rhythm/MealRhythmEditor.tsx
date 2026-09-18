@@ -71,7 +71,7 @@ export function MealRhythmEditor({ draft, onUpdateSlot, disabled }: MealRhythmEd
                     label: event.target.value.trim() ? event.target.value : null,
                   })
                 }
-                className="w-full rounded-2xl border border-white/10 bg-transparent px-4 py-2.5 text-sm text-white placeholder-white/30 disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/20"
+                className="w-full rounded-2xl border border-white/10 bg-transparent px-4 py-2.5 text-xl text-white placeholder-white/30 disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/20"
               />
             </div>
             <input
@@ -79,7 +79,7 @@ export function MealRhythmEditor({ draft, onUpdateSlot, disabled }: MealRhythmEd
               value={slot.target_time}
               disabled={!slot.enabled || disabled}
               onChange={(event) => onUpdateSlot(key, { target_time: event.target.value })}
-              className="w-[7rem] shrink-0 rounded-2xl border border-white/10 bg-transparent px-3 py-2.5 text-sm text-white disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/20"
+              className="w-[7rem] shrink-0 rounded-2xl border border-white/10 bg-transparent px-3 py-2.5 text-xl text-white disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/20"
             />
           </div>
         );
