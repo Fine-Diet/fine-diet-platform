@@ -195,7 +195,7 @@ export function HaulItemEditor({
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search products"
-              className="min-h-11 w-full rounded-lg bg-[#16110d] px-3 text-sm outline-none"
+              className="min-h-11 w-full rounded-lg bg-[#16110d] px-3 text-xl outline-none"
             />
             <div className="mt-2 max-h-52 overflow-y-auto">
               {searching && <p className="px-2 py-3 text-xs text-white/40">Searching…</p>}
@@ -230,7 +230,7 @@ export function HaulItemEditor({
             <input
               value={value as string}
               onChange={(event) => (setter as (value: string) => void)(event.target.value)}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-sm font-normal text-white outline-none focus:border-white/45"
+              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-xl font-normal text-white outline-none focus:border-white/45"
             />
           </label>
         ))}
@@ -248,7 +248,7 @@ export function HaulItemEditor({
               step="any"
               value={value as string}
               onChange={(event) => (setter as (value: string) => void)(event.target.value)}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-sm font-normal text-white outline-none focus:border-white/45"
+              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-xl font-normal text-white outline-none focus:border-white/45"
             />
           </label>
         ))}

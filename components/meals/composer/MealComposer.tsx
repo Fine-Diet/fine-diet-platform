@@ -57,7 +57,7 @@ export interface MealComposerProps {
 }
 
 const inputClass =
-  'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
+  'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
 const labelClass = 'mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45';
 
 export function MealComposer({
@@ -268,7 +268,7 @@ export function MealComposer({
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'REMOVE_STEP', stepNumber: step.step_number })}
-                  className="mt-2 shrink-0 text-xs text-white/40 hover:text-red-200"
+                  className="mt-2 shrink-0 text-xl text-white/40 hover:text-red-200"
                 >
                   Remove
                 </button>

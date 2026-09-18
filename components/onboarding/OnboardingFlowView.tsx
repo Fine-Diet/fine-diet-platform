@@ -90,10 +90,10 @@ const V = {
 } as const;
 
 const FIELD_CLASS =
-  'w-full rounded-full bg-transparent px-5 py-3.5 text-base text-[#F5F1E8] placeholder-[#7A7468] border border-[rgba(245,241,232,0.28)] focus:border-[rgba(245,241,232,0.55)] focus:outline-none';
+  'w-full rounded-full bg-transparent px-5 py-3.5 text-xl text-[#F5F1E8] placeholder-[#7A7468] border border-[rgba(245,241,232,0.28)] focus:border-[rgba(245,241,232,0.55)] focus:outline-none';
 
 const UNIT_SELECT_CLASS =
-  'rounded-full bg-transparent pl-2 pr-7 py-3.5 text-sm text-[#A8A294] border-0 focus:outline-none appearance-none cursor-pointer';
+  'rounded-full bg-transparent pl-2 pr-7 py-3.5 text-xl text-[#A8A294] border-0 focus:outline-none appearance-none cursor-pointer';
 
 interface Opt { value: string; label: string }
 
@@ -568,7 +568,7 @@ export function OnboardingFlowView({
                     value={heightFeet}
                     placeholder="5"
                     onChange={(e) => updateImperialHeight(e.target.value, heightInches)}
-                    className="w-10 bg-transparent py-2.5 text-base text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
+                    className="w-10 bg-transparent py-2.5 text-xl text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
                   />
                   <span className="text-sm text-[#A8A294]">ft</span>
                   <input
@@ -580,7 +580,7 @@ export function OnboardingFlowView({
                     value={heightInches}
                     placeholder="10"
                     onChange={(e) => updateImperialHeight(heightFeet, e.target.value)}
-                    className="w-10 bg-transparent py-2.5 text-base text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
+                    className="w-10 bg-transparent py-2.5 text-xl text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
                   />
                   <span className="text-sm text-[#A8A294]">in</span>
                 </div>
@@ -592,7 +592,7 @@ export function OnboardingFlowView({
                   value={answers.height_value}
                   placeholder="175"
                   onChange={(e) => setAnswer('height_value', e.target.value)}
-                  className="min-w-0 flex-1 bg-transparent py-3.5 pl-2 text-base text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
+                  className="min-w-0 flex-1 bg-transparent py-3.5 pl-2 text-xl text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
                 />
               )}
               <select
@@ -637,7 +637,7 @@ export function OnboardingFlowView({
                 value={answers.weight_value}
                 placeholder="150"
                 onChange={(e) => setAnswer('weight_value', e.target.value)}
-                className="min-w-0 flex-1 bg-transparent py-3.5 pl-2 text-base text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent py-3.5 pl-2 text-xl text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
               />
               <select
                 aria-label="Weight unit"

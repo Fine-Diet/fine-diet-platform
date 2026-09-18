@@ -59,7 +59,7 @@ function isComponentGrounded(component: MealComponent): boolean {
 }
 
 const inputClass =
-  'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
+  'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
 const controlButtonClass =
   'rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-semibold text-white/65 transition-colors hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-30';
 

@@ -61,7 +61,7 @@ interface LotDraft {
 }
 
 const inputClass =
-  'mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/40';
+  'mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-xl text-white outline-none placeholder:text-white/25 focus:border-white/40';
 
 function formatDate(value: string): string {
   const date = new Date(`${value}T00:00:00`);
@@ -708,7 +708,7 @@ export default function PantryManager() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search items, products, brands, or retailers"
-                  className="w-full rounded-xl border border-white/12 bg-white/[0.04] py-2.5 pl-10 pr-10 text-sm text-white outline-none placeholder:text-white/28 focus:border-white/30"
+                  className="w-full rounded-xl border border-white/12 bg-white/[0.04] py-2.5 pl-10 pr-10 text-xl text-white outline-none placeholder:text-white/28 focus:border-white/30"
                 />
                 {query && (
                   <button
@@ -731,7 +731,7 @@ export default function PantryManager() {
                 <select
                   value={perishability}
                   onChange={(event) => setPerishability(event.target.value as PerishabilityFilter)}
-                  className="mt-1 w-full bg-transparent text-sm text-white/75 outline-none"
+                  className="mt-1 w-full bg-transparent text-xl text-white/75 outline-none"
                 >
                   <option value="all">All items</option>
                   <option value="evidence">Expiration evidence</option>
@@ -745,7 +745,7 @@ export default function PantryManager() {
                 <select
                   value={inventory}
                   onChange={(event) => setInventory(event.target.value as InventoryFilter)}
-                  className="mt-1 w-full bg-transparent text-sm text-white/75 outline-none"
+                  className="mt-1 w-full bg-transparent text-xl text-white/75 outline-none"
                 >
                   <option value="all">All amounts</option>
                   <option value="positive">Positive amount</option>

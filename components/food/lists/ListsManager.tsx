@@ -487,7 +487,7 @@ export default function ListsManager() {
               <select
                 value={selectedListId ?? ''}
                 onChange={(event) => selectList(event.target.value)}
-                className="min-h-14 flex-1 rounded-full border border-white/20 bg-[#211a14]/80 px-5 text-sm font-semibold text-white outline-none focus:border-white/50"
+                className="min-h-14 flex-1 rounded-full border border-white/20 bg-[#211a14]/80 px-5 text-xl font-semibold text-white outline-none focus:border-white/50"
                 aria-label="Select a List"
               >
                 {lists.map((candidate) => (
@@ -500,7 +500,7 @@ export default function ListsManager() {
               <button
                 type="button"
                 onClick={() => setNewListOpen(true)}
-                className="min-h-14 rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] hover:bg-white"
+                className="min-h-14 rounded-full bg-brand-50 px-6 text-xl font-semibold text-[#16110d] hover:bg-white"
               >
                 + New List
               </button>
@@ -524,7 +524,7 @@ export default function ListsManager() {
                 }}
                 disabled={Boolean(list?.plan_id)}
                 placeholder={list?.plan_id ? 'Plan-generated Lists are read-only' : 'Search to add item(s)'}
-                className="min-h-11 min-w-0 flex-1 rounded-full bg-transparent px-5 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:opacity-50"
+                className="min-h-11 min-w-0 flex-1 rounded-full bg-transparent px-5 py-2 text-xl text-white outline-none placeholder:text-white/35 disabled:opacity-50"
               />
               <button
                 type="button"
@@ -735,7 +735,7 @@ export default function ListsManager() {
               type="button"
               onClick={() => void createList()}
               disabled={creatingList || !newListTitle.trim()}
-              className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40"
+              className="rounded-full bg-brand-50 px-5 py-2 text-xl font-semibold text-[#16110d] disabled:opacity-40"
             >
               {creatingList ? 'Creating…' : 'Create List'}
             </button>
@@ -758,20 +758,20 @@ export default function ListsManager() {
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label>
-                <span className="text-xs text-white/55">Quantity</span>
+                <span className="text-xl text-white/55">Quantity</span>
                 <input type="number" min="0" step="0.01" value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none" />
               </label>
               <label>
-                <span className="text-xs text-white/55">Unit</span>
+                <span className="text-xl text-white/55">Unit</span>
                 <input value={editUnit} onChange={(event) => setEditUnit(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none" />
               </label>
             </div>
             <label className="block">
-              <span className="text-xs text-white/55">Notes</span>
+              <span className="text-xl text-white/55">Notes</span>
               <textarea value={editNotes} onChange={(event) => setEditNotes(event.target.value)} rows={2} className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none" />
             </label>
           </div>
-          {editError && <p className="mt-2 text-sm text-red-200" role="alert">{editError}</p>}
+          {editError && <p className="mt-2 text-xl text-red-200" role="alert">{editError}</p>}
           <div className="mt-5 flex items-center justify-between gap-2">
             <button type="button" onClick={() => void removeItem()} disabled={savingEdit} className="text-sm text-red-200/80">Remove from List</button>
             <div className="flex items-center gap-2">
@@ -783,7 +783,7 @@ export default function ListsManager() {
                   setEditItem(null);
                   if (item) openChooseProduct(item);
                 }}
-                className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/70"
+                className="rounded-full border border-white/15 px-4 py-2 text-xl text-white/70"
               >
                 {editItem && productName(choices[editItem.id], prices[editItem.id])
                   ? 'Change Product'
@@ -859,8 +859,8 @@ export default function ListsManager() {
             <span className="text-xs text-white/55">Shopping date</span>
             <input type="date" value={shoppingDate} onChange={(event) => setShoppingDate(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none" />
           </label>
-          {haulError && <p className="mt-2 text-sm text-red-200" role="alert">{haulError}</p>}
-          <button type="button" onClick={() => void buildHaul()} disabled={startingHaul || !shoppingDate} className="mt-5 w-full rounded-full bg-brand-50 px-5 py-2.5 text-sm font-semibold text-[#16110d] disabled:opacity-40">
+          {haulError && <p className="mt-2 text-xl text-red-200" role="alert">{haulError}</p>}
+          <button type="button" onClick={() => void buildHaul()} disabled={startingHaul || !shoppingDate} className="mt-5 w-full rounded-full bg-brand-50 px-5 py-2.5 text-xl font-semibold text-[#16110d] disabled:opacity-40">
             {startingHaul ? 'Building…' : 'Build a Haul'}
           </button>
         </div>

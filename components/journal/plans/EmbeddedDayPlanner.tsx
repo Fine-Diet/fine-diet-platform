@@ -260,12 +260,12 @@ export function EmbeddedDayPlanner({
           aria-label="Day Plan name"
           value={draft.name}
           onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-          className="mr-auto min-w-44 flex-1 border-0 bg-transparent px-2 py-2 text-sm font-semibold outline-none focus:bg-white/[0.04]"
+          className="mr-auto min-w-44 flex-1 border-0 bg-transparent px-2 py-2 text-xl font-semibold outline-none focus:bg-white/[0.04]"
         />
         <button
           type="button"
           onClick={() => replaceDraft(blankTemplate, 'blank')}
-          className="rounded-full border border-white/15 px-3 py-2 text-xs hover:bg-white/10"
+          className="rounded-full border border-white/15 px-3 py-2 text-xl hover:bg-white/10"
         >
           New
         </button>
@@ -279,7 +279,7 @@ export function EmbeddedDayPlanner({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search Day Plans"
-            className="mt-4 w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none"
+            className="mt-4 w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-xl outline-none"
           />
           <ul className="mt-2 max-h-48 divide-y divide-white/10 overflow-y-auto">
             {matchingTemplates.map((template) => (

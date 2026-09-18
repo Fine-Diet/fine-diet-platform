@@ -380,13 +380,13 @@ export function SimplifiedMealCreationView() {
                 value={shareTitle}
                 onChange={(event) => setShareTitle(event.target.value)}
                 placeholder="Share what you’re having"
-                className="w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 text-sm text-brand-50"
+                className="w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 text-xl text-brand-50"
               />
               {error ? <p className="text-sm text-red-300">{error}</p> : null}
               <button
                 type="button"
                 onClick={goToReview}
-                className="w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black"
+                className="w-full rounded-full bg-brand-50 py-3 text-center text-xl font-semibold text-black"
               >
                 Review meal
               </button>
@@ -396,7 +396,7 @@ export function SimplifiedMealCreationView() {
                   setError('');
                   setFlow('candidates');
                 }}
-                className="w-full py-2 text-center text-sm text-white/45"
+                className="w-full py-2 text-center text-xl text-white/45"
               >
                 Back to suggestions
               </button>

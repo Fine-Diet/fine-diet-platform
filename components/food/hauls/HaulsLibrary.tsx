@@ -163,13 +163,13 @@ export default function HaulsLibrary() {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search Hauls"
                 aria-label="Search Hauls"
-                className="min-h-11 w-full rounded-xl border border-white/15 bg-transparent pl-10 pr-4 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/45"
+                className="min-h-11 w-full rounded-xl border border-white/15 bg-transparent pl-10 pr-4 text-xl text-white outline-none placeholder:text-white/35 focus:border-white/45"
               />
             </div>
           </div>
 
           {error && (
-            <div role="alert" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <div role="alert" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-xl text-red-100">
               <span>{error}</span>
               <button type="button" onClick={() => void load()} className="font-semibold underline">
                 Try again

@@ -140,7 +140,7 @@ function LegacyDayTemplatesPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Template name (optional)"
-              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
             />
 
             <div className="flex flex-wrap gap-2">
@@ -175,7 +175,7 @@ function LegacyDayTemplatesPage() {
                   value={selectedPlanDayId}
                   onChange={(e) => setSelectedPlanDayId(e.target.value)}
                   disabled={planDays.length === 0}
-                  className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+                  className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
                 >
                   {planDays.map((day) => (
                     <option key={day.id} value={day.id}>

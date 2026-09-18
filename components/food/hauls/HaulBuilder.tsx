@@ -350,7 +350,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                 <input
                   value={metadata.title}
                   onChange={(event) => setMetadata({ ...metadata, title: event.target.value })}
-                  className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-base font-semibold normal-case tracking-normal text-brand-50 outline-none focus:border-white/45"
+                  className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-semibold normal-case tracking-normal text-brand-50 outline-none focus:border-white/45"
                 />
               </label>
               <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
@@ -359,7 +359,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                   type="date"
                   value={metadata.shoppingDate}
                   onChange={(event) => setMetadata({ ...metadata, shoppingDate: event.target.value })}
-                  className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
+                  className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
                 />
               </label>
               <div className="grid grid-cols-[1fr_5rem] gap-2">
@@ -372,7 +372,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     value={metadata.budgetAmount}
                     onChange={(event) => setMetadata({ ...metadata, budgetAmount: event.target.value })}
                     placeholder="Optional"
-                    className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
+                    className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
                   />
                 </label>
                 <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
@@ -381,7 +381,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     maxLength={3}
                     value={metadata.currency}
                     onChange={(event) => setMetadata({ ...metadata, currency: event.target.value.toUpperCase() })}
-                    className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-2 text-center text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
+                    className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-2 text-center text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
                   />
                 </label>
               </div>
@@ -631,7 +631,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
             value={addListQuery}
             onChange={(event) => setAddListQuery(event.target.value)}
             placeholder="Search active Lists"
-            className="min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] pl-10 pr-3 text-sm outline-none"
+            className="min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] pl-10 pr-3 text-xl outline-none"
           />
         </div>
         <div className="mt-3 space-y-2">
