@@ -964,7 +964,7 @@ export default function MealLibraryPage() {
                         type="button"
                         onClick={() => setFilter(option.id)}
                         aria-pressed={isActive}
-                        className={`rounded-full px-3.5 py-1.5 text-xl font-semibold antialiased transition-colors ${
+                        className={`rounded-full px-3.5 py-1.5 text-xs font-semibold antialiased transition-colors ${
                           isActive
                             ? 'bg-brand-50 text-black'
                             : 'border border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white'

@@ -933,7 +933,7 @@ export default function PantryManager() {
               <button
                 type="button"
                 onClick={() => setSelectedFood(null)}
-                className="mt-3 text-xl text-white/45 hover:text-white"
+                className="mt-3 text-xs text-white/45 hover:text-white"
               >
                 Choose a different food
               </button>
@@ -972,11 +972,11 @@ export default function PantryManager() {
               <input type="number" min="0" step="any" value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} className={inputClass} />
             </label>
             <label>
-              <span className="text-xl text-white/55">Unit</span>
+              <span className="text-xs text-white/55">Unit</span>
               <input value={editUnit} onChange={(event) => setEditUnit(event.target.value)} className={inputClass} />
             </label>
           </div>
-          {editError && <p className="mt-3 text-xl text-red-200" role="alert">{editError}</p>}
+          {editError && <p className="mt-3 text-sm text-red-200" role="alert">{editError}</p>}
           <div className="mt-5 flex items-center justify-between gap-3">
             <button type="button" onClick={() => void deleteAggregateItem()} disabled={editBusy} className="text-sm text-red-200/75">
               Remove from Pantry
@@ -1011,7 +1011,7 @@ export default function PantryManager() {
                 <input type="date" value={lotForm.acquiredOn} onChange={(event) => updateLotForm({ acquiredOn: event.target.value })} className={inputClass} />
               </label>
               <label>
-                <span className="text-xl text-white/55">Expiration date</span>
+                <span className="text-xs text-white/55">Expiration date</span>
                 <input type="date" value={lotForm.expiresOn} onChange={(event) => updateLotForm({ expiresOn: event.target.value })} className={inputClass} />
               </label>
             </div>
@@ -1021,16 +1021,16 @@ export default function PantryManager() {
                 <input type="number" min="0.01" step="any" value={lotForm.quantityAcquired} onChange={(event) => updateAcquiredQuantity(event.target.value)} className={inputClass} />
               </label>
               <label>
-                <span className="text-xl text-white/55">Remaining *</span>
+                <span className="text-xs text-white/55">Remaining *</span>
                 <input type="number" min="0" step="any" value={lotForm.quantityRemaining} onChange={(event) => updateLotForm({ quantityRemaining: event.target.value })} className={inputClass} />
               </label>
               <label className="col-span-2 sm:col-span-1">
-                <span className="text-xl text-white/55">Unit</span>
+                <span className="text-xs text-white/55">Unit</span>
                 <input value={lotForm.unit} onChange={(event) => updateLotForm({ unit: event.target.value })} className={inputClass} />
               </label>
             </div>
             {!lotContext?.lot && (
-              <p className="-mt-2 text-xl text-white/35">
+              <p className="-mt-2 text-xs text-white/35">
                 Remaining starts equal to the amount acquired; change it if some has already been used.
               </p>
             )}
@@ -1039,38 +1039,38 @@ export default function PantryManager() {
               <input type="number" min="1" step="1" value={lotForm.expectedShelfLifeDays} onChange={(event) => updateLotForm({ expectedShelfLifeDays: event.target.value })} className={inputClass} />
             </label>
             <div className="border-t border-white/[0.08] pt-4">
-              <p className="text-xl font-semibold uppercase tracking-[0.14em] text-white/35">Product details</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Product details</p>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label>
                   <span className="text-xs text-white/55">Product title</span>
                   <input value={lotForm.productTitle} onChange={(event) => updateLotForm({ productTitle: event.target.value })} className={inputClass} />
                 </label>
                 <label>
-                  <span className="text-xl text-white/55">Brand</span>
+                  <span className="text-xs text-white/55">Brand</span>
                   <input value={lotForm.brandName} onChange={(event) => updateLotForm({ brandName: event.target.value })} className={inputClass} />
                 </label>
                 <label>
-                  <span className="text-xl text-white/55">Package size</span>
+                  <span className="text-xs text-white/55">Package size</span>
                   <input type="number" min="0.01" step="any" value={lotForm.packageSize} onChange={(event) => updateLotForm({ packageSize: event.target.value })} className={inputClass} />
                 </label>
                 <label>
-                  <span className="text-xl text-white/55">Package unit</span>
+                  <span className="text-xs text-white/55">Package unit</span>
                   <input value={lotForm.packageUnit} onChange={(event) => updateLotForm({ packageUnit: event.target.value })} className={inputClass} />
                 </label>
                 <label>
-                  <span className="text-xl text-white/55">Package count</span>
+                  <span className="text-xs text-white/55">Package count</span>
                   <input type="number" min="1" step="1" value={lotForm.packageCount} onChange={(event) => updateLotForm({ packageCount: event.target.value })} className={inputClass} />
                 </label>
                 <label>
-                  <span className="text-xl text-white/55">Retailer</span>
+                  <span className="text-xs text-white/55">Retailer</span>
                   <input value={lotForm.retailer} onChange={(event) => updateLotForm({ retailer: event.target.value })} className={inputClass} />
                 </label>
                 <label>
-                  <span className="text-xl text-white/55">Price</span>
+                  <span className="text-xs text-white/55">Price</span>
                   <input type="number" min="0" step="0.01" value={lotForm.priceAmount} onChange={(event) => updateLotForm({ priceAmount: event.target.value })} className={inputClass} />
                 </label>
                 <label>
-                  <span className="text-xl text-white/55">Currency</span>
+                  <span className="text-xs text-white/55">Currency</span>
                   <input maxLength={3} value={lotForm.currency} onChange={(event) => updateLotForm({ currency: event.target.value.toUpperCase() })} className={inputClass} />
                 </label>
               </div>

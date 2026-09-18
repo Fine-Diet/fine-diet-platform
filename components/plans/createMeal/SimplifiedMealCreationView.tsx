@@ -386,7 +386,7 @@ export function SimplifiedMealCreationView() {
               <button
                 type="button"
                 onClick={goToReview}
-                className="w-full rounded-full bg-brand-50 py-3 text-center text-xl font-semibold text-black"
+                className="w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black"
               >
                 Review meal
               </button>
@@ -396,7 +396,7 @@ export function SimplifiedMealCreationView() {
                   setError('');
                   setFlow('candidates');
                 }}
-                className="w-full py-2 text-center text-xl text-white/45"
+                className="w-full py-2 text-center text-sm text-white/45"
               >
                 Back to suggestions
               </button>

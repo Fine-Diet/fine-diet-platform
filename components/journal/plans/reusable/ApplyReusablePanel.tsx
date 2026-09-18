@@ -149,7 +149,7 @@ export function ApplyDayTemplatePanel({
         type="button"
         disabled={busy || !targetPlanDayId || !canApply}
         onClick={handleApply}
-        className="rounded-full bg-[#d7ecff] px-4 py-2 text-xl font-semibold text-black disabled:opacity-40"
+        className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
       >
         {busy ? 'Applying…' : 'Apply template'}
       </button>
@@ -389,7 +389,7 @@ export function ApplyWeekPatternPanel({
         type="button"
         disabled={busy || !targetStartPlanDayId || !canApply}
         onClick={handleApply}
-        className="rounded-full bg-[#d7ecff] px-4 py-2 text-xl font-semibold text-black disabled:opacity-40"
+        className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
       >
         {busy ? 'Applying…' : 'Apply pattern'}
       </button>

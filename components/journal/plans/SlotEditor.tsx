@@ -465,7 +465,7 @@ export function SlotEditor(props: SlotEditorProps) {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleConfirmScaledImport(false)}
-                className="flex-1 py-2.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:opacity-50 transition-colors text-xl font-semibold text-denim-200 antialiased"
+                className="flex-1 py-2.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:opacity-50 transition-colors text-sm font-semibold text-denim-200 antialiased"
               >
                 {busy ? 'Adding…' : 'Add to slot'}
               </button>
@@ -701,7 +701,7 @@ export function SlotEditor(props: SlotEditorProps) {
         <button
           type="submit"
           disabled={busy || name.trim().length === 0}
-          className="rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 transition-colors px-4 py-2 text-xl font-medium text-denim-200 antialiased"
+          className="rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 transition-colors px-4 py-2 text-sm font-medium text-denim-200 antialiased"
         >
           {submitLabel}
         </button>

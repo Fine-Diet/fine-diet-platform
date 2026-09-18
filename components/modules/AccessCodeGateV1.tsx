@@ -312,7 +312,7 @@ export function AccessCodeGateV1({ content }: Props) {
             <button
               type="submit"
               disabled={state === 'submitting'}
-              className="w-full rounded-full bg-brand-900 px-8 py-4 text-xl font-semibold text-white transition-colors hover:bg-brand-800 disabled:opacity-50"
+              className="w-full rounded-full bg-brand-900 px-8 py-4 text-base font-semibold text-white transition-colors hover:bg-brand-800 disabled:opacity-50"
             >
               {state === 'submitting' ? submittingLabel : content.ctaLabel}
             </button>
@@ -381,7 +381,7 @@ export function AccessCodeGateV1({ content }: Props) {
           <button
             type="submit"
             disabled={state === 'submitting'}
-            className="w-full rounded-md bg-brand-900 px-4 py-3 text-xl font-semibold text-white transition-colors hover:bg-brand-800 disabled:opacity-50"
+            className="w-full rounded-md bg-brand-900 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-brand-800 disabled:opacity-50"
           >
             {state === 'submitting' ? submittingLabel : content.ctaLabel}
           </button>

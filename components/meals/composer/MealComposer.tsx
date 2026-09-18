@@ -268,7 +268,7 @@ export function MealComposer({
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'REMOVE_STEP', stepNumber: step.step_number })}
-                  className="mt-2 shrink-0 text-xl text-white/40 hover:text-red-200"
+                  className="mt-2 shrink-0 text-xs text-white/40 hover:text-red-200"
                 >
                   Remove
                 </button>

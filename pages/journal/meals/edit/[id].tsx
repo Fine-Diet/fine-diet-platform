@@ -387,7 +387,7 @@ export default function JournalMealEditPage() {
           {/* Add items button */}
           <button
             onClick={() => setShowAddPanel(true)}
-            className="w-full mt-3 py-3 rounded-xl border border-dashed border-white/20 text-white/50 text-xl hover:border-white/40 hover:text-white/70 hover:bg-white/5 transition-colors"
+            className="w-full mt-3 py-3 rounded-xl border border-dashed border-white/20 text-white/50 text-sm hover:border-white/40 hover:text-white/70 hover:bg-white/5 transition-colors"
           >
             + Add items
           </button>

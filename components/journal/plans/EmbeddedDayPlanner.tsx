@@ -265,7 +265,7 @@ export function EmbeddedDayPlanner({
         <button
           type="button"
           onClick={() => replaceDraft(blankTemplate, 'blank')}
-          className="rounded-full border border-white/15 px-3 py-2 text-xl hover:bg-white/10"
+          className="rounded-full border border-white/15 px-3 py-2 text-xs hover:bg-white/10"
         >
           New
         </button>

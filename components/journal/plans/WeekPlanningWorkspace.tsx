@@ -541,7 +541,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
             <p className="mt-2 text-sm text-white/55">Save an isolated reusable snapshot of this dated week.</p>
             <input aria-label="New Week Plan name" value={saveName} onChange={(event) => setSaveName(event.target.value)} placeholder={defaultWeekPlanName(props.selectedRange.start)} className="mt-5 w-full rounded-xl border border-white/15 bg-black/20 px-4 py-3 outline-none" />
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setSaveOpen(false)} className="rounded-full px-4 py-2 text-xl text-white/60 hover:bg-white/10">Cancel</button>
+              <button type="button" onClick={() => setSaveOpen(false)} className="rounded-full px-4 py-2 text-sm text-white/60 hover:bg-white/10">Cancel</button>
               <button
                 type="button"
                 disabled={props.busy}
@@ -553,7 +553,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
                     // Parent owns surfaced error copy; keep the dialog open.
                   }
                 }}
-                className="rounded-full bg-[#d7ecff] px-5 py-2 text-xl font-semibold text-black disabled:opacity-40"
+                className="rounded-full bg-[#d7ecff] px-5 py-2 text-sm font-semibold text-black disabled:opacity-40"
               >
                 {props.busy ? 'Saving…' : 'Save Week Plan'}
               </button>
@@ -569,7 +569,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
             <p className="mt-2 text-sm text-white/55">Choose new week</p>
             <input type="date" aria-label="Choose new week" value={applyDate} onChange={(event) => setApplyDate(event.target.value)} className="mt-5 w-full rounded-xl border border-white/15 bg-black/20 px-4 py-3 [color-scheme:dark]" />
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setApplyOpen(false)} className="rounded-full px-4 py-2 text-xl text-white/60 hover:bg-white/10">Cancel</button>
+              <button type="button" onClick={() => setApplyOpen(false)} className="rounded-full px-4 py-2 text-sm text-white/60 hover:bg-white/10">Cancel</button>
               <button
                 type="button"
                 disabled={!applyDate || props.busy}
@@ -581,7 +581,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
                     // Parent owns surfaced error copy; keep the dialog open.
                   }
                 }}
-                className="rounded-full bg-[#d7ecff] px-5 py-2 text-xl font-semibold text-black disabled:opacity-40"
+                className="rounded-full bg-[#d7ecff] px-5 py-2 text-sm font-semibold text-black disabled:opacity-40"
               >
                 {props.busy ? 'Applying…' : 'Apply to week'}
               </button>
