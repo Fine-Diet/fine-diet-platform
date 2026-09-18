@@ -250,7 +250,7 @@ export const LoginForm = ({
             onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
             required
-            className="autofill-dark w-full px-4 py-3 bg-neutral-800/50 text-sm rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 transition-all antialiased disabled:opacity-50"
+            className="autofill-dark w-full px-4 py-3 bg-neutral-800/50 text-xl rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 transition-all antialiased disabled:opacity-50"
             placeholder="your.email@example.com"
           />
         </div>
@@ -264,7 +264,7 @@ export const LoginForm = ({
             onChange={(e) => setPassword(e.target.value)}
             disabled={loading}
             required
-            className="autofill-dark w-full px-4 py-3 bg-neutral-800/50 text-sm rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 transition-all antialiased disabled:opacity-50"
+            className="autofill-dark w-full px-4 py-3 bg-neutral-800/50 text-xl rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 transition-all antialiased disabled:opacity-50"
             placeholder="password*"
           />
         </div>

@@ -56,12 +56,12 @@ export function MethodLinkEmail({
           }}
           placeholder="Enter your email"
           required
-          className="w-full px-4 py-2 rounded-full text-base font-semibold text-[#0A0800] bg-neutral-100 border-none focus:outline-none focus:ring-2 focus:ring-denim-900"
+          className="w-full px-4 py-2 rounded-full text-xl font-semibold text-[#0A0800] bg-neutral-100 border-none focus:outline-none focus:ring-2 focus:ring-denim-900"
         />
         <button
           type="submit"
           disabled={!inputEmail || isSubmitting}
-          className="w-full px-4 py-2 text-sm font-semibold text-white bg-denim-900 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="w-full px-4 py-2 text-xl font-semibold text-white bg-denim-900 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           {isSubmitting ? 'Sending...' : 'Send Link'}
         </button>

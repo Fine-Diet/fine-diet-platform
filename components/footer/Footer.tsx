@@ -81,7 +81,7 @@ export const Footer = ({ footerContent }: FooterProps) => {
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={status === 'submitting'}
                     required
-                    className="w-full px-4 py-3 pr-12 rounded-full text-sm placeholder:text-[#252018] placeholder:font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#252018] focus:ring-[#ACACAC] disabled:opacity-50"
+                    className="w-full px-4 py-3 pr-12 rounded-full text-xl placeholder:text-[#252018] placeholder:font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#252018] focus:ring-[#ACACAC] disabled:opacity-50"
                     style={{
                       backgroundColor: '#4A4A4A',
                       color: '#252018',

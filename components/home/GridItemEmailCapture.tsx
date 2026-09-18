@@ -91,7 +91,7 @@ export const GridItemEmailCapture = ({
 
   // Shared underline input style matching the screenshot aesthetic
   const inputClass =
-    'w-full bg-transparent border-b border-white/60 py-2 text-sm text-white ' +
+    'w-full bg-transparent border-b border-white/60 py-2 text-xl text-white ' +
     'placeholder-white/55 antialiased focus:outline-none focus:border-white/80 ' +
     'disabled:opacity-50 transition-colors';
 
@@ -174,7 +174,7 @@ export const GridItemEmailCapture = ({
               <button
                 type="submit"
                 disabled={status === 'submitting'}
-                className="px-6 py-2 rounded-full text-sm font-semibold antialiased
+                className="px-6 py-2 rounded-full text-xl font-semibold antialiased
                   bg-white text-neutral-900
                   hover:bg-white/90 transition-opacity
                   disabled:opacity-50 disabled:cursor-not-allowed

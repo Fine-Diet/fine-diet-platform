@@ -110,7 +110,7 @@ export function CheckoutEmailOptIn({
           placeholder="your@email.com"
           disabled={status === 'submitting'}
           className="w-full px-4 py-2.5 bg-neutral-700/50 border border-neutral-600 rounded-xl
-            text-white placeholder-white/40 text-sm antialiased
+            text-white placeholder-white/40 text-xl antialiased
             focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent
             disabled:opacity-50 transition-all"
         />
