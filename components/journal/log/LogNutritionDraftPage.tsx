@@ -881,7 +881,7 @@ export default function LogNutritionDraftPage() {
                 setAllowAutoAssignment(true);
                 if (slot) setSelectedTime(slot.target_time);
               }}
-              className="bg-transparent text-[11px] text-white/35 outline-none"
+              className="bg-transparent text-xl text-white/35 outline-none"
               aria-label="Meal Rhythm occasion"
             >
               {enabledSlots.map((slot) => (

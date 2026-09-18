@@ -323,7 +323,7 @@ export function NutritionCaptureDraft({
                 'min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-white/35',
                 compact
                   ? 'h-9 py-0 pl-9 pr-2 text-xl'
-                  : 'h-14 rounded-2xl py-0 pl-12 pr-4 text-base',
+                  : 'h-14 rounded-2xl py-0 pl-12 pr-4 text-xl',
               )}
             />
           </div>
@@ -634,7 +634,7 @@ export function NutritionCaptureDraft({
                             }
                           }}
                           placeholder="Item name"
-                          className={`w-full border-0 bg-transparent p-0 font-medium text-white outline-none placeholder:text-white/35 ${compact ? 'text-xl' : 'text-sm'}`}
+                          className={`w-full border-0 bg-transparent p-0 font-medium text-white outline-none placeholder:text-white/35 text-xl`}
                         />
                       ) : (
                         <p className={`truncate font-medium text-white ${compact ? 'text-xl' : 'text-sm'}`}>{rowTitle}</p>
@@ -751,7 +751,7 @@ export function NutritionCaptureDraft({
                                 },
                           );
                         }}
-                        className={`${compact ? 'w-12 rounded-full px-2 py-1 text-center text-xs' : 'w-full rounded-xl px-3 py-2 text-sm'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
+                        className={`${compact ? 'w-12 rounded-full px-2 py-1 text-center text-xl' : 'w-full rounded-xl px-3 py-2 text-xl'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
                       />
                     </label>
                     <label className={compact ? 'flex items-center gap-2' : undefined}>
@@ -774,7 +774,7 @@ export function NutritionCaptureDraft({
                               unit: event.target.value || null,
                             })
                         }
-                        className={`${compact ? 'min-w-20 rounded-full px-3 py-1 text-center text-xs' : 'w-full rounded-xl px-3 py-2 text-sm'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
+                        className={`${compact ? 'min-w-20 rounded-full px-3 py-1 text-center text-xl' : 'w-full rounded-xl px-3 py-2 text-xl'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
                       />
                     </label>
                   </div>
@@ -805,7 +805,7 @@ export function NutritionCaptureDraft({
                 type="text"
                 value={state.document.title}
                 onChange={(event) => dispatch({ type: 'SET_TITLE', title: event.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none focus:border-[#d7ecff]/50"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-white outline-none focus:border-[#d7ecff]/50"
               />
             </label>
             <label className="block">
@@ -816,7 +816,7 @@ export function NutritionCaptureDraft({
                 onChange={(event) =>
                   dispatch({ type: 'SET_PREP_NOTES', prepNotes: event.target.value })
                 }
-                className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none focus:border-[#d7ecff]/50"
+                className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-white outline-none focus:border-[#d7ecff]/50"
               />
             </label>
           </div>

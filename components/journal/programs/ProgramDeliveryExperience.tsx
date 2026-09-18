@@ -352,7 +352,7 @@ function StartGate({
               min={today}
               value={selectedDate}
               onChange={(event) => setSelectedDate(event.target.value)}
-              className="mt-2 h-11 w-full rounded-xl border border-black/15 bg-white px-3 font-normal"
+              className="mt-2 h-11 w-full rounded-xl border border-black/15 bg-white px-3 text-xl font-normal"
             />
           </label>
         )}
