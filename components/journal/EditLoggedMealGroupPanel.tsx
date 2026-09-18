@@ -205,7 +205,7 @@ export function EditLoggedMealGroupPanel({
           </label>
 
           {status === 'error' && error && (
-            <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-3.5 py-2.5 text-xl text-red-200 antialiased">
+            <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-200 antialiased">
               {error}
             </div>
           )}
@@ -216,7 +216,7 @@ export function EditLoggedMealGroupPanel({
             type="button"
             onClick={onClose}
             disabled={status === 'submitting'}
-            className="inline-flex justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xl font-semibold text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-40"
+            className="inline-flex justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-40"
           >
             Cancel
           </button>

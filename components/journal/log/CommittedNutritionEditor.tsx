@@ -357,7 +357,7 @@ function SingleItemEditor({
                 key={`${result.kind}:${result.id}`}
                 type="button"
                 onClick={() => selectReplacement(result)}
-                className="block w-full rounded-lg px-3 py-2 text-left text-xl hover:bg-white/[0.06]"
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-white/[0.06]"
               >
                 {result.title}
               </button>

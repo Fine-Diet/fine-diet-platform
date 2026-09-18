@@ -139,7 +139,7 @@ export function WeekPatternDayControls({
             type="button"
             disabled={busy || !selectedTemplateId}
             onClick={handleChooseTemplate}
-            className="rounded-full border border-white/15 px-4 py-2 text-xl font-semibold text-white/85 disabled:opacity-40"
+            className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/85 disabled:opacity-40"
           >
             Apply template
           </button>
@@ -178,7 +178,7 @@ export function WeekPatternDayControls({
               type="button"
               disabled={busy || duplicateFromIndex === ''}
               onClick={handleDuplicateDay}
-              className="rounded-full border border-white/15 px-4 py-2 text-xl font-semibold text-white/85 disabled:opacity-40"
+              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/85 disabled:opacity-40"
             >
               Duplicate day
             </button>

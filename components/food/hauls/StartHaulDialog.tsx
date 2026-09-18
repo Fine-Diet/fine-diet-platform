@@ -99,13 +99,13 @@ export function StartHaulDialog({
                 onChange={() => toggleList(list.id)}
                 className="h-4 w-4 accent-white"
               />
-              <span className="text-xl font-semibold">{groceryListTitle(list)}</span>
+              <span className="text-sm font-semibold">{groceryListTitle(list)}</span>
             </label>
           ))
         )}
       </fieldset>
 
-      <label className="mt-5 block text-xl font-semibold uppercase tracking-[0.16em] text-white/45">
+      <label className="mt-5 block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
         Shopping date
         <input
           type="date"
@@ -119,7 +119,7 @@ export function StartHaulDialog({
       </label>
 
       {error && (
-        <p role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-xl text-red-100">
+        <p role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
           {error}
         </p>
       )}
@@ -129,7 +129,7 @@ export function StartHaulDialog({
           type="button"
           onClick={onClose}
           disabled={busy}
-          className="min-h-11 rounded-full border border-white/15 px-5 text-xl font-semibold hover:bg-white/[0.04]"
+          className="min-h-11 rounded-full border border-white/15 px-5 text-sm font-semibold hover:bg-white/[0.04]"
         >
           Cancel
         </button>

@@ -919,7 +919,7 @@ export default function JournalPlanDayPage() {
                       <button
                         type="button"
                         onClick={() => navigateToDate(todayLocalDateKey())}
-                        className="text-xl text-white/50 hover:text-white"
+                        className="text-xs text-white/50 hover:text-white"
                       >
                         Today
                       </button>
@@ -928,7 +928,7 @@ export default function JournalPlanDayPage() {
                   <button
                     type="button"
                     onClick={() => navigateToDate(addDaysToDateKey(selectedDate, 1))}
-                    className="min-h-12 px-3 text-xl text-white/55 transition-colors hover:text-white"
+                    className="min-h-12 px-3 text-lg text-white/55 transition-colors hover:text-white"
                     aria-label="Next day"
                   >
                     ›
@@ -1123,7 +1123,7 @@ export default function JournalPlanDayPage() {
                     type="button"
                     disabled={busy || meals.length === 0}
                     onClick={handleSaveDayTemplate}
-                    className="shrink-0 px-3 py-1.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 text-xl font-medium text-denim-200 antialiased transition-colors"
+                    className="shrink-0 px-3 py-1.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 text-xs font-medium text-denim-200 antialiased transition-colors"
                   >
                     Save day
                   </button>
@@ -1159,7 +1159,7 @@ export default function JournalPlanDayPage() {
                     type="button"
                     disabled={busy || !selectedTemplateId}
                     onClick={handleInstantiateTemplate}
-                    className="px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.10] disabled:bg-white/[0.04] disabled:text-white/30 text-xl font-medium text-white/75 antialiased transition-colors"
+                    className="px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.10] disabled:bg-white/[0.04] disabled:text-white/30 text-xs font-medium text-white/75 antialiased transition-colors"
                   >
                     Append
                   </button>
@@ -1200,7 +1200,7 @@ export default function JournalPlanDayPage() {
                     type="button"
                     disabled={busy || planDays.length === 0 || allPlanMeals.length === 0}
                     onClick={handleSaveWeekPattern}
-                    className="shrink-0 px-3 py-1.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 text-xl font-medium text-denim-200 antialiased transition-colors"
+                    className="shrink-0 px-3 py-1.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 text-xs font-medium text-denim-200 antialiased transition-colors"
                   >
                     Save pattern
                   </button>
@@ -1236,7 +1236,7 @@ export default function JournalPlanDayPage() {
                     type="button"
                     disabled={busy || !selectedWeekPatternId}
                     onClick={handleInstantiateWeekPattern}
-                    className="px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.10] disabled:bg-white/[0.04] disabled:text-white/30 text-xl font-medium text-white/75 antialiased transition-colors"
+                    className="px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.10] disabled:bg-white/[0.04] disabled:text-white/30 text-xs font-medium text-white/75 antialiased transition-colors"
                   >
                     Append range
                   </button>
@@ -1315,7 +1315,7 @@ export default function JournalPlanDayPage() {
                   type="button"
                   disabled={busy || !moveTargetSlotId}
                   onClick={handleConfirmMove}
-                  className="px-3 py-1.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 text-xl font-medium text-denim-200 antialiased transition-colors"
+                  className="px-3 py-1.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 text-xs font-medium text-denim-200 antialiased transition-colors"
                 >
                   Move meal
                 </button>
@@ -1362,7 +1362,7 @@ export default function JournalPlanDayPage() {
                   type="button"
                   disabled={busy || !copyTargetSlotId}
                   onClick={handleConfirmCopy}
-                  className="px-3 py-1.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 text-xl font-medium text-denim-200 antialiased transition-colors"
+                  className="px-3 py-1.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 text-xs font-medium text-denim-200 antialiased transition-colors"
                 >
                   Copy meal
                 </button>

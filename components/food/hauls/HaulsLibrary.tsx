@@ -169,7 +169,7 @@ export default function HaulsLibrary() {
           </div>
 
           {error && (
-            <div role="alert" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-xl text-red-100">
+            <div role="alert" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
               <span>{error}</span>
               <button type="button" onClick={() => void load()} className="font-semibold underline">
                 Try again

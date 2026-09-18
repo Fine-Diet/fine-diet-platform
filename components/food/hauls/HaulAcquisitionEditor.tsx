@@ -151,7 +151,7 @@ export function HaulAcquisitionEditor({
           type="button"
           onClick={onClose}
           disabled={saving}
-          className="rounded-full border border-white/15 px-5 py-2.5 text-xl font-semibold"
+          className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold"
         >
           Cancel
         </button>

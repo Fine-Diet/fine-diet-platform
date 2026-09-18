@@ -361,7 +361,7 @@ export function LogMealDocumentPanel({
                 type="button"
                 onClick={onClose}
                 disabled={status === 'submitting'}
-                className="inline-flex justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xl font-semibold text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-40"
+                className="inline-flex justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-40"
               >
                 Cancel
               </button>

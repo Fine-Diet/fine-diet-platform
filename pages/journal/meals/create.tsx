@@ -106,8 +106,8 @@ export default function JournalMealsCreatePage() {
             </div>
 
             <div>
-              <h2 className="text-white/80 text-xl font-medium mb-2">Included items</h2>
-              <p className="text-white/50 text-xl mb-2">Uncheck to remove from this meal template.</p>
+              <h2 className="text-white/80 text-sm font-medium mb-2">Included items</h2>
+              <p className="text-white/50 text-xs mb-2">Uncheck to remove from this meal template.</p>
               <ul className="space-y-2">
                 {entries.map((entry) => {
                   const p = entry.payload as { name?: string; quantity?: number; unit?: string };
@@ -123,7 +123,7 @@ export default function JournalMealsCreatePage() {
                     <label htmlFor={`inc-${entry.id}`} className="flex-1 text-white cursor-pointer">
                       {formatFoodNameString(p.name ?? 'Untitled')}
                       {p.quantity != null && (
-                        <span className="text-white/60 text-xl ml-1">
+                        <span className="text-white/60 text-sm ml-1">
                           {p.quantity} {p.unit ?? ''}
                         </span>
                       )}

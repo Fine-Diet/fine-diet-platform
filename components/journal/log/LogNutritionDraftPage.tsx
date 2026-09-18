@@ -249,7 +249,7 @@ function DraftEntryRow({
               event.stopPropagation();
               onRemove();
             }}
-            className={`mt-3 p-1 text-xl leading-none text-white/25 transition-all hover:text-white/75 ${
+            className={`mt-3 p-1 text-lg leading-none text-white/25 transition-all hover:text-white/75 ${
               active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
             }`}
             aria-label={`Remove ${entry.title}`}
@@ -400,7 +400,7 @@ function QuickAddModal({
           <button
             onClick={() => void submit()}
             disabled={saving}
-            className="rounded-full bg-white px-5 py-2 text-xl font-medium text-black disabled:opacity-50"
+            className="rounded-full bg-white px-5 py-2 text-sm font-medium text-black disabled:opacity-50"
           >
             {saving ? 'Adding…' : 'Add to Draft'}
           </button>
@@ -921,7 +921,7 @@ export default function LogNutritionDraftPage() {
             <button
               type="button"
               onClick={() => setShowScanner(true)}
-              className="p-3 text-xl text-white/55 hover:text-white"
+              className="p-3 text-lg text-white/55 hover:text-white"
               aria-label="Scan barcode"
             >
               ⛶
@@ -1093,17 +1093,17 @@ export default function LogNutritionDraftPage() {
               placeholder="Meal name"
               className="mt-4 w-full rounded-xl border border-white/15 bg-transparent px-3 py-2.5 text-xl outline-none"
             />
-            <p className="mt-2 text-xl text-white/35">
+            <p className="mt-2 text-xs text-white/35">
               This does not log anything. Your active draft will remain here.
             </p>
             <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => setShowSaveMeal(false)} className="px-4 py-2 text-xl text-white/50">
+              <button onClick={() => setShowSaveMeal(false)} className="px-4 py-2 text-sm text-white/50">
                 Cancel
               </button>
               <button
                 onClick={() => void saveAsMeal()}
                 disabled={!mealName.trim() || savingMeal}
-                className="rounded-full bg-white px-5 py-2 text-xl font-medium text-black disabled:opacity-40"
+                className="rounded-full bg-white px-5 py-2 text-sm font-medium text-black disabled:opacity-40"
               >
                 {savingMeal ? 'Saving…' : 'Save'}
               </button>

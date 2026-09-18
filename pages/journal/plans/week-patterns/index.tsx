@@ -190,7 +190,7 @@ export default function WeekPatternsPage() {
               type="button"
               disabled={busyId === 'blank'}
               onClick={handleCreateBlank}
-              className="rounded-full bg-[#d7ecff] px-4 py-2 text-xl font-semibold text-black disabled:opacity-40"
+              className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
             >
               {busyId === 'blank' ? 'Creating…' : 'Create blank pattern'}
             </button>
@@ -251,7 +251,7 @@ export default function WeekPatternsPage() {
               type="button"
               disabled={busyId === 'create' || !plan || !rangePreview.days}
               onClick={handleCreateFromRange}
-              className="rounded-full bg-[#d7ecff] px-4 py-2 text-xl font-semibold text-black disabled:opacity-40"
+              className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
             >
               {busyId === 'create' ? 'Creating…' : 'Save from plan days'}
             </button>
