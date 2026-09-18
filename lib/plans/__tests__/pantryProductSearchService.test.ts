@@ -53,6 +53,35 @@ describe('searchPantryProductDetails', () => {
     })).rejects.toThrow('Search query must be at least 2 characters.');
   });
 
+  it('orders pantry offers with rankGroceryPriceCandidates instead of raw provider order', async () => {
+    setSerpApiFetchOverride(async () => ({
+      shopping_results: [
+        {
+          title: 'Sponsored Organic Spinach Multipack',
+          source: 'Whole Foods',
+          extracted_price: 2.99,
+        },
+        {
+          title: 'Organic Spinach 5 oz',
+          source: 'Whole Foods',
+          extracted_price: 3.49,
+        },
+      ],
+    }));
+
+    const result = await searchPantryProductDetails({
+      personId: PERSON_ID,
+      query: 'organic spinach',
+      retailer: 'Whole Foods',
+    });
+
+    expect(result.outcome).toBe('results');
+    expect(result.offers.map((offer) => offer.title)).toEqual([
+      'Organic Spinach 5 oz',
+      'Sponsored Organic Spinach Multipack',
+    ]);
+  });
+
   it('returns normalized offers without requiring grocery item scope', async () => {
     setSerpApiFetchOverride(async () => ({
       shopping_results: [

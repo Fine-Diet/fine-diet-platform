@@ -253,7 +253,7 @@ export default function PantryManager() {
   >('idle');
   const [productSearchOffers, setProductSearchOffers] = useState<PantryProductSearchOffer[]>([]);
   const [productSearchError, setProductSearchError] = useState<string | null>(null);
-  const todayYmd = useMemo(() => localTodayYmd(), []);
+  const todayYmd = localTodayYmd();
 
   const [quickStartProposal, setQuickStartProposal] =
     useState<PantryQuickStartProposal | null>(null);

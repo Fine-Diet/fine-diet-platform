@@ -7,6 +7,7 @@ import type { GroceryPriceSearchContext } from './groceryPriceProviderTypes';
 import { isGroceryPriceProviderError } from './groceryPriceProviderTypes';
 import { buildGroceryPriceSearchQuota, GroceryPriceQuotaExceededError } from './groceryPriceQuota';
 import { finalizeQuotaClaim, reserveGroceryPriceSearchQuota } from './groceryPriceQuotaReservation';
+import { rankGroceryPriceCandidates } from './groceryPriceRanking';
 import {
   searchWithQueryFallback,
   serpApiGroceryPriceProvider,
@@ -89,7 +90,8 @@ export async function searchPantryProductDetails(options: {
       };
     }
 
-    const offers = fallback.result.candidates
+    const ranked = rankGroceryPriceCandidates(context, fallback.result.candidates);
+    const offers = ranked
       .slice(0, MAX_OFFERS)
       .map(toPantryProductSearchOffer);
     const billed = offers.length > 0;
