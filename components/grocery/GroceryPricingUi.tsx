@@ -496,7 +496,7 @@ export function GroceryPricePanel({
                     value={retailer}
                     onChange={(e) => setRetailer(e.target.value)}
                     placeholder="Target, Whole Foods…"
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                   />
                 </label>
                 <label className="space-y-1 col-span-2 sm:col-span-1">
@@ -506,7 +506,7 @@ export function GroceryPricePanel({
                     value={postalCode}
                     onChange={(e) => setPostalCode(e.target.value)}
                     placeholder="94110"
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                   />
                 </label>
               </div>
@@ -591,7 +591,7 @@ export function GroceryPricePanel({
                     step="1"
                     value={packageCount}
                     onChange={(e) => setPackageCount(e.target.value)}
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                   />
                 </label>
               )}
@@ -715,7 +715,7 @@ export function GroceryPricePanel({
                   type="text"
                   value={manualProductTitle}
                   onChange={(e) => setManualProductTitle(e.target.value)}
-                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                 />
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -728,7 +728,7 @@ export function GroceryPricePanel({
                     value={manualUnitPrice}
                     onChange={(e) => setManualUnitPrice(e.target.value)}
                     placeholder="3.99"
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                   />
                 </label>
                 <label className="space-y-1">
@@ -737,7 +737,7 @@ export function GroceryPricePanel({
                     type="text"
                     value={manualRetailer}
                     onChange={(e) => setManualRetailer(e.target.value)}
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                   />
                 </label>
               </div>
@@ -747,7 +747,7 @@ export function GroceryPricePanel({
                   type="text"
                   value={manualPostalCode}
                   onChange={(e) => setManualPostalCode(e.target.value)}
-                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                 />
               </label>
               <button
