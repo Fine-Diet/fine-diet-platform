@@ -11,10 +11,18 @@ import { PantryQuickStartView } from './PantryQuickStartView';
 import {
   earliestExpirationEvidence,
   filterAndSortPantryItems,
+  formatExpirationEvidenceLabel,
+  localTodayYmd,
   sortAcquisitionLots,
   type InventoryFilter,
   type PerishabilityFilter,
 } from './pantryPolicy';
+import { applyPantryProductOfferToLotDraft } from '@/lib/plans/pantryProductSearchMapping';
+import {
+  fetchPantryProductSearch,
+  PantryProductSearchQuotaExceededError,
+} from '@/lib/plans/pantryProductSearchClient';
+import type { PantryProductSearchOffer } from '@/lib/plans/pantryProductSearchTypes';
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 import {
   planService,
@@ -156,9 +164,11 @@ function lotInputFromDraft(draft: LotDraft): PantryAcquisitionLotInput {
 function LotCard({
   lot,
   onEdit,
+  todayYmd,
 }: {
   lot: PantryAcquisitionLot;
   onEdit: () => void;
+  todayYmd: string;
 }) {
   const evidence = earliestExpirationEvidence([lot]);
   const product = [lot.brand_name, lot.product_title].filter(Boolean).join(' · ');
@@ -185,10 +195,7 @@ function LotCard({
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/42">
         <span>Acquired {formatDate(lot.acquired_on)}</span>
         {evidence && (
-          <span>
-            {evidence.kind === 'exact' ? 'Expires' : 'Expected expiration'}{' '}
-            {formatDate(evidence.date)}
-          </span>
+          <span>{formatExpirationEvidenceLabel(evidence, todayYmd)}</span>
         )}
         {packageText && <span>{packageText}</span>}
         {lot.retailer && <span>{lot.retailer}</span>}
@@ -239,6 +246,14 @@ export default function PantryManager() {
   const [lotForm, setLotForm] = useState<LotDraft>(() => emptyLotDraft(null));
   const [lotBusy, setLotBusy] = useState(false);
   const [lotError, setLotError] = useState<string | null>(null);
+  const [productSearchOpen, setProductSearchOpen] = useState(false);
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productSearchState, setProductSearchState] = useState<
+    'idle' | 'searching' | 'results' | 'zero_results' | 'error' | 'quota_exceeded'
+  >('idle');
+  const [productSearchOffers, setProductSearchOffers] = useState<PantryProductSearchOffer[]>([]);
+  const [productSearchError, setProductSearchError] = useState<string | null>(null);
+  const todayYmd = useMemo(() => localTodayYmd(), []);
 
   const [quickStartProposal, setQuickStartProposal] =
     useState<PantryQuickStartProposal | null>(null);
@@ -467,11 +482,76 @@ export default function PantryManager() {
     }
   }
 
+  function resetProductSearch() {
+    setProductSearchOpen(false);
+    setProductSearchQuery('');
+    setProductSearchState('idle');
+    setProductSearchOffers([]);
+    setProductSearchError(null);
+  }
+
   function openLot(item: PantryOnHandItem, lot: PantryAcquisitionLot | null = null) {
     setMenuKey(null);
     setLotContext({ pantryKey: item.key, itemName: item.name, lot });
     setLotForm(lot ? lotDraft(lot) : emptyLotDraft(item.unit));
     setLotError(null);
+    resetProductSearch();
+  }
+
+  function openProductSearch() {
+    const defaultQuery = lotForm.productTitle.trim() || lotContext?.itemName || '';
+    setProductSearchOpen(true);
+    setProductSearchQuery(defaultQuery);
+    setProductSearchState('idle');
+    setProductSearchOffers([]);
+    setProductSearchError(null);
+  }
+
+  async function runProductSearch() {
+    const query = productSearchQuery.trim();
+    if (query.length < 2) {
+      setProductSearchError('Enter at least two characters to search.');
+      setProductSearchState('error');
+      return;
+    }
+    setProductSearchState('searching');
+    setProductSearchError(null);
+    setProductSearchOffers([]);
+    try {
+      const result = await fetchPantryProductSearch({
+        query,
+        retailer: lotForm.retailer.trim() || null,
+      });
+      if (result.outcome === 'provider_error') {
+        setProductSearchState('error');
+        setProductSearchError(
+          result.provider_error?.message ?? 'Product lookup is temporarily unavailable.',
+        );
+        return;
+      }
+      if (result.outcome === 'zero_results' || result.offers.length === 0) {
+        setProductSearchState('zero_results');
+        return;
+      }
+      setProductSearchOffers(result.offers);
+      setProductSearchState('results');
+    } catch (err) {
+      if (err instanceof PantryProductSearchQuotaExceededError) {
+        setProductSearchState('quota_exceeded');
+        setProductSearchError('Product lookup quota exceeded for now.');
+        return;
+      }
+      setProductSearchState('error');
+      setProductSearchError(err instanceof Error ? err.message : 'Product search failed.');
+    }
+  }
+
+  function selectProductOffer(offer: PantryProductSearchOffer) {
+    setLotForm((current) => applyPantryProductOfferToLotDraft(current, offer));
+    setProductSearchOpen(false);
+    setProductSearchState('idle');
+    setProductSearchOffers([]);
+    setProductSearchError(null);
   }
 
   function updateLotForm(patch: Partial<LotDraft>) {
@@ -766,8 +846,7 @@ export default function PantryManager() {
                         </span>
                         {evidence && (
                           <span className="mt-0.5 block text-xs text-white/38">
-                            {evidence.kind === 'exact' ? 'Expires' : 'Expected expiration'}{' '}
-                            {formatDate(evidence.date)}
+                            {formatExpirationEvidenceLabel(evidence, todayYmd)}
                           </span>
                         )}
                       </button>
@@ -840,7 +919,12 @@ export default function PantryManager() {
                           ) : (
                             <div className="mt-4">
                               {itemLots.map((lot) => (
-                                <LotCard key={lot.id} lot={lot} onEdit={() => openLot(item, lot)} />
+                                <LotCard
+                                  key={lot.id}
+                                  lot={lot}
+                                  todayYmd={todayYmd}
+                                  onEdit={() => openLot(item, lot)}
+                                />
                               ))}
                             </div>
                           )}
@@ -1039,7 +1123,84 @@ export default function PantryManager() {
               <input type="number" min="1" step="1" value={lotForm.expectedShelfLifeDays} onChange={(event) => updateLotForm({ expectedShelfLifeDays: event.target.value })} className={inputClass} />
             </label>
             <div className="border-t border-white/[0.08] pt-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Product details</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Product details</p>
+                <button
+                  type="button"
+                  onClick={() => (productSearchOpen ? resetProductSearch() : openProductSearch())}
+                  className="text-xs font-medium text-brand-50 hover:text-white"
+                >
+                  {productSearchOpen ? 'Hide product lookup' : 'Find product details'}
+                </button>
+              </div>
+              {productSearchOpen && (
+                <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex gap-2">
+                    <input
+                      value={productSearchQuery}
+                      onChange={(event) => setProductSearchQuery(event.target.value)}
+                      placeholder="Search retail products"
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void runProductSearch()}
+                      disabled={productSearchState === 'searching'}
+                      className="shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white hover:bg-white/[0.06] disabled:opacity-40"
+                    >
+                      {productSearchState === 'searching' ? 'Searching…' : 'Search'}
+                    </button>
+                  </div>
+                  {productSearchState === 'searching' && (
+                    <p className="mt-3 text-xs text-white/45">Searching retail listings…</p>
+                  )}
+                  {productSearchState === 'zero_results' && (
+                    <p className="mt-3 text-xs text-white/45">No retail matches found. You can still enter product details manually.</p>
+                  )}
+                  {productSearchState === 'quota_exceeded' && productSearchError && (
+                    <p className="mt-3 text-xs text-amber-200" role="alert">{productSearchError}</p>
+                  )}
+                  {productSearchState === 'error' && productSearchError && (
+                    <p className="mt-3 text-xs text-red-200" role="alert">{productSearchError}</p>
+                  )}
+                  {productSearchState === 'results' && productSearchOffers.length > 0 && (
+                    <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+                      {productSearchOffers.map((offer) => (
+                        <li key={offer.provider_result_id}>
+                          <button
+                            type="button"
+                            onClick={() => selectProductOffer(offer)}
+                            className="flex w-full items-start gap-3 rounded-lg border border-white/10 px-3 py-2 text-left hover:bg-white/[0.05]"
+                          >
+                            {offer.image_url && (
+                              <img
+                                src={offer.image_url}
+                                alt=""
+                                className="mt-0.5 h-10 w-10 shrink-0 rounded object-cover"
+                              />
+                            )}
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium text-white">{offer.title}</span>
+                              <span className="mt-0.5 block text-xs text-white/50">
+                                {[
+                                  offer.retailer,
+                                  offer.price != null
+                                    ? formatCurrency(offer.price, offer.currency)
+                                    : null,
+                                  offer.package_text
+                                    ?? (offer.package_size != null
+                                      ? `${offer.package_size}${offer.package_unit ? ` ${offer.package_unit}` : ''}`
+                                      : null),
+                                ].filter(Boolean).join(' · ')}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label>
                   <span className="text-xs text-white/55">Product title</span>
