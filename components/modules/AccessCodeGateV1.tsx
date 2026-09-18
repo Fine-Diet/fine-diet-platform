@@ -288,7 +288,7 @@ export function AccessCodeGateV1({ content }: Props) {
               spellCheck={false}
               aria-label={content.codeLabel ?? 'Access code'}
               placeholder={content.codePlaceholder ?? 'Enter code'}
-              className="w-full rounded-full border border-brand-900/15 bg-white px-6 py-4 text-center text-lg text-brand-900 placeholder:text-brand-900/40 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+              className="w-full rounded-full border border-brand-900/15 bg-white px-6 py-4 text-center text-xl text-brand-900 placeholder:text-brand-900/40 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
             />
 
             {content.collectEmail && (
@@ -299,7 +299,7 @@ export function AccessCodeGateV1({ content }: Props) {
                 autoComplete="email"
                 aria-label={content.emailLabel ?? 'Email'}
                 placeholder={content.emailPlaceholder ?? 'you@example.com'}
-                className="w-full rounded-full border border-brand-900/15 bg-white px-6 py-4 text-center text-lg text-brand-900 placeholder:text-brand-900/40 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+                className="w-full rounded-full border border-brand-900/15 bg-white px-6 py-4 text-center text-xl text-brand-900 placeholder:text-brand-900/40 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
               />
             )}
 
@@ -312,7 +312,7 @@ export function AccessCodeGateV1({ content }: Props) {
             <button
               type="submit"
               disabled={state === 'submitting'}
-              className="w-full rounded-full bg-brand-900 px-8 py-4 text-base font-semibold text-white transition-colors hover:bg-brand-800 disabled:opacity-50"
+              className="w-full rounded-full bg-brand-900 px-8 py-4 text-xl font-semibold text-white transition-colors hover:bg-brand-800 disabled:opacity-50"
             >
               {state === 'submitting' ? submittingLabel : content.ctaLabel}
             </button>
@@ -355,7 +355,7 @@ export function AccessCodeGateV1({ content }: Props) {
               autoCorrect="off"
               spellCheck={false}
               placeholder={content.codePlaceholder ?? 'Enter code'}
-              className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-base text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+              className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-xl text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
             />
           </Field>
 
@@ -367,7 +367,7 @@ export function AccessCodeGateV1({ content }: Props) {
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
                 placeholder={content.emailPlaceholder ?? 'you@example.com'}
-                className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-base text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+                className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-xl text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
               />
             </Field>
           )}
@@ -381,7 +381,7 @@ export function AccessCodeGateV1({ content }: Props) {
           <button
             type="submit"
             disabled={state === 'submitting'}
-            className="w-full rounded-md bg-brand-900 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-brand-800 disabled:opacity-50"
+            className="w-full rounded-md bg-brand-900 px-4 py-3 text-xl font-semibold text-white transition-colors hover:bg-brand-800 disabled:opacity-50"
           >
             {state === 'submitting' ? submittingLabel : content.ctaLabel}
           </button>

@@ -91,7 +91,7 @@ export function ProgramsByCategoryModule({
               setDraft(next);
               onSearchChange(next);
             }}
-            className="h-6 w-full rounded-full border border-white/15 bg-white/0 pl-9 pr-3 text-sm text-white placeholder:text-white/40 focus:border-white/35 focus:outline-none"
+            className="h-6 w-full rounded-full border border-white/15 bg-white/0 pl-9 pr-3 text-xl text-white placeholder:text-white/40 focus:border-white/35 focus:outline-none"
           />
         </label>
       </div>
