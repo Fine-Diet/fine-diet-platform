@@ -1,4 +1,8 @@
 import { setSerpApiFetchOverride } from '../groceryPriceSerpApiProvider';
+import {
+  searchPantryProductDetails,
+  setPantryProductSearchTimeoutMsOverride,
+} from '../pantryProductSearchService';
 
 const mockBuildGroceryPriceSearchQuota = jest.fn();
 const mockFinalizeQuotaClaim = jest.fn();
@@ -16,14 +20,13 @@ jest.mock('../groceryPriceQuotaReservation', () => ({
   finalizeQuotaClaim: (...args: unknown[]) => mockFinalizeQuotaClaim(...args),
 }));
 
-import { searchPantryProductDetails } from '../pantryProductSearchService';
-
 const PERSON_ID = 'person-1';
 
 describe('searchPantryProductDetails', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     setSerpApiFetchOverride(null);
+    setPantryProductSearchTimeoutMsOverride(null);
     mockReserveGroceryPriceSearchQuota.mockResolvedValue({
       claimId: 'claim-1',
       tier: 'demo',
@@ -44,6 +47,8 @@ describe('searchPantryProductDetails', () => {
 
   afterEach(() => {
     setSerpApiFetchOverride(null);
+    setPantryProductSearchTimeoutMsOverride(null);
+    jest.useRealTimers();
   });
 
   it('rejects blank or too-short queries', async () => {
@@ -131,5 +136,40 @@ describe('searchPantryProductDetails', () => {
 
     expect(result.outcome).toBe('provider_error');
     expect(result.provider_error?.code).toBe('provider_error');
+  });
+
+  it('returns provider_error and releases quota when Pantry timeout elapses', async () => {
+    jest.useFakeTimers();
+    setPantryProductSearchTimeoutMsOverride(50);
+    setSerpApiFetchOverride((_url, init) => new Promise((resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) {
+        reject(new Error('expected abort signal'));
+        return;
+      }
+      signal.addEventListener('abort', () => {
+        const error = new Error('Aborted');
+        error.name = 'AbortError';
+        reject(error);
+      });
+    }));
+
+    const promise = searchPantryProductDetails({
+      personId: PERSON_ID,
+      query: 'spinach',
+    });
+    await jest.advanceTimersByTimeAsync(50);
+    const result = await promise;
+
+    expect(result.outcome).toBe('provider_error');
+    expect(result.provider_error?.code).toBe('timeout');
+    expect(mockFinalizeQuotaClaim).toHaveBeenCalledWith({
+      claimId: 'claim-1',
+      status: 'released',
+    });
+    expect(mockFinalizeQuotaClaim).not.toHaveBeenCalledWith({
+      claimId: 'claim-1',
+      status: 'billed',
+    });
   });
 });

@@ -529,7 +529,11 @@ export default function PantryManager() {
         );
         return;
       }
-      if (result.outcome === 'zero_results' || result.offers.length === 0) {
+      if (
+        result.outcome === 'zero_results'
+        || !Array.isArray(result.offers)
+        || result.offers.length === 0
+      ) {
         setProductSearchState('zero_results');
         return;
       }
