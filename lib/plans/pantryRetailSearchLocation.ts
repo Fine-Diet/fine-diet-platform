@@ -108,11 +108,12 @@ function scoreSupportedLocationCandidate(
   const canonicalName = candidate.canonical_name?.trim();
   if (!canonicalName) return null;
 
+  if (!candidateContainsExactPostal(candidate, normalizedPostal)) return null;
+
   let score = 0;
   if (isPostalTargetType(candidate.target_type)) score += 100;
-  if (candidateContainsExactPostal(candidate, normalizedPostal)) score += 50;
   if (countryCode === expectedCountry) score += 10;
-  return score > 0 ? score : null;
+  return score > 0 ? score : 1;
 }
 
 function selectBestSupportedLocation(
@@ -196,7 +197,7 @@ export async function resolvePantryRetailSearchLocation(
         'Search location lookup timed out. Try again.',
       );
     }
-    if (error instanceof PantryRetailSearchLocationError) {
+    if (isPantryRetailSearchLocationError(error) && error.code === 'location_timeout') {
       throw error;
     }
   } finally {

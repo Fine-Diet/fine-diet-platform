@@ -37,6 +37,21 @@ describe('resolvePantryRetailSearchLocation', () => {
     });
   });
 
+  it('rejects same-country candidates that do not contain the exact postal token', async () => {
+    setPantryRetailLocationsFetchOverride(async () => ([
+      {
+        name: 'San Francisco, California, United States',
+        canonical_name: 'San Francisco, California, United States',
+        country_code: 'US',
+        target_type: 'City',
+      },
+    ]));
+
+    const result = await resolvePantryRetailSearchLocation('94110');
+    expect(result.resolution_source).toBe('legacy_market_fallback');
+    expect(result.provider_location).toContain('San Francisco');
+  });
+
   it('rejects wrong-country candidates', async () => {
     setPantryRetailLocationsFetchOverride(async () => ([
       {
@@ -77,6 +92,19 @@ describe('resolvePantryRetailSearchLocation', () => {
     const result = await resolvePantryRetailSearchLocation('M5V 2T6');
     expect(result.postal_code).toBe('M5V 2T6');
     expect(result.country_code).toBe('CA');
+  });
+
+  it('uses legacy fallback when Supported Locations fetch fails with location_unresolved', async () => {
+    setPantryRetailLocationsFetchOverride(async () => {
+      throw new PantryRetailSearchLocationError(
+        'location_unresolved',
+        'Unable to resolve search location.',
+      );
+    });
+
+    const result = await resolvePantryRetailSearchLocation('94110');
+    expect(result.resolution_source).toBe('legacy_market_fallback');
+    expect(result.provider_location).toContain('San Francisco');
   });
 
   it('throws when location cannot be resolved', async () => {
