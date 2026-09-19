@@ -6,6 +6,12 @@ export const PANTRY_PRODUCT_SEARCH_INVALID_RESPONSE_MESSAGE =
 export const PANTRY_PRODUCT_SEARCH_UNAVAILABLE_MESSAGE =
   'Product lookup is temporarily unavailable. Please try again.';
 
+export function formatPantryProductSearchProviderErrorMessage(
+  _providerError: { code: string; message: string } | null | undefined,
+): string {
+  return PANTRY_PRODUCT_SEARCH_UNAVAILABLE_MESSAGE;
+}
+
 export class PantryProductSearchQuotaExceededError extends Error {
   readonly quota: GroceryPriceSearchQuota;
 

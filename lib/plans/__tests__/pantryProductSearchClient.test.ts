@@ -1,5 +1,6 @@
 import {
   fetchPantryProductSearch,
+  formatPantryProductSearchProviderErrorMessage,
   PANTRY_PRODUCT_SEARCH_INVALID_RESPONSE_MESSAGE,
   PANTRY_PRODUCT_SEARCH_UNAVAILABLE_MESSAGE,
   PantryProductSearchQuotaExceededError,
@@ -34,6 +35,26 @@ function mockFetch(status: number, body: unknown): void {
     json: async () => body,
   } as Response);
 }
+
+describe('formatPantryProductSearchProviderErrorMessage', () => {
+  it('maps timeout provider diagnostics to stable user-facing copy', () => {
+    expect(formatPantryProductSearchProviderErrorMessage({
+      code: 'timeout',
+      message: 'SerpAPI request aborted (abort_source=external_signal, elapsed_ms=20001)',
+    })).toBe(PANTRY_PRODUCT_SEARCH_UNAVAILABLE_MESSAGE);
+  });
+
+  it('maps disabled and provider_error codes to stable user-facing copy', () => {
+    expect(formatPantryProductSearchProviderErrorMessage({
+      code: 'disabled',
+      message: 'Grocery price provider is disabled',
+    })).toBe(PANTRY_PRODUCT_SEARCH_UNAVAILABLE_MESSAGE);
+    expect(formatPantryProductSearchProviderErrorMessage({
+      code: 'provider_error',
+      message: 'SerpAPI request failed (400): bad location',
+    })).toBe(PANTRY_PRODUCT_SEARCH_UNAVAILABLE_MESSAGE);
+  });
+});
 
 describe('fetchPantryProductSearch', () => {
   const originalFetch = global.fetch;

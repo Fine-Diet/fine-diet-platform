@@ -12,7 +12,9 @@ import {
   searchPantryProductDetails,
 } from '@/lib/plans/pantryProductSearchService';
 
-export const maxDuration = 30;
+export const config = {
+  maxDuration: 30,
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
