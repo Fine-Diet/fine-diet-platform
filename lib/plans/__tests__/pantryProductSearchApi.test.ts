@@ -10,6 +10,7 @@ jest.mock('@/lib/access/requireJournalAccess', () => ({
 jest.mock('@/lib/plans/pantryProductSearchService', () => ({
   searchPantryProductDetails: (...args: unknown[]) => mockSearchPantryProductDetails(...args),
   PantryProductSearchValidationError: class PantryProductSearchValidationError extends Error {},
+  PantryProductSearchLocationError: class PantryProductSearchLocationError extends Error {},
   GroceryPriceQuotaExceededError: class GroceryPriceQuotaExceededError extends Error {
     quota = { remaining: 0 };
   },
@@ -70,10 +71,22 @@ describe('pantry product-search API route', () => {
     mockRequireJournalAccess.mockResolvedValue(null);
     const req = {
       method: 'POST',
+      body: { query: 'spinach', postal_code: '94110' },
+    } as NextApiRequest;
+    const res = createMockRes();
+    await handler(req, res);
+    expect(mockSearchPantryProductDetails).not.toHaveBeenCalled();
+  });
+
+  it('requires postal_code', async () => {
+    const req = {
+      method: 'POST',
       body: { query: 'spinach' },
     } as NextApiRequest;
     const res = createMockRes();
     await handler(req, res);
+    expect(res.statusCode).toBe(400);
+    expect((res.body as { error?: string }).error).toBe('postal_code is required');
     expect(mockSearchPantryProductDetails).not.toHaveBeenCalled();
   });
 
@@ -84,11 +97,12 @@ describe('pantry product-search API route', () => {
       offers: [],
       quota: { remaining: 1 },
       provider_error: { code: 'disabled', message: 'disabled' },
+      search_provenance: null,
     });
 
     const req = {
       method: 'POST',
-      body: { query: 'spinach' },
+      body: { query: 'spinach', postal_code: '94110' },
     } as NextApiRequest;
     const res = createMockRes();
     await handler(req, res);
@@ -96,18 +110,24 @@ describe('pantry product-search API route', () => {
     expect((res.body as { outcome?: string }).outcome).toBe('provider_error');
   });
 
-  it('accepts pantry queries without grocery item identifiers', async () => {
+  it('accepts pantry queries with postal_code and optional retailer', async () => {
     mockSearchPantryProductDetails.mockResolvedValue({
       outcome: 'results',
       query: 'spinach',
       offers: [{ title: 'Spinach', retailer: 'Target', price: 2.99, currency: 'USD' }],
       quota: { remaining: 1 },
       provider_error: null,
+      search_provenance: {
+        requested_postal_code: '94110',
+        resolved_provider_location: '94110, California, United States',
+        retailer: null,
+        scope: 'market',
+      },
     });
 
     const req = {
       method: 'POST',
-      body: { query: 'spinach' },
+      body: { query: 'spinach', postal_code: '94110' },
     } as NextApiRequest;
     const res = createMockRes();
     await handler(req, res);
@@ -115,6 +135,7 @@ describe('pantry product-search API route', () => {
     expect(mockSearchPantryProductDetails).toHaveBeenCalledWith({
       personId: 'person-1',
       query: 'spinach',
+      postal_code: '94110',
       retailer: null,
     });
   });

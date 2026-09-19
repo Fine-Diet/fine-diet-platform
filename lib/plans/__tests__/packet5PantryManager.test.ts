@@ -44,6 +44,15 @@ describe('Packet 5 Pantry v2 manager', () => {
     expect(manager).not.toContain('result.provider_error?.message');
   });
 
+  it('requires postal search location and optional retailer in product lookup', () => {
+    expect(manager).toContain('Search location');
+    expect(manager).toContain('Retailer (optional)');
+    expect(manager).toContain('loadGroceryPriceSearchPrefs');
+    expect(manager).toContain('saveGroceryPriceSearchPrefs');
+    expect(manager).not.toContain('navigator.geolocation');
+    expect(manager).not.toContain('Use my location');
+  });
+
   it('exposes only factual Pantry filters and does not invent a Food Group', () => {
     expect(manager).toContain('Perishability');
     expect(manager).toContain('Inventory Status');

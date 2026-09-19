@@ -1,5 +1,10 @@
 import { setSerpApiFetchOverride } from '../groceryPriceSerpApiProvider';
 import {
+  setPantryRetailLocationsFetchOverride,
+} from '../pantryRetailSearchLocation';
+import {
+  PantryProductSearchLocationError,
+  PantryProductSearchValidationError,
   searchPantryProductDetails,
   setPantryProductSearchTimeoutMsOverride,
 } from '../pantryProductSearchService';
@@ -21,12 +26,26 @@ jest.mock('../groceryPriceQuotaReservation', () => ({
 }));
 
 const PERSON_ID = 'person-1';
+const POSTAL_CODE = '94110';
+
+function mockResolvablePostal() {
+  setPantryRetailLocationsFetchOverride(async () => ([
+    {
+      name: '94110, California, United States',
+      canonical_name: '94110, California, United States',
+      country_code: 'US',
+      target_type: 'Postal Code',
+    },
+  ]));
+}
 
 describe('searchPantryProductDetails', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     setSerpApiFetchOverride(null);
+    setPantryRetailLocationsFetchOverride(null);
     setPantryProductSearchTimeoutMsOverride(null);
+    mockResolvablePostal();
     mockReserveGroceryPriceSearchQuota.mockResolvedValue({
       claimId: 'claim-1',
       tier: 'demo',
@@ -47,6 +66,7 @@ describe('searchPantryProductDetails', () => {
 
   afterEach(() => {
     setSerpApiFetchOverride(null);
+    setPantryRetailLocationsFetchOverride(null);
     setPantryProductSearchTimeoutMsOverride(null);
     jest.useRealTimers();
   });
@@ -55,7 +75,45 @@ describe('searchPantryProductDetails', () => {
     await expect(searchPantryProductDetails({
       personId: PERSON_ID,
       query: ' ',
+      postal_code: POSTAL_CODE,
     })).rejects.toThrow('Search query must be at least 2 characters.');
+  });
+
+  it('rejects missing postal before quota reservation', async () => {
+    await expect(searchPantryProductDetails({
+      personId: PERSON_ID,
+      query: 'spinach',
+      postal_code: ' ',
+    })).rejects.toThrow('postal_code is required');
+    expect(mockReserveGroceryPriceSearchQuota).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid postal before quota reservation', async () => {
+    await expect(searchPantryProductDetails({
+      personId: PERSON_ID,
+      query: 'spinach',
+      postal_code: '12',
+    })).rejects.toThrow('postal_code must be a valid US ZIP or Canadian postal code');
+    expect(mockReserveGroceryPriceSearchQuota).not.toHaveBeenCalled();
+  });
+
+  it('rejects unresolved location before quota reservation', async () => {
+    setPantryRetailLocationsFetchOverride(async () => ([]));
+
+    try {
+      await searchPantryProductDetails({
+        personId: PERSON_ID,
+        query: 'spinach',
+        postal_code: '99999',
+      });
+      throw new Error('expected rejection');
+    } catch (error) {
+      expect(error).toMatchObject({
+        name: 'PantryProductSearchLocationError',
+        message: expect.stringContaining('Unable to resolve'),
+      });
+    }
+    expect(mockReserveGroceryPriceSearchQuota).not.toHaveBeenCalled();
   });
 
   it('orders pantry offers with rankGroceryPriceCandidates instead of raw provider order', async () => {
@@ -77,6 +135,7 @@ describe('searchPantryProductDetails', () => {
     const result = await searchPantryProductDetails({
       personId: PERSON_ID,
       query: 'organic spinach',
+      postal_code: POSTAL_CODE,
       retailer: 'Whole Foods',
     });
 
@@ -85,6 +144,32 @@ describe('searchPantryProductDetails', () => {
       'Organic Spinach 5 oz',
       'Sponsored Organic Spinach Multipack',
     ]);
+    expect(result.search_provenance).toMatchObject({
+      requested_postal_code: POSTAL_CODE,
+      retailer: 'Whole Foods',
+      scope: 'retailer_localized',
+    });
+  });
+
+  it('returns market scope when retailer is blank', async () => {
+    setSerpApiFetchOverride(async () => ({
+      shopping_results: [
+        {
+          title: 'Organic Baby Spinach 5 oz',
+          source: 'Whole Foods',
+          extracted_price: 3.49,
+        },
+      ],
+    }));
+
+    const result = await searchPantryProductDetails({
+      personId: PERSON_ID,
+      query: 'organic spinach',
+      postal_code: POSTAL_CODE,
+    });
+
+    expect(result.search_provenance?.scope).toBe('market');
+    expect(result.search_provenance?.retailer).toBeNull();
   });
 
   it('returns normalized offers without requiring grocery item scope', async () => {
@@ -101,6 +186,7 @@ describe('searchPantryProductDetails', () => {
     const result = await searchPantryProductDetails({
       personId: PERSON_ID,
       query: 'organic spinach',
+      postal_code: POSTAL_CODE,
       retailer: 'Whole Foods',
     });
 
@@ -120,6 +206,7 @@ describe('searchPantryProductDetails', () => {
     const result = await searchPantryProductDetails({
       personId: PERSON_ID,
       query: 'mystery item',
+      postal_code: POSTAL_CODE,
     });
 
     expect(result.outcome).toBe('zero_results');
@@ -132,6 +219,7 @@ describe('searchPantryProductDetails', () => {
     const result = await searchPantryProductDetails({
       personId: PERSON_ID,
       query: 'spinach',
+      postal_code: POSTAL_CODE,
     });
 
     expect(result.outcome).toBe('provider_error');
@@ -157,6 +245,7 @@ describe('searchPantryProductDetails', () => {
     const promise = searchPantryProductDetails({
       personId: PERSON_ID,
       query: 'spinach',
+      postal_code: POSTAL_CODE,
     });
     await jest.advanceTimersByTimeAsync(50);
     const result = await promise;
@@ -171,5 +260,27 @@ describe('searchPantryProductDetails', () => {
       claimId: 'claim-1',
       status: 'billed',
     });
+  });
+
+  it('returns resolved provider location in search provenance', async () => {
+    setSerpApiFetchOverride(async () => ({
+      shopping_results: [
+        {
+          title: 'Organic Baby Spinach 5 oz',
+          source: 'Whole Foods',
+          extracted_price: 3.49,
+        },
+      ],
+    }));
+
+    const result = await searchPantryProductDetails({
+      personId: PERSON_ID,
+      query: 'spinach',
+      postal_code: POSTAL_CODE,
+    });
+
+    expect(result.search_provenance?.resolved_provider_location).toBe(
+      '94110, California, United States',
+    );
   });
 });

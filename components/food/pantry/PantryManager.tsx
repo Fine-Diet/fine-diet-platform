@@ -23,6 +23,12 @@ import {
   formatPantryProductSearchProviderErrorMessage,
   PantryProductSearchQuotaExceededError,
 } from '@/lib/plans/pantryProductSearchClient';
+import {
+  loadGroceryPriceSearchPrefs,
+  saveGroceryPriceSearchPrefs,
+} from '@/lib/plans/groceryPricingClient';
+import { tryNormalizePostalCode } from '@/lib/plans/groceryPricingValidation';
+import type { PantryProductSearchProvenance } from '@/lib/plans/pantryProductSearchTypes';
 import type { PantryProductSearchOffer } from '@/lib/plans/pantryProductSearchTypes';
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 import {
@@ -249,11 +255,16 @@ export default function PantryManager() {
   const [lotError, setLotError] = useState<string | null>(null);
   const [productSearchOpen, setProductSearchOpen] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productSearchPostal, setProductSearchPostal] = useState('');
+  const [productSearchRetailer, setProductSearchRetailer] = useState('');
+  const [productSearchPostalTouched, setProductSearchPostalTouched] = useState(false);
   const [productSearchState, setProductSearchState] = useState<
     'idle' | 'searching' | 'results' | 'zero_results' | 'error' | 'quota_exceeded'
   >('idle');
   const [productSearchOffers, setProductSearchOffers] = useState<PantryProductSearchOffer[]>([]);
   const [productSearchError, setProductSearchError] = useState<string | null>(null);
+  const [productSearchProvenance, setProductSearchProvenance] =
+    useState<PantryProductSearchProvenance | null>(null);
   const todayYmd = localTodayYmd();
 
   const [quickStartProposal, setQuickStartProposal] =
@@ -486,9 +497,13 @@ export default function PantryManager() {
   function resetProductSearch() {
     setProductSearchOpen(false);
     setProductSearchQuery('');
+    setProductSearchPostal('');
+    setProductSearchRetailer('');
+    setProductSearchPostalTouched(false);
     setProductSearchState('idle');
     setProductSearchOffers([]);
     setProductSearchError(null);
+    setProductSearchProvenance(null);
   }
 
   function openLot(item: PantryOnHandItem, lot: PantryAcquisitionLot | null = null) {
@@ -500,28 +515,62 @@ export default function PantryManager() {
   }
 
   function openProductSearch() {
+    const prefs = loadGroceryPriceSearchPrefs();
+    const savedPostal = tryNormalizePostalCode(prefs.postal_code);
     const defaultQuery = lotForm.productTitle.trim() || lotContext?.itemName || '';
+    const lotRetailer = lotForm.retailer.trim();
     setProductSearchOpen(true);
     setProductSearchQuery(defaultQuery);
+    setProductSearchPostal(savedPostal.ok ? savedPostal.value : '');
+    setProductSearchRetailer(lotRetailer || prefs.retailer.trim());
+    setProductSearchPostalTouched(false);
     setProductSearchState('idle');
     setProductSearchOffers([]);
     setProductSearchError(null);
+    setProductSearchProvenance(null);
   }
+
+  function productSearchScopeLabel(postalCode: string, retailer: string): string {
+    const retailerLabel = retailer.trim();
+    return retailerLabel
+      ? `Searching ${retailerLabel} offers near ${postalCode}`
+      : `Searching offers near ${postalCode}`;
+  }
+
+  const productSearchPostalValidation = tryNormalizePostalCode(productSearchPostal);
+  const productSearchCanSubmit =
+    productSearchQuery.trim().length >= 2 && productSearchPostalValidation.ok;
 
   async function runProductSearch() {
     const query = productSearchQuery.trim();
+    setProductSearchPostalTouched(true);
     if (query.length < 2) {
       setProductSearchError('Enter at least two characters to search.');
       setProductSearchState('error');
       return;
     }
+    if (!productSearchPostalValidation.ok) {
+      setProductSearchError(
+        productSearchPostalValidation.message
+          || 'Enter a valid US ZIP or Canadian postal code.',
+      );
+      setProductSearchState('error');
+      return;
+    }
+    const retailer = productSearchRetailer.trim() || null;
     setProductSearchState('searching');
     setProductSearchError(null);
     setProductSearchOffers([]);
+    setProductSearchProvenance(null);
     try {
       const result = await fetchPantryProductSearch({
         query,
-        retailer: lotForm.retailer.trim() || null,
+        postal_code: productSearchPostalValidation.value,
+        retailer,
+      });
+      saveGroceryPriceSearchPrefs({
+        postal_code: productSearchPostalValidation.value,
+        retailer: retailer ?? '',
       });
       if (result.outcome === 'provider_error') {
         setProductSearchState('error');
@@ -539,6 +588,7 @@ export default function PantryManager() {
         return;
       }
       setProductSearchOffers(result.offers);
+      setProductSearchProvenance(result.search_provenance);
       setProductSearchState('results');
     } catch (err) {
       if (err instanceof PantryProductSearchQuotaExceededError) {
@@ -557,6 +607,7 @@ export default function PantryManager() {
     setProductSearchState('idle');
     setProductSearchOffers([]);
     setProductSearchError(null);
+    setProductSearchProvenance(null);
   }
 
   function updateLotForm(patch: Partial<LotDraft>) {
@@ -1140,24 +1191,61 @@ export default function PantryManager() {
               </div>
               {productSearchOpen && (
                 <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="flex gap-2">
-                    <input
-                      value={productSearchQuery}
-                      onChange={(event) => setProductSearchQuery(event.target.value)}
-                      placeholder="Search retail products"
-                      className={inputClass}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void runProductSearch()}
-                      disabled={productSearchState === 'searching'}
-                      className="shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white hover:bg-white/[0.06] disabled:opacity-40"
-                    >
-                      {productSearchState === 'searching' ? 'Searching…' : 'Search'}
-                    </button>
+                  <div className="space-y-3">
+                    <label className="block">
+                      <span className="text-xs text-white/55">Product query</span>
+                      <input
+                        value={productSearchQuery}
+                        onChange={(event) => setProductSearchQuery(event.target.value)}
+                        placeholder="Search retail products"
+                        className={inputClass}
+                      />
+                    </label>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="text-xs text-white/55">Search location</span>
+                        <input
+                          value={productSearchPostal}
+                          onChange={(event) => setProductSearchPostal(event.target.value)}
+                          onBlur={() => setProductSearchPostalTouched(true)}
+                          placeholder="ZIP or postal code"
+                          autoComplete="postal-code"
+                          className={inputClass}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-white/55">Retailer (optional)</span>
+                        <input
+                          value={productSearchRetailer}
+                          onChange={(event) => setProductSearchRetailer(event.target.value)}
+                          placeholder="Any retailer"
+                          className={inputClass}
+                        />
+                      </label>
+                    </div>
+                    {productSearchPostalTouched && !productSearchPostalValidation.ok && (
+                      <p className="text-xs text-red-200" role="alert">
+                        {productSearchPostalValidation.message}
+                      </p>
+                    )}
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void runProductSearch()}
+                        disabled={productSearchState === 'searching' || !productSearchCanSubmit}
+                        className="shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white hover:bg-white/[0.06] disabled:opacity-40"
+                      >
+                        {productSearchState === 'searching' ? 'Searching…' : 'Search'}
+                      </button>
+                    </div>
                   </div>
-                  {productSearchState === 'searching' && (
-                    <p className="mt-3 text-xs text-white/45">Searching retail listings…</p>
+                  {productSearchState === 'searching' && productSearchPostalValidation.ok && (
+                    <p className="mt-3 text-xs text-white/45">
+                      {productSearchScopeLabel(
+                        productSearchPostalValidation.value,
+                        productSearchRetailer,
+                      )}
+                    </p>
                   )}
                   {productSearchState === 'zero_results' && (
                     <p className="mt-3 text-xs text-white/45">No retail matches found. You can still enter product details manually.</p>
@@ -1167,6 +1255,14 @@ export default function PantryManager() {
                   )}
                   {productSearchState === 'error' && productSearchError && (
                     <p className="mt-3 text-xs text-red-200" role="alert">{productSearchError}</p>
+                  )}
+                  {productSearchState === 'results' && productSearchProvenance && (
+                    <p className="mt-3 text-xs text-white/45">
+                      {productSearchScopeLabel(
+                        productSearchProvenance.requested_postal_code,
+                        productSearchProvenance.retailer ?? '',
+                      )}
+                    </p>
                   )}
                   {productSearchState === 'results' && productSearchOffers.length > 0 && (
                     <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto">

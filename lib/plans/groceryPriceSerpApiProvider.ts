@@ -443,9 +443,11 @@ export function buildSerpApiSearchParams(
     api_key: apiKey,
   });
 
-  const location = resolveSerpApiLocation(context.postal_code);
-  if (location) {
-    params.set('location', location);
+  const resolvedLocation =
+    context.provider_location?.trim()
+    || resolveSerpApiLocation(context.postal_code);
+  if (resolvedLocation) {
+    params.set('location', resolvedLocation);
   }
 
   return params;

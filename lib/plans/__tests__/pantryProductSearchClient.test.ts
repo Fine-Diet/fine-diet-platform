@@ -29,6 +29,13 @@ const VALID_OFFER = {
   image_url: null,
 };
 
+const BASE_PROVENANCE = {
+  requested_postal_code: '94110',
+  resolved_provider_location: '94110, California, United States',
+  retailer: null,
+  scope: 'market' as const,
+};
+
 function mockFetch(status: number, body: unknown): void {
   global.fetch = jest.fn().mockResolvedValue({
     status,
@@ -71,11 +78,49 @@ describe('fetchPantryProductSearch', () => {
       offers: [VALID_OFFER],
       quota: BASE_QUOTA,
       provider_error: null,
+      search_provenance: BASE_PROVENANCE,
     });
 
-    const result = await fetchPantryProductSearch({ query: 'spinach' });
+    const result = await fetchPantryProductSearch({
+      query: 'spinach',
+      postal_code: '94110',
+    });
     expect(result.outcome).toBe('results');
     expect(result.offers).toHaveLength(1);
+    expect(result.search_provenance?.scope).toBe('market');
+  });
+
+  it('sends postal_code and optional retailer in the request body', async () => {
+    mockFetch(200, {
+      outcome: 'results',
+      query: 'spinach',
+      offers: [VALID_OFFER],
+      quota: BASE_QUOTA,
+      provider_error: null,
+      search_provenance: {
+        ...BASE_PROVENANCE,
+        retailer: 'Target',
+        scope: 'retailer_localized',
+      },
+    });
+
+    await fetchPantryProductSearch({
+      query: 'spinach',
+      postal_code: '94110',
+      retailer: 'Target',
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/journal/plans/pantry/product-search',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'spinach',
+          postal_code: '94110',
+          retailer: 'Target',
+        }),
+      }),
+    );
   });
 
   it('returns a valid 502 provider_error payload', async () => {
@@ -85,9 +130,13 @@ describe('fetchPantryProductSearch', () => {
       offers: [],
       quota: BASE_QUOTA,
       provider_error: { code: 'timeout', message: 'Timed out' },
+      search_provenance: BASE_PROVENANCE,
     });
 
-    const result = await fetchPantryProductSearch({ query: 'spinach' });
+    const result = await fetchPantryProductSearch({
+      query: 'spinach',
+      postal_code: '94110',
+    });
     expect(result.outcome).toBe('provider_error');
     expect(result.provider_error?.code).toBe('timeout');
   });
@@ -95,7 +144,10 @@ describe('fetchPantryProductSearch', () => {
   it('throws a controlled message for generic 502 JSON', async () => {
     mockFetch(502, { error: 'Bad Gateway' });
 
-    await expect(fetchPantryProductSearch({ query: 'spinach' })).rejects.toThrow(
+    await expect(fetchPantryProductSearch({
+      query: 'spinach',
+      postal_code: '94110',
+    })).rejects.toThrow(
       PANTRY_PRODUCT_SEARCH_UNAVAILABLE_MESSAGE,
     );
   });
@@ -106,9 +158,13 @@ describe('fetchPantryProductSearch', () => {
       query: 'spinach',
       quota: BASE_QUOTA,
       provider_error: null,
+      search_provenance: BASE_PROVENANCE,
     });
 
-    await expect(fetchPantryProductSearch({ query: 'spinach' })).rejects.toThrow(
+    await expect(fetchPantryProductSearch({
+      query: 'spinach',
+      postal_code: '94110',
+    })).rejects.toThrow(
       PANTRY_PRODUCT_SEARCH_INVALID_RESPONSE_MESSAGE,
     );
   });
@@ -122,7 +178,10 @@ describe('fetchPantryProductSearch', () => {
       }),
     });
 
-    await expect(fetchPantryProductSearch({ query: 'spinach' })).rejects.toMatchObject({
+    await expect(fetchPantryProductSearch({
+      query: 'spinach',
+      postal_code: '94110',
+    })).rejects.toMatchObject({
       name: 'PantryProductSearchQuotaExceededError',
       message: 'Product search quota exceeded',
       quota: BASE_QUOTA,

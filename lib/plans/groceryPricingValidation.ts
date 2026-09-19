@@ -18,6 +18,29 @@ export class GroceryPriceValidationError extends Error {
   }
 }
 
+export function tryNormalizePostalCode(
+  value: string,
+): { ok: true; value: string } | { ok: false; message: string } {
+  try {
+    return { ok: true, value: normalizePostalCode(value) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'postal_code is invalid';
+    return { ok: false, message };
+  }
+}
+
+export function normalizeOptionalRetailer(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return null;
+  if (trimmed.length > MAX_RETAILER_LENGTH) {
+    throw new GroceryPriceValidationError(
+      `retailer must be at most ${MAX_RETAILER_LENGTH} characters`,
+    );
+  }
+  return trimmed;
+}
+
 export function normalizeRetailer(value: string): string {
   const trimmed = value.trim().replace(/\s+/g, ' ');
   if (!trimmed) {
