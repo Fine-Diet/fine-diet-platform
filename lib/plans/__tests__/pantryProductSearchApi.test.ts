@@ -15,7 +15,7 @@ jest.mock('@/lib/plans/pantryProductSearchService', () => ({
   },
 }));
 
-import handler from '@/pages/api/journal/plans/pantry/product-search';
+import handler, { config } from '@/pages/api/journal/plans/pantry/product-search';
 
 interface MockResponse {
   statusCode: number;
@@ -50,6 +50,10 @@ function createMockRes(): NextApiResponse & MockResponse {
 }
 
 describe('pantry product-search API route', () => {
+  it('exports Pages Router maxDuration config for the 20s Pantry timeout budget', () => {
+    expect(config).toEqual({ maxDuration: 30 });
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockRequireJournalAccess.mockResolvedValue({ personId: 'person-1' });

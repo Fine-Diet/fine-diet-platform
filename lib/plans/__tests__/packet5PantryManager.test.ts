@@ -39,6 +39,11 @@ describe('Packet 5 Pantry v2 manager', () => {
     expect(manager).not.toContain('Add common staples');
   });
 
+  it('maps provider_error outcomes to controlled product-search copy', () => {
+    expect(manager).toContain('formatPantryProductSearchProviderErrorMessage(result.provider_error)');
+    expect(manager).not.toContain('result.provider_error?.message');
+  });
+
   it('exposes only factual Pantry filters and does not invent a Food Group', () => {
     expect(manager).toContain('Perishability');
     expect(manager).toContain('Inventory Status');

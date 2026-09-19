@@ -20,6 +20,7 @@ import {
 import { applyPantryProductOfferToLotDraft } from '@/lib/plans/pantryProductSearchMapping';
 import {
   fetchPantryProductSearch,
+  formatPantryProductSearchProviderErrorMessage,
   PantryProductSearchQuotaExceededError,
 } from '@/lib/plans/pantryProductSearchClient';
 import type { PantryProductSearchOffer } from '@/lib/plans/pantryProductSearchTypes';
@@ -525,11 +526,15 @@ export default function PantryManager() {
       if (result.outcome === 'provider_error') {
         setProductSearchState('error');
         setProductSearchError(
-          result.provider_error?.message ?? 'Product lookup is temporarily unavailable.',
+          formatPantryProductSearchProviderErrorMessage(result.provider_error),
         );
         return;
       }
-      if (result.outcome === 'zero_results' || result.offers.length === 0) {
+      if (
+        result.outcome === 'zero_results'
+        || !Array.isArray(result.offers)
+        || result.offers.length === 0
+      ) {
         setProductSearchState('zero_results');
         return;
       }

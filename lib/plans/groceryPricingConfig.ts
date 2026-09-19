@@ -24,6 +24,11 @@ export const GROCERY_PRICE_PROVIDER_TIMEOUT_MS = readPositiveInt(
   12_000,
 );
 
+export const PANTRY_PRODUCT_SEARCH_TIMEOUT_MS = readPositiveInt(
+  process.env.PANTRY_PRODUCT_SEARCH_TIMEOUT_MS,
+  20_000,
+);
+
 export const GROCERY_PRICE_SEARCH_EVENT_MAX_AGE_MS = readPositiveInt(
   process.env.GROCERY_PRICE_SEARCH_EVENT_MAX_AGE_MS,
   60 * 60 * 1000,

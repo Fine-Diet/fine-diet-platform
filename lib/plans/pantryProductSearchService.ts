@@ -8,6 +8,7 @@ import { isGroceryPriceProviderError } from './groceryPriceProviderTypes';
 import { buildGroceryPriceSearchQuota, GroceryPriceQuotaExceededError } from './groceryPriceQuota';
 import { finalizeQuotaClaim, reserveGroceryPriceSearchQuota } from './groceryPriceQuotaReservation';
 import { rankGroceryPriceCandidates } from './groceryPriceRanking';
+import { PANTRY_PRODUCT_SEARCH_TIMEOUT_MS } from './groceryPricingConfig';
 import {
   searchWithQueryFallback,
   serpApiGroceryPriceProvider,
@@ -17,6 +18,16 @@ import type { PantryProductSearchResult } from './pantryProductSearchTypes';
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_OFFERS = 8;
+
+let pantryProductSearchTimeoutMsOverride: number | null = null;
+
+export function setPantryProductSearchTimeoutMsOverride(ms: number | null): void {
+  pantryProductSearchTimeoutMsOverride = ms;
+}
+
+function resolvePantryProductSearchTimeoutMs(): number {
+  return pantryProductSearchTimeoutMsOverride ?? PANTRY_PRODUCT_SEARCH_TIMEOUT_MS;
+}
 
 export class PantryProductSearchValidationError extends Error {
   constructor(message: string) {
@@ -72,9 +83,16 @@ export async function searchPantryProductDetails(options: {
 
   const context = buildPantryProductSearchContext(query, options.retailer);
   const reservation = await reserveGroceryPriceSearchQuota(options.personId);
+  const timeoutMs = resolvePantryProductSearchTimeoutMs();
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const fallback = await searchWithQueryFallback(context, serpApiGroceryPriceProvider);
+    const fallback = await searchWithQueryFallback(
+      context,
+      serpApiGroceryPriceProvider,
+      { signal: controller.signal },
+    );
     if (fallback.kind === 'zero_results') {
       await finalizeQuotaClaim({
         claimId: reservation.claimId,
@@ -133,6 +151,8 @@ export async function searchPantryProductDetails(options: {
       };
     }
     throw error;
+  } finally {
+    clearTimeout(timeoutHandle);
   }
 }
 
