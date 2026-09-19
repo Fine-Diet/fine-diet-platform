@@ -99,7 +99,7 @@ export function EmailYourResults({
             placeholder="Email Your Results"
             required
             disabled={isSubmitting}
-            className="w-full px-8 py-4 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-denim-500 antialiased disabled:opacity-50 pr-12"
+            className="w-full px-8 py-4 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-denim-500 antialiased disabled:opacity-50 pr-12"
           />
           <button
             type="submit"

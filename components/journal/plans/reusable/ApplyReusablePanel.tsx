@@ -137,7 +137,7 @@ export function ApplyDayTemplatePanel({
         value={targetPlanDayId}
         onChange={(e) => setTargetPlanDayId(e.target.value)}
         disabled={busy || planDays.length === 0}
-        className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+        className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
       >
         {planDays.map((day) => (
           <option key={day.id} value={day.id}>
@@ -340,7 +340,7 @@ export function ApplyWeekPatternPanel({
         value={targetStartPlanDayId}
         onChange={(e) => setTargetStartPlanDayId(e.target.value)}
         disabled={busy || planDays.length === 0}
-        className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+        className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
       >
         {planDays.map((day) => (
           <option key={day.id} value={day.id}>
@@ -357,7 +357,7 @@ export function ApplyWeekPatternPanel({
           value={applicationMode}
           onChange={(e) => setApplicationMode(e.target.value as WeekPatternApplicationMode)}
           disabled={busy}
-          className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+          className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
         >
           <option value="once">Once</option>
           <option value="repeat_weeks">Repeat for N pattern spans</option>
@@ -371,7 +371,7 @@ export function ApplyWeekPatternPanel({
             value={repeatWeeks}
             onChange={(e) => setRepeatWeeks(e.target.value)}
             disabled={busy}
-            className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+            className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
             placeholder="Number of spans"
           />
         ) : null}
@@ -381,7 +381,7 @@ export function ApplyWeekPatternPanel({
             value={untilDateLocal}
             onChange={(e) => setUntilDateLocal(e.target.value)}
             disabled={busy}
-            className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+            className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
           />
         ) : null}
       </div>

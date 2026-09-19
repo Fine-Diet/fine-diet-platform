@@ -114,7 +114,7 @@ export function StartHaulDialog({
             setShoppingDate(event.target.value);
             setCreationToken(null);
           }}
-          className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#16110d] px-4 text-sm text-white outline-none focus:border-white/45"
+          className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#16110d] px-4 text-xl text-white outline-none focus:border-white/45"
         />
       </label>
 

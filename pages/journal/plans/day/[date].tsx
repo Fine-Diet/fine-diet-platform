@@ -912,7 +912,7 @@ export default function JournalPlanDayPage() {
                       type="date"
                       value={selectedDate}
                       onChange={(event) => navigateToDate(event.target.value)}
-                      className="min-h-12 min-w-0 bg-transparent text-center text-sm text-white/80 [color-scheme:dark] focus:outline-none"
+                      className="min-h-12 min-w-0 bg-transparent text-center text-xl text-white/80 [color-scheme:dark] focus:outline-none"
                       aria-label="Selected plan date"
                     />
                     {selectedDate !== todayLocalDateKey() && (
@@ -1117,7 +1117,7 @@ export default function JournalPlanDayPage() {
                     onChange={(e) => setTemplateName(e.target.value)}
                     placeholder={`Template from ${day.date_local}`}
                     disabled={busy}
-                    className="min-w-0 flex-1 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
+                    className="min-w-0 flex-1 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
                   />
                   <button
                     type="button"
@@ -1134,7 +1134,7 @@ export default function JournalPlanDayPage() {
                     value={selectedTemplateId}
                     onChange={(e) => setSelectedTemplateId(e.target.value)}
                     disabled={busy || templates.length === 0}
-                    className="rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xs text-white antialiased focus:outline-none focus:border-denim-400"
+                    className="rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                   >
                     <option value="">Choose template</option>
                     {templates.map((template) => (
@@ -1147,7 +1147,7 @@ export default function JournalPlanDayPage() {
                     value={templateTargetDayId || day.id}
                     onChange={(e) => setTemplateTargetDayId(e.target.value)}
                     disabled={busy || templates.length === 0}
-                    className="rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xs text-white antialiased focus:outline-none focus:border-denim-400"
+                    className="rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                   >
                     {planDays.map((planDay) => (
                       <option key={planDay.id} value={planDay.id}>
@@ -1194,7 +1194,7 @@ export default function JournalPlanDayPage() {
                         : 'Week pattern'
                     }
                     disabled={busy}
-                    className="min-w-0 flex-1 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
+                    className="min-w-0 flex-1 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
                   />
                   <button
                     type="button"
@@ -1211,7 +1211,7 @@ export default function JournalPlanDayPage() {
                     value={selectedWeekPatternId}
                     onChange={(e) => setSelectedWeekPatternId(e.target.value)}
                     disabled={busy || weekPatterns.length === 0}
-                    className="rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xs text-white antialiased focus:outline-none focus:border-denim-400"
+                    className="rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                   >
                     <option value="">Choose pattern</option>
                     {weekPatterns.map((pattern) => (
@@ -1224,7 +1224,7 @@ export default function JournalPlanDayPage() {
                     value={weekPatternTargetStartDayId || day.id}
                     onChange={(e) => setWeekPatternTargetStartDayId(e.target.value)}
                     disabled={busy || weekPatterns.length === 0}
-                    className="rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xs text-white antialiased focus:outline-none focus:border-denim-400"
+                    className="rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
                   >
                     {planDays.map((planDay) => (
                       <option key={planDay.id} value={planDay.id}>
@@ -1301,7 +1301,7 @@ export default function JournalPlanDayPage() {
                 value={moveTargetSlotId}
                 onChange={(e) => setMoveTargetSlotId(e.target.value)}
                 disabled={busy}
-                className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
               >
                 <option value="">Choose destination</option>
                 {moveSlotOptions.map(({ slot, label }) => (
@@ -1348,7 +1348,7 @@ export default function JournalPlanDayPage() {
                 value={copyTargetSlotId}
                 onChange={(e) => setCopyTargetSlotId(e.target.value)}
                 disabled={busy}
-                className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
               >
                 <option value="">Choose destination</option>
                 {moveSlotOptions.map(({ slot, label }) => (

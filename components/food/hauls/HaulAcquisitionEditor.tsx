@@ -117,7 +117,7 @@ export function HaulAcquisitionEditor({
             <input
               value={editorDraft[key]}
               onChange={(event) => update(key, event.target.value)}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-sm font-normal text-white outline-none focus:border-white/45"
+              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-xl font-normal text-white outline-none focus:border-white/45"
             />
           </label>
         ))}
@@ -135,7 +135,7 @@ export function HaulAcquisitionEditor({
               step="any"
               value={editorDraft[key]}
               onChange={(event) => update(key, event.target.value)}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-sm font-normal text-white outline-none focus:border-white/45"
+              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-xl font-normal text-white outline-none focus:border-white/45"
             />
           </label>
         ))}

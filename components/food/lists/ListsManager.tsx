@@ -487,7 +487,7 @@ export default function ListsManager() {
               <select
                 value={selectedListId ?? ''}
                 onChange={(event) => selectList(event.target.value)}
-                className="min-h-14 flex-1 rounded-full border border-white/20 bg-[#211a14]/80 px-5 text-sm font-semibold text-white outline-none focus:border-white/50"
+                className="min-h-14 flex-1 rounded-full border border-white/20 bg-[#211a14]/80 px-5 text-xl font-semibold text-white outline-none focus:border-white/50"
                 aria-label="Select a List"
               >
                 {lists.map((candidate) => (
@@ -524,7 +524,7 @@ export default function ListsManager() {
                 }}
                 disabled={Boolean(list?.plan_id)}
                 placeholder={list?.plan_id ? 'Plan-generated Lists are read-only' : 'Search to add item(s)'}
-                className="min-h-11 min-w-0 flex-1 rounded-full bg-transparent px-5 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:opacity-50"
+                className="min-h-11 min-w-0 flex-1 rounded-full bg-transparent px-5 py-2 text-xl text-white outline-none placeholder:text-white/35 disabled:opacity-50"
               />
               <button
                 type="button"

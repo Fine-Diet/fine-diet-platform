@@ -380,7 +380,7 @@ export function SimplifiedMealCreationView() {
                 value={shareTitle}
                 onChange={(event) => setShareTitle(event.target.value)}
                 placeholder="Share what you’re having"
-                className="w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 text-sm text-brand-50"
+                className="w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 text-xl text-brand-50"
               />
               {error ? <p className="text-sm text-red-300">{error}</p> : null}
               <button

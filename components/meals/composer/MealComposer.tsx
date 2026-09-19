@@ -57,7 +57,7 @@ export interface MealComposerProps {
 }
 
 const inputClass =
-  'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
+  'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
 const labelClass = 'mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45';
 
 export function MealComposer({

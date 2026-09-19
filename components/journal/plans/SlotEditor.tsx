@@ -408,7 +408,7 @@ export function SlotEditor(props: SlotEditorProps) {
           <select
             value={mealType}
             onChange={(e) => setMealType(e.target.value as PlannedMealType)}
-            className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
+            className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
           >
             <option value="breakfast">Breakfast</option>
             <option value="lunch">Lunch</option>
@@ -452,7 +452,7 @@ export function SlotEditor(props: SlotEditorProps) {
                 step="0.5"
                 value={pendingServingsTarget}
                 onChange={(e) => setPendingServingsTarget(e.target.value)}
-                className="w-24 rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-1.5 focus:outline-none focus:border-denim-400"
+                className="w-24 rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white antialiased px-3 py-1.5 focus:outline-none focus:border-denim-400"
               />
               <p className="text-[10px] text-white/40 antialiased">
                 Nutrition totals and per-item values scale proportionally.
@@ -653,7 +653,7 @@ export function SlotEditor(props: SlotEditorProps) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={isCreate ? 'e.g., Greek yogurt + berries' : undefined}
-          className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
+          className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
         />
       </div>
 
@@ -664,7 +664,7 @@ export function SlotEditor(props: SlotEditorProps) {
         <select
           value={mealType}
           onChange={(e) => setMealType(e.target.value as PlannedMealType)}
-          className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
+          className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
         >
           <option value="breakfast">Breakfast</option>
           <option value="lunch">Lunch</option>
@@ -687,7 +687,7 @@ export function SlotEditor(props: SlotEditorProps) {
               onChange={(e) =>
                 setTotals((t) => ({ ...t, [k]: Number(e.target.value) }))
               }
-              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
+              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
             />
           </div>
         ))}

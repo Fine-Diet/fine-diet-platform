@@ -175,7 +175,7 @@ export default function WeekPatternsPage() {
               value={blankName}
               onChange={(e) => setBlankName(e.target.value)}
               placeholder="Pattern name (optional)"
-              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
             />
             <input
               type="number"
@@ -183,7 +183,7 @@ export default function WeekPatternsPage() {
               step={1}
               value={blankDayCount}
               onChange={(e) => setBlankDayCount(e.target.value)}
-              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
               placeholder="Number of days"
             />
             <button
@@ -207,7 +207,7 @@ export default function WeekPatternsPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Pattern name (optional)"
-              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
             />
             <div className="flex flex-col gap-2 sm:flex-row">
               <div className="flex-1 space-y-1">
@@ -218,7 +218,7 @@ export default function WeekPatternsPage() {
                   value={rangeStartDayId}
                   onChange={(e) => setRangeStartDayId(e.target.value)}
                   disabled={orderedPlanDays.length === 0}
-                  className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+                  className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
                 >
                   {orderedPlanDays.map((day) => (
                     <option key={day.id} value={day.id}>
@@ -238,7 +238,7 @@ export default function WeekPatternsPage() {
                   step={1}
                   value={rangeDayCount}
                   onChange={(e) => setRangeDayCount(e.target.value)}
-                  className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+                  className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
                 />
               </div>
             </div>

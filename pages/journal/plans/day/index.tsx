@@ -391,7 +391,7 @@ export default function DayPlanDesignerPage() {
                       aria-label="Day Plan name"
                       value={draft.name}
                       onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                      className="min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-base font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04] sm:min-w-48"
+                      className="min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-xl font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04] sm:min-w-48"
                       placeholder={UNNAMED_DAY_PLAN}
                     />
                     <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2">
@@ -478,7 +478,7 @@ export default function DayPlanDesignerPage() {
                       })
                     }
                     placeholder="Add a description"
-                    className="mt-1 h-[38px] w-full resize-none overflow-y-auto scrollbar-hide border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+                    className="mt-1 h-[38px] w-full resize-none overflow-y-auto scrollbar-hide border-0 bg-transparent px-2 py-2 text-xl text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
                   />
                 </section>
 

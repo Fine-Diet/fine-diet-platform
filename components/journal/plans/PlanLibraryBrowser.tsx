@@ -86,7 +86,7 @@ export function PlanLibraryBrowser({
             aria-label="Sort library"
             value={sort}
             onChange={(event) => setSort(event.target.value as PlanLibrarySort)}
-            className="appearance-none border-0 bg-transparent py-1 pr-5 text-sm text-white/80 outline-none focus:text-white"
+            className="appearance-none border-0 bg-transparent py-1 pr-5 text-xl text-white/80 outline-none focus:text-white"
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value} className="bg-[#16110d] text-white">
@@ -103,7 +103,7 @@ export function PlanLibraryBrowser({
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full rounded-full border border-white/15 bg-transparent px-4 py-2 pr-9 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/25"
+            className="w-full rounded-full border border-white/15 bg-transparent px-4 py-2 pr-9 text-xl text-white outline-none placeholder:text-white/35 focus:border-white/25"
           />
           <span
             aria-hidden

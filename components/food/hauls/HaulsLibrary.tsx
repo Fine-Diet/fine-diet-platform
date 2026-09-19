@@ -163,7 +163,7 @@ export default function HaulsLibrary() {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search Hauls"
                 aria-label="Search Hauls"
-                className="min-h-11 w-full rounded-xl border border-white/15 bg-transparent pl-10 pr-4 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/45"
+                className="min-h-11 w-full rounded-xl border border-white/15 bg-transparent pl-10 pr-4 text-xl text-white outline-none placeholder:text-white/35 focus:border-white/45"
               />
             </div>
           </div>

@@ -124,7 +124,7 @@ export function WeekPatternDayControls({
             value={selectedTemplateId}
             onChange={(event) => setSelectedTemplateId(event.target.value)}
             disabled={busy || loadingTemplates}
-            className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+            className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
           >
             <option value="">
               {loadingTemplates ? 'Loading templates…' : 'Select a day template'}
@@ -165,7 +165,7 @@ export function WeekPatternDayControls({
               value={duplicateFromIndex}
               onChange={(event) => setDuplicateFromIndex(event.target.value)}
               disabled={busy}
-              className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+              className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 text-xl text-white px-3 py-2"
             >
               <option value="">Select a day</option>
               {duplicateOptions.map(({ candidate, index }) => (

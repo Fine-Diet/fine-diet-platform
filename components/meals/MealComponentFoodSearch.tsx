@@ -166,7 +166,7 @@ export function MealComponentFoodSearch({
   );
 
   const inputClass =
-    'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
+    'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
 
   const showEmpty =
     touched && !searching && query.trim().length >= MIN_QUERY && results.length === 0 && !error;
@@ -383,7 +383,7 @@ function CreateCustomFoodPanel({
   }, [formValid, name, servingUnit, servingSizeG, calories, proteinG, carbsG, fatG, onCreated]);
 
   const inputClass =
-    'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
+    'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50';
   const labelClass =
     'mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45';
   const invalidClass = 'border-red-400/50 focus:border-red-400/70';

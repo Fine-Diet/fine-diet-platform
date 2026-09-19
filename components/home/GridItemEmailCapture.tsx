@@ -91,7 +91,7 @@ export const GridItemEmailCapture = ({
 
   // Shared underline input style matching the screenshot aesthetic
   const inputClass =
-    'w-full bg-transparent border-b border-white/60 py-2 text-sm text-white ' +
+    'w-full bg-transparent border-b border-white/60 py-2 text-xl text-white ' +
     'placeholder-white/55 antialiased focus:outline-none focus:border-white/80 ' +
     'disabled:opacity-50 transition-colors';
 

@@ -48,7 +48,7 @@ function QuestionField({
         <select
           value={value}
           onChange={(event) => onChange(question.key, event.target.value)}
-          className="mt-2 w-full rounded-xl border border-white/10 bg-brand-900 px-3 py-2 text-sm text-white focus:border-denim-300 focus:outline-none"
+          className="mt-2 w-full rounded-xl border border-white/10 bg-brand-900 px-3 py-2 text-xl text-white focus:border-denim-300 focus:outline-none"
         >
           <option value="">Choose one</option>
           {question.options.map((option) => (
@@ -62,7 +62,7 @@ function QuestionField({
           type={question.input === 'number' ? 'number' : 'text'}
           value={value}
           onChange={(event) => onChange(question.key, event.target.value)}
-          className="mt-2 w-full rounded-xl border border-white/10 bg-brand-900 px-3 py-2 text-sm text-white focus:border-denim-300 focus:outline-none"
+          className="mt-2 w-full rounded-xl border border-white/10 bg-brand-900 px-3 py-2 text-xl text-white focus:border-denim-300 focus:outline-none"
         />
       )}
     </label>

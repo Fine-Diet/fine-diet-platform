@@ -250,7 +250,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
             aria-label="Week Plan name"
             value={weekPlanName}
             onChange={(event) => setWeekPlanName(event.target.value)}
-            className="min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-base font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04] sm:min-w-48"
+            className="min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-xl font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04] sm:min-w-48"
             placeholder={defaultWeekPlanName(props.selectedRange.start)}
           />
           <button
@@ -290,7 +290,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
             value={weekPlanDescription}
             onChange={(event) => setWeekPlanDescription(event.target.value)}
             placeholder="Add a description"
-            className="mt-1 h-[38px] w-full resize-none overflow-y-auto scrollbar-hide border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+            className="mt-1 h-[38px] w-full resize-none overflow-y-auto scrollbar-hide border-0 bg-transparent px-2 py-2 text-xl text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
           />
         </div>
 

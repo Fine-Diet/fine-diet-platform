@@ -300,7 +300,7 @@ function SingleItemEditor({
               setQuantity(event.target.value);
               setError(null);
             }}
-            className="w-full rounded-xl border border-white/15 bg-black/20 px-3 py-2.5 text-sm outline-none"
+            className="w-full rounded-xl border border-white/15 bg-black/20 px-3 py-2.5 text-xl outline-none"
           />
         </label>
         <label className="block">
@@ -308,7 +308,7 @@ function SingleItemEditor({
           <select
             value={unit}
             onChange={(event) => changeUnit(event.target.value)}
-            className="w-full rounded-xl border border-white/15 bg-[#181711] px-3 py-2.5 text-sm outline-none"
+            className="w-full rounded-xl border border-white/15 bg-[#181711] px-3 py-2.5 text-xl outline-none"
           >
             {units.map((option) => (
               <option
@@ -569,7 +569,7 @@ export function CommittedNutritionEditor({
             type="date"
             value={dateKey}
             onChange={(event) => setDateKey(event.target.value)}
-            className="mt-1 block w-full bg-transparent text-xs text-white outline-none"
+            className="mt-1 block w-full bg-transparent text-xl text-white outline-none"
           />
         </label>
         <label className="text-[10px] text-white/40">
@@ -578,7 +578,7 @@ export function CommittedNutritionEditor({
             type="time"
             value={time}
             onChange={(event) => setTime(event.target.value)}
-            className="mt-1 block w-full bg-transparent text-xs text-white outline-none"
+            className="mt-1 block w-full bg-transparent text-xl text-white outline-none"
           />
         </label>
         <label className="text-[10px] text-white/40">
@@ -597,7 +597,7 @@ export function CommittedNutritionEditor({
               setMealSlotKey(event.target.value);
               if (slot) setTime(slot.target_time);
             }}
-            className="mt-1 block w-full bg-[#181711] text-xs text-white outline-none"
+            className="mt-1 block w-full bg-[#181711] text-xl text-white outline-none"
           >
             <option value="">Unassigned</option>
             {slots.map((slot) => (

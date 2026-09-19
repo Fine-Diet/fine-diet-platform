@@ -54,9 +54,9 @@ import { deriveOnboardingState } from '@/lib/onboarding/onboardingState';
 /* ================================================================== */
 
 const inputClass =
-  'w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 text-sm text-brand-50 placeholder-brand-50/35 shadow-inner focus:outline-none focus:ring-2 focus:ring-brand-200/20';
+  'w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 text-xl text-brand-50 placeholder-brand-50/35 shadow-inner focus:outline-none focus:ring-2 focus:ring-brand-200/20';
 const selectClass =
-  'w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 pr-10 text-sm text-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-200/20 appearance-none';
+  'w-full rounded-full border border-white/10 bg-neutral-900 px-5 py-3 pr-10 text-xl text-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-200/20 appearance-none';
 const labelClass = 'block text-brand-50/55 text-xs font-medium mb-1.5';
 const btnClass =
   'w-full py-3 rounded-full bg-brand-50 text-center text-sm text-black font-semibold hover:bg-brand-50 transition-colors disabled:opacity-50';

@@ -293,7 +293,7 @@ function StapleRow({
                     }),
                   )
                 }
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-1.5 text-sm text-brand-50 outline-none focus:border-emerald-300/50"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-1.5 text-xl text-brand-50 outline-none focus:border-emerald-300/50"
                 aria-label={`${label} quantity`}
               />
               <input
@@ -309,7 +309,7 @@ function StapleRow({
                     }),
                   )
                 }
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-1.5 text-sm text-brand-50 outline-none focus:border-emerald-300/50"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-1.5 text-xl text-brand-50 outline-none focus:border-emerald-300/50"
                 aria-label={`${label} unit`}
               />
             </div>

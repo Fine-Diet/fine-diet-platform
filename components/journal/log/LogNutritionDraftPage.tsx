@@ -218,7 +218,7 @@ function DraftEntryRow({
                   onChange={(event) =>
                     onChange({ quantity: Number(event.target.value) })
                   }
-                  className="w-[54px] rounded-full border border-white/25 bg-transparent px-2 py-1 text-center text-xs text-white outline-none focus:border-white/60"
+                  className="w-[54px] rounded-full border border-white/25 bg-transparent px-2 py-1 text-center text-xl text-white outline-none focus:border-white/60"
                   aria-label={`Quantity for ${entry.title}`}
                 />
               </label>
@@ -229,7 +229,7 @@ function DraftEntryRow({
                   onFocus={onActivate}
                   onChange={(event) => onChange({ unit: event.target.value })}
                   disabled={entry.kind === 'meal'}
-                  className="max-w-[150px] rounded-full border border-white/25 bg-[#181711] px-3 py-1 text-xs text-white/70 outline-none focus:border-white/60 disabled:opacity-80"
+                  className="max-w-[150px] rounded-full border border-white/25 bg-[#181711] px-3 py-1 text-xl text-white/70 outline-none focus:border-white/60 disabled:opacity-80"
                   aria-label={`Unit for ${entry.title}`}
                 >
                   {unitOptions.map((unit) => (
@@ -371,7 +371,7 @@ function QuickAddModal({
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Item name"
-            className="col-span-2 rounded-xl border border-white/15 bg-transparent px-3 py-2.5 text-sm text-white outline-none"
+            className="col-span-2 rounded-xl border border-white/15 bg-transparent px-3 py-2.5 text-xl text-white outline-none"
           />
           {[
             ['Calories', calories, setCalories],
@@ -390,7 +390,7 @@ function QuickAddModal({
                 (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value)
               }
               placeholder={label as string}
-              className="rounded-xl border border-white/15 bg-transparent px-3 py-2.5 text-sm text-white outline-none"
+              className="rounded-xl border border-white/15 bg-transparent px-3 py-2.5 text-xl text-white outline-none"
             />
           ))}
         </div>
@@ -881,7 +881,7 @@ export default function LogNutritionDraftPage() {
                 setAllowAutoAssignment(true);
                 if (slot) setSelectedTime(slot.target_time);
               }}
-              className="bg-transparent text-[11px] text-white/35 outline-none"
+              className="bg-transparent text-xl text-white/35 outline-none"
               aria-label="Meal Rhythm occasion"
             >
               {enabledSlots.map((slot) => (
@@ -1091,7 +1091,7 @@ export default function LogNutritionDraftPage() {
               value={mealName}
               onChange={(event) => setMealName(event.target.value)}
               placeholder="Meal name"
-              className="mt-4 w-full rounded-xl border border-white/15 bg-transparent px-3 py-2.5 text-sm outline-none"
+              className="mt-4 w-full rounded-xl border border-white/15 bg-transparent px-3 py-2.5 text-xl outline-none"
             />
             <p className="mt-2 text-xs text-white/35">
               This does not log anything. Your active draft will remain here.

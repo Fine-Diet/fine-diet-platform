@@ -101,7 +101,7 @@ export default function JournalMealsCreatePage() {
                 placeholder="e.g. Breakfast usual"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
+                className="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/50 text-xl focus:outline-none focus:ring-2 focus:ring-white/30"
               />
             </div>
 

@@ -279,7 +279,7 @@ export function LeadWaitlistCaptureV1({ content }: Props) {
                 <select
                   value={preferredChannel}
                   onChange={(e) => setPreferredChannel(e.target.value as PreferredChannel)}
-                  className="mt-2 w-full border-b border-brand-900/20 bg-transparent py-2 text-base text-brand-900 focus:outline-none focus:border-brand-900/50"
+                  className="mt-2 w-full border-b border-brand-900/20 bg-transparent py-2 text-xl text-brand-900 focus:outline-none focus:border-brand-900/50"
                 >
                   {PREFERRED_CHANNEL_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
@@ -298,7 +298,7 @@ export function LeadWaitlistCaptureV1({ content }: Props) {
                 <select
                   value={goal}
                   onChange={(e) => setGoal(e.target.value as GoalOption | '')}
-                  className="mt-2 w-full border-b border-brand-900/20 bg-transparent py-2 text-base text-brand-900 focus:outline-none focus:border-brand-900/50"
+                  className="mt-2 w-full border-b border-brand-900/20 bg-transparent py-2 text-xl text-brand-900 focus:outline-none focus:border-brand-900/50"
                 >
                   <option value="">Select one…</option>
                   {GOAL_OPTIONS.map((opt) => (
@@ -363,7 +363,7 @@ export function LeadWaitlistCaptureV1({ content }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
-              className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-base text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+              className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-xl text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
             />
           </Field>
 
@@ -374,7 +374,7 @@ export function LeadWaitlistCaptureV1({ content }: Props) {
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
               required
-              className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-base text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+              className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-xl text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
             />
           </Field>
 
@@ -388,7 +388,7 @@ export function LeadWaitlistCaptureV1({ content }: Props) {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               autoComplete="tel"
-              className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-base text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+              className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-xl text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
             />
           </Field>
 
@@ -397,7 +397,7 @@ export function LeadWaitlistCaptureV1({ content }: Props) {
               <select
                 value={preferredChannel}
                 onChange={(e) => setPreferredChannel(e.target.value as PreferredChannel)}
-                className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-base text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+                className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-xl text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
               >
                 {PREFERRED_CHANNEL_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -413,7 +413,7 @@ export function LeadWaitlistCaptureV1({ content }: Props) {
               <select
                 value={goal}
                 onChange={(e) => setGoal(e.target.value as GoalOption | '')}
-                className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-base text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+                className="w-full rounded-md border border-brand-900/20 bg-white px-3 py-2 text-xl text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
               >
                 <option value="">Select one…</option>
                 {GOAL_OPTIONS.map((opt) => (
@@ -487,7 +487,7 @@ function UnderlineField({
       aria-label={label}
       placeholder={placeholder}
       required={required}
-      className="w-full border-b border-brand-900/25 bg-transparent py-2 text-base text-brand-900 placeholder:text-brand-900/55 placeholder:font-light focus:border-brand-900/60 focus:outline-none"
+      className="w-full border-b border-brand-900/25 bg-transparent py-2 text-xl text-brand-900 placeholder:text-brand-900/55 placeholder:font-light focus:border-brand-900/60 focus:outline-none"
     />
   );
 }

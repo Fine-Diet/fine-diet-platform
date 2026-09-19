@@ -149,7 +149,7 @@ export function EditLoggedMealGroupPanel({
               onChange={(event) => setName(event.target.value)}
               maxLength={200}
               aria-invalid={!nameValid}
-              className={`w-full rounded-xl border bg-black/20 px-3 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors ${
+              className={`w-full rounded-xl border bg-black/20 px-3 py-2.5 text-xl text-brand-50 antialiased outline-none transition-colors ${
                 nameValid
                   ? 'border-white/10 focus:border-emerald-300/50'
                   : 'border-red-400/50 focus:border-red-400/70'
@@ -174,7 +174,7 @@ export function EditLoggedMealGroupPanel({
               value={servings}
               onChange={(event) => setServings(event.target.value)}
               aria-invalid={!servingsValid}
-              className={`w-full rounded-xl border bg-black/20 px-3 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors ${
+              className={`w-full rounded-xl border bg-black/20 px-3 py-2.5 text-xl text-brand-50 antialiased outline-none transition-colors ${
                 servingsValid
                   ? 'border-white/10 focus:border-emerald-300/50'
                   : 'border-red-400/50 focus:border-red-400/70'
@@ -200,7 +200,7 @@ export function EditLoggedMealGroupPanel({
               rows={2}
               maxLength={500}
               placeholder="e.g. half portion, ate at work"
-              className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50"
+              className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-brand-50 antialiased outline-none transition-colors placeholder:text-white/30 focus:border-emerald-300/50"
             />
           </label>
 

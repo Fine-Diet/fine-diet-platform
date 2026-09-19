@@ -103,7 +103,7 @@ export function MealComposerRecipeSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search recipes…"
-        className="mb-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-brand-50 outline-none placeholder:text-white/30 focus:border-emerald-300/50"
+        className="mb-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xl text-brand-50 outline-none placeholder:text-white/30 focus:border-emerald-300/50"
         autoFocus
       />
       {error && <p className="mb-2 text-xs text-red-200/90">{error}</p>}

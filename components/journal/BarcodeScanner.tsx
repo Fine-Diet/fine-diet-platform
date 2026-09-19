@@ -261,7 +261,7 @@ export default function BarcodeScanner({ onScan, onClose, elevated = false }: Ba
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value.replace(/\D/g, ''))}
               onKeyDown={(e) => { if (e.key === 'Enter') handleManualSubmit(); }}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/40 text-base tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/40 text-xl tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-200/30"
             />
             <button
               onClick={handleManualSubmit}
