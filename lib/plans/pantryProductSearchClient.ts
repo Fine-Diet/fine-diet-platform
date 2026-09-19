@@ -1,5 +1,8 @@
 import type { GroceryPriceSearchQuota } from './groceryPricingTypes';
-import type { PantryProductSearchResult } from './pantryProductSearchTypes';
+import type {
+  PantryProductSearchProvenance,
+  PantryProductSearchResult,
+} from './pantryProductSearchTypes';
 
 export const PANTRY_PRODUCT_SEARCH_INVALID_RESPONSE_MESSAGE =
   'Product search returned an invalid response.';
@@ -48,6 +51,16 @@ function isProviderErrorShape(
   );
 }
 
+function isSearchProvenanceShape(value: unknown): value is PantryProductSearchProvenance {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.requested_postal_code === 'string'
+    && typeof value.resolved_provider_location === 'string'
+    && (value.retailer === null || typeof value.retailer === 'string')
+    && (value.scope === 'market' || value.scope === 'retailer_localized')
+  );
+}
+
 export function parsePantryProductSearchResult(
   body: Record<string, unknown>,
 ): PantryProductSearchResult | null {
@@ -65,6 +78,9 @@ export function parsePantryProductSearchResult(
   if (body.provider_error != null && !isProviderErrorShape(body.provider_error)) {
     return null;
   }
+  if (body.search_provenance != null && !isSearchProvenanceShape(body.search_provenance)) {
+    return null;
+  }
 
   return {
     outcome,
@@ -72,11 +88,13 @@ export function parsePantryProductSearchResult(
     offers: body.offers as PantryProductSearchResult['offers'],
     quota: body.quota as unknown as GroceryPriceSearchQuota,
     provider_error: body.provider_error as PantryProductSearchResult['provider_error'],
+    search_provenance: (body.search_provenance ?? null) as PantryProductSearchResult['search_provenance'],
   };
 }
 
 export async function fetchPantryProductSearch(input: {
   query: string;
+  postal_code: string;
   retailer?: string | null;
 }): Promise<PantryProductSearchResult> {
   const res = await fetch('/api/journal/plans/pantry/product-search', {
@@ -85,6 +103,7 @@ export async function fetchPantryProductSearch(input: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       query: input.query,
+      postal_code: input.postal_code,
       retailer: input.retailer ?? undefined,
     }),
   });

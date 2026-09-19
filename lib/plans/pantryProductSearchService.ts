@@ -10,11 +10,24 @@ import { finalizeQuotaClaim, reserveGroceryPriceSearchQuota } from './groceryPri
 import { rankGroceryPriceCandidates } from './groceryPriceRanking';
 import { PANTRY_PRODUCT_SEARCH_TIMEOUT_MS } from './groceryPricingConfig';
 import {
+  GroceryPriceValidationError,
+  normalizeOptionalRetailer,
+  normalizePostalCode,
+} from './groceryPricingValidation';
+import {
   searchWithQueryFallback,
   serpApiGroceryPriceProvider,
 } from './groceryPriceSerpApiProvider';
 import { toPantryProductSearchOffer } from './pantryProductSearchMapping';
-import type { PantryProductSearchResult } from './pantryProductSearchTypes';
+import {
+  isPantryRetailSearchLocationError,
+  resolvePantryRetailSearchLocation,
+} from './pantryRetailSearchLocation';
+import type {
+  PantryProductSearchProvenance,
+  PantryProductSearchResult,
+  PantryProductSearchScope,
+} from './pantryProductSearchTypes';
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_OFFERS = 8;
@@ -36,18 +49,28 @@ export class PantryProductSearchValidationError extends Error {
   }
 }
 
+export class PantryProductSearchLocationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PantryProductSearchLocationError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 function normalizeQuery(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
 }
 
-function buildPantryProductSearchContext(
-  query: string,
-  retailer?: string | null,
-): GroceryPriceSearchContext {
-  const normalizedQuery = normalizeQuery(query);
-  const normalizedRetailer = retailer?.trim() ?? '';
+function buildPantryProductSearchContext(input: {
+  query: string;
+  retailer: string | null;
+  postalCode: string;
+  providerLocation: string;
+}): GroceryPriceSearchContext {
+  const normalizedQuery = normalizeQuery(input.query);
+  const normalizedRetailer = input.retailer ?? '';
   const digest = createHash('sha256')
-    .update(`${normalizedQuery}|${normalizedRetailer}`)
+    .update(`${normalizedQuery}|${normalizedRetailer}|${input.postalCode}`)
     .digest('hex')
     .slice(0, 16);
 
@@ -65,13 +88,42 @@ function buildPantryProductSearchContext(
     purchase_quantity: null,
     purchase_unit: null,
     retailer: normalizedRetailer,
-    postal_code: '',
+    postal_code: input.postalCode,
+    provider_location: input.providerLocation,
   };
+}
+
+function resolveSearchScope(retailer: string | null): PantryProductSearchScope {
+  return retailer ? 'retailer_localized' : 'market';
+}
+
+function buildSearchProvenance(input: {
+  postalCode: string;
+  providerLocation: string;
+  retailer: string | null;
+}): PantryProductSearchProvenance {
+  return {
+    requested_postal_code: input.postalCode,
+    resolved_provider_location: input.providerLocation,
+    retailer: input.retailer,
+    scope: resolveSearchScope(input.retailer),
+  };
+}
+
+function mapLocationResolutionError(error: unknown): never {
+  if (isPantryRetailSearchLocationError(error)) {
+    throw new PantryProductSearchLocationError(error.message);
+  }
+  if (error instanceof GroceryPriceValidationError) {
+    throw new PantryProductSearchValidationError(error.message);
+  }
+  throw error;
 }
 
 export async function searchPantryProductDetails(options: {
   personId: string;
   query: string;
+  postal_code: string;
   retailer?: string | null;
 }): Promise<PantryProductSearchResult> {
   const query = normalizeQuery(options.query);
@@ -81,7 +133,37 @@ export async function searchPantryProductDetails(options: {
     );
   }
 
-  const context = buildPantryProductSearchContext(query, options.retailer);
+  let postalCode: string;
+  let retailer: string | null;
+  try {
+    postalCode = normalizePostalCode(options.postal_code);
+    retailer = normalizeOptionalRetailer(options.retailer);
+  } catch (error) {
+    if (error instanceof GroceryPriceValidationError) {
+      throw new PantryProductSearchValidationError(error.message);
+    }
+    throw error;
+  }
+
+  let locationResolution;
+  try {
+    locationResolution = await resolvePantryRetailSearchLocation(postalCode);
+  } catch (error) {
+    mapLocationResolutionError(error);
+  }
+
+  const searchProvenance = buildSearchProvenance({
+    postalCode: locationResolution.postal_code,
+    providerLocation: locationResolution.provider_location,
+    retailer,
+  });
+
+  const context = buildPantryProductSearchContext({
+    query,
+    retailer,
+    postalCode: locationResolution.postal_code,
+    providerLocation: locationResolution.provider_location,
+  });
   const reservation = await reserveGroceryPriceSearchQuota(options.personId);
   const timeoutMs = resolvePantryProductSearchTimeoutMs();
   const controller = new AbortController();
@@ -105,6 +187,7 @@ export async function searchPantryProductDetails(options: {
         offers: [],
         quota,
         provider_error: null,
+        search_provenance: searchProvenance,
       };
     }
 
@@ -130,6 +213,7 @@ export async function searchPantryProductDetails(options: {
       offers,
       quota,
       provider_error: null,
+      search_provenance: searchProvenance,
     };
   } catch (error) {
     await finalizeQuotaClaim({
@@ -148,6 +232,7 @@ export async function searchPantryProductDetails(options: {
           code: error.code,
           message: error.message,
         },
+        search_provenance: searchProvenance,
       };
     }
     throw error;

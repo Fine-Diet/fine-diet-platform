@@ -1,5 +1,14 @@
 import type { GroceryPriceSearchQuota } from './groceryPricingTypes';
 
+export type PantryProductSearchScope = 'market' | 'retailer_localized';
+
+export interface PantryProductSearchProvenance {
+  requested_postal_code: string;
+  resolved_provider_location: string;
+  retailer: string | null;
+  scope: PantryProductSearchScope;
+}
+
 export interface PantryProductSearchOffer {
   provider_result_id: string;
   title: string;
@@ -18,4 +27,5 @@ export interface PantryProductSearchResult {
   offers: PantryProductSearchOffer[];
   quota: GroceryPriceSearchQuota;
   provider_error: { code: string; message: string } | null;
+  search_provenance: PantryProductSearchProvenance | null;
 }

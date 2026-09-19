@@ -171,6 +171,19 @@ describe('groceryPriceSerpApiProvider', () => {
     expect(params.get('location')).not.toBe('94110');
   });
 
+  it('prefers explicit provider_location over postal_code lookup', () => {
+    const params = buildSerpApiSearchParams(
+      { strategy: 'upc_retailer', query: '085412000123 Whole Foods Market' },
+      {
+        ...BASE_CONTEXT,
+        provider_location: '94110, California, United States',
+      },
+      'test-api-key',
+    );
+
+    expect(params.get('location')).toBe('94110, California, United States');
+  });
+
   it('formats safe SerpAPI HTTP error details without leaking secrets', () => {
     expect(
       formatSerpApiHttpError(400, {

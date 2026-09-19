@@ -8,6 +8,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireJournalAccess } from '@/lib/access/requireJournalAccess';
 import {
   GroceryPriceQuotaExceededError,
+  PantryProductSearchLocationError,
   PantryProductSearchValidationError,
   searchPantryProductDetails,
 } from '@/lib/plans/pantryProductSearchService';
@@ -22,9 +23,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
   }
 
-  const body = (req.body ?? {}) as { query?: unknown; retailer?: unknown };
+  const body = (req.body ?? {}) as {
+    query?: unknown;
+    postal_code?: unknown;
+    retailer?: unknown;
+  };
   if (typeof body.query !== 'string') {
     return res.status(400).json({ error: 'query is required' });
+  }
+  if (typeof body.postal_code !== 'string' || !body.postal_code.trim()) {
+    return res.status(400).json({ error: 'postal_code is required' });
   }
 
   const retailer =
@@ -42,6 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const result = await searchPantryProductDetails({
       personId: ctx.personId,
       query: body.query,
+      postal_code: body.postal_code,
       retailer,
     });
     if (result.outcome === 'provider_error') {
@@ -50,6 +59,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json(result);
   } catch (error) {
     if (error instanceof PantryProductSearchValidationError) {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error instanceof PantryProductSearchLocationError) {
       return res.status(400).json({ error: error.message });
     }
     if (error instanceof GroceryPriceQuotaExceededError) {

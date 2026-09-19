@@ -19,6 +19,8 @@ export interface GroceryPriceSearchContext {
   purchase_unit: string | null;
   retailer: string;
   postal_code: string;
+  /** Resolved SerpAPI canonical location; when set, overrides postal_code lookup. */
+  provider_location?: string | null;
 }
 
 export interface GroceryPriceProviderCandidate {
