@@ -73,6 +73,8 @@ describe('Packet 5 Pantry v2 manager', () => {
     expect(manager).toContain('Add purchase');
     expect(manager).toContain('Edit on-hand amount');
     expect(manager).toContain('formatPurchaseStateLabel');
+    expect(manager).toContain('No purchases recorded yet.');
+    expect((manager.match(/\+ Add purchase/g) ?? []).length).toBe(1);
     expect(manager).not.toContain('Acquisition details');
     expect(manager).not.toContain('Lot history does not change the aggregate on-hand amount.');
     expect(manager).not.toContain('bg-red-400 animate-pulse');

@@ -116,6 +116,33 @@ export function earliestActiveExpirationEvidence(
   return earliestExpirationEvidence(activeAcquisitionLots(lots));
 }
 
+export function parentDisplayExpirationEvidence(
+  lots: PantryAcquisitionLot[],
+  todayYmd: string,
+): ExpirationEvidence | null {
+  const activeEvidence = activeAcquisitionLots(lots)
+    .map((entry) => expirationEvidence(entry))
+    .filter((value): value is ExpirationEvidence => value !== null);
+
+  const exactExpired = activeEvidence
+    .filter(
+      (evidence) =>
+        evidence.kind === 'exact'
+        && expirationEvidenceTense(evidence, todayYmd) === 'expired',
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (exactExpired.length > 0) return exactExpired[0];
+
+  const exactToday = activeEvidence.find(
+    (evidence) =>
+      evidence.kind === 'exact'
+      && expirationEvidenceTense(evidence, todayYmd) === 'today',
+  );
+  if (exactToday) return exactToday;
+
+  return earliestActiveExpirationEvidence(lots);
+}
+
 export function parentExpirationShortState(
   evidence: ExpirationEvidence,
   todayYmd: string,

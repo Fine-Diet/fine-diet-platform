@@ -10,13 +10,13 @@ import { AppDialog } from '@/components/ui/AppDialog';
 import { DisclosureTriangle } from '@/components/ui/DisclosureTriangle';
 import { PantryQuickStartView } from './PantryQuickStartView';
 import {
-  earliestActiveExpirationEvidence,
   expirationEvidence,
   expirationEvidenceTense,
   filterAndSortPantryItems,
   formatExpirationEvidenceLabel,
   formatPurchaseStateLabel,
   localTodayYmd,
+  parentDisplayExpirationEvidence,
   parentExpirationShortState,
   sortPurchaseHistoryLots,
   type InventoryFilter,
@@ -893,7 +893,7 @@ export default function PantryManager() {
             <div className="mt-2">
               {visibleItems.map((item) => {
                 const itemLots = lotsByPantryKey[item.key] ?? [];
-                const evidence = earliestActiveExpirationEvidence(itemLots);
+                const evidence = parentDisplayExpirationEvidence(itemLots, todayYmd);
                 const shortState = evidence ? parentExpirationShortState(evidence, todayYmd) : null;
                 const expanded = expandedKey === item.key;
                 return (
@@ -965,13 +965,9 @@ export default function PantryManager() {
                             </button>
                           </div>
                           {itemLots.length === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => openLot(item)}
-                              className="mt-4 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-black hover:bg-white/90"
-                            >
-                              Add purchase
-                            </button>
+                            <p className="mt-4 text-sm text-white/50">
+                              No purchases recorded yet.
+                            </p>
                           ) : (
                             <div className="mt-4">
                               {itemLots.map((lot) => (

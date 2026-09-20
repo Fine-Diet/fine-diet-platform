@@ -7,6 +7,7 @@ import {
   filterAndSortPantryItems,
   formatExpirationEvidenceLabel,
   formatPurchaseStateLabel,
+  parentDisplayExpirationEvidence,
   parentExpirationShortState,
   sortPurchaseHistoryLots,
 } from '../pantryPolicy';
@@ -122,6 +123,41 @@ describe('Pantry v2 deterministic policy', () => {
     const evidence = earliestActiveExpirationEvidence(lots);
     expect(evidence).toEqual({ date: '2026-09-15', kind: 'exact' });
     expect(parentExpirationShortState(evidence!, '2026-09-18')).toBe('Expired');
+  });
+
+  it('prefers active exact expired display over an earlier active expected expiration', () => {
+    const lots = [
+      lot('expected-sooner', {
+        acquired_on: '2026-09-01',
+        expected_shelf_life_days: 7,
+      }),
+      lot('exact-expired', {
+        acquired_on: '2026-09-02',
+        expires_on: '2026-09-15',
+      }),
+    ];
+    const todayYmd = '2026-09-18';
+    const displayEvidence = parentDisplayExpirationEvidence(lots, todayYmd);
+    expect(displayEvidence).toEqual({ date: '2026-09-15', kind: 'exact' });
+    expect(parentExpirationShortState(displayEvidence!, todayYmd)).toBe('Expired');
+    expect(formatExpirationEvidenceLabel(displayEvidence!, todayYmd)).toContain('Expired Sep 15');
+  });
+
+  it('prefers active exact expires-today display over earlier expected evidence', () => {
+    const lots = [
+      lot('expected-sooner', {
+        acquired_on: '2026-09-01',
+        expected_shelf_life_days: 7,
+      }),
+      lot('exact-today', {
+        acquired_on: '2026-09-10',
+        expires_on: '2026-09-18',
+      }),
+    ];
+    const todayYmd = '2026-09-18';
+    const displayEvidence = parentDisplayExpirationEvidence(lots, todayYmd);
+    expect(displayEvidence).toEqual({ date: '2026-09-18', kind: 'exact' });
+    expect(parentExpirationShortState(displayEvidence!, todayYmd)).toBe('Expires today');
   });
 
   it('clears parent expiration evidence when the expired active purchase becomes depleted', () => {
