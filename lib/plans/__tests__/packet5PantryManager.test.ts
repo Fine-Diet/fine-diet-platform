@@ -64,8 +64,14 @@ describe('Packet 5 Pantry v2 manager', () => {
     expect(manager).not.toContain('Food Group');
   });
 
-  it('uses shared disclosure, purchase history copy, and compact add purchase treatment', () => {
-    expect(manager).toContain('DisclosureTriangle');
+  it('uses Plans Home meal-row disclosure and single parent expiration line', () => {
+    expect(manager).not.toContain('DisclosureTriangle');
+    expect(manager).toContain('grid h-7 w-8');
+    expect(manager).toContain('h-[15px] w-[15px]');
+    expect(manager).toContain('polygon points="12,18 2,6 22,6"');
+    expect(manager).toContain('rotate-180');
+    expect(manager).not.toContain('parentExpirationShortState');
+    expect(manager).toContain('parentDisplayExpirationEvidence');
     expect(manager).not.toContain('MoreHorizontal');
     expect(manager).not.toContain('ChevronDown');
     expect(manager).toContain('Purchase history');

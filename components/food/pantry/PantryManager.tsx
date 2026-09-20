@@ -7,7 +7,6 @@ import { useRouter } from 'next/router';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
-import { DisclosureTriangle } from '@/components/ui/DisclosureTriangle';
 import { PantryQuickStartView } from './PantryQuickStartView';
 import {
   expirationEvidence,
@@ -17,7 +16,6 @@ import {
   formatPurchaseStateLabel,
   localTodayYmd,
   parentDisplayExpirationEvidence,
-  parentExpirationShortState,
   sortPurchaseHistoryLots,
   type InventoryFilter,
   type PerishabilityFilter,
@@ -894,7 +892,15 @@ export default function PantryManager() {
               {visibleItems.map((item) => {
                 const itemLots = lotsByPantryKey[item.key] ?? [];
                 const evidence = parentDisplayExpirationEvidence(itemLots, todayYmd);
-                const shortState = evidence ? parentExpirationShortState(evidence, todayYmd) : null;
+                const evidenceLabel = evidence
+                  ? formatExpirationEvidenceLabel(evidence, todayYmd)
+                  : null;
+                const evidenceTense = evidence
+                  ? expirationEvidenceTense(evidence, todayYmd)
+                  : null;
+                const isAttentionEvidence = evidence?.kind === 'exact'
+                  && (evidenceTense === 'expired' || evidenceTense === 'today');
+                const showExpiredDot = evidence?.kind === 'exact' && evidenceTense === 'expired';
                 const expanded = expandedKey === item.key;
                 return (
                   <article
@@ -909,31 +915,35 @@ export default function PantryManager() {
                         className="min-w-0 flex-1 text-left"
                       >
                         <span className="block text-xl font-semibold text-white">{item.name}</span>
-                        {shortState && (
-                          <span className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-white/50">
-                            {shortState === 'Expired' && (
+                        {evidenceLabel && (
+                          <span className={`mt-1 flex items-center gap-1.5 text-sm text-white/50 ${isAttentionEvidence ? 'font-semibold' : ''}`}>
+                            {showExpiredDot && (
                               <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
                             )}
-                            {shortState}
+                            {evidenceLabel}
                           </span>
                         )}
                         <span className="mt-1 block text-sm text-white/50">
                           {formatAmount(item.quantity, item.unit)}
                         </span>
-                        {evidence && (
-                          <span className="mt-1 block text-sm text-white/50">
-                            {formatExpirationEvidenceLabel(evidence, todayYmd)}
-                          </span>
-                        )}
                       </button>
                       <button
                         type="button"
                         aria-expanded={expanded}
                         aria-label={expanded ? `Collapse ${item.name}` : `Expand ${item.name}`}
                         onClick={() => setExpandedKey(expanded ? null : item.key)}
-                        className="mt-1 shrink-0 rounded-md p-1 focus:outline-none focus:ring-1 focus:ring-white/40"
+                        className="mt-1 grid h-7 w-8 shrink-0 place-items-center rounded-md text-base text-white/55 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
                       >
-                        <DisclosureTriangle expanded={expanded} />
+                        <svg
+                          aria-hidden
+                          className={`h-[15px] w-[15px] flex-shrink-0 transition-transform duration-200 ${
+                            expanded ? 'rotate-180' : ''
+                          }`}
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <polygon points="12,18 2,6 22,6" />
+                        </svg>
                       </button>
                     </div>
 
