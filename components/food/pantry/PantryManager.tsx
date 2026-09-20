@@ -726,13 +726,10 @@ export default function PantryManager() {
       <SignedInPageScroll className="px-4 pt-8 sm:px-6 sm:pt-12">
         <div className="mx-auto w-full max-w-[760px]">
           <header className="text-center">
-            <p className="text-sm font-semibold text-white/90">Pantry</p>
-            <h1 className="mt-1 text-3xl font-medium tracking-tight text-brand-50 sm:text-4xl">
-              Your inventory truth as a feed
+            <p className="text-2xl font-semibold text-white">Pantry</p>
+            <h1 className="text-[2.5rem] font-medium tracking-tight text-brand-50 sm:text-[2.75rem] leading-[1]">
+              Your inventory truth <br /> as a feed
             </h1>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-white/48">
-              Keep aggregate on-hand amounts separate from where, when, and what you acquired.
-            </p>
           </header>
 
           <section className="mt-8">
@@ -740,7 +737,7 @@ export default function PantryManager() {
               <button
                 type="button"
                 onClick={openAdd}
-                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-t-xl bg-brand-50 px-4 text-sm font-semibold text-[#16110d] sm:flex-none sm:min-w-48"
+                className="flex flex-1 min-h-11 items-center justify-center gap-2 rounded-t-xl bg-brand-50 px-6 py-4 text-xl font-semibold text-[#16110d] sm:flex-none sm:min-w-48 sm:text-xl"
               >
                 <Plus className="h-4 w-4" />
                 Add Pantry Item
@@ -748,10 +745,10 @@ export default function PantryManager() {
               <button
                 type="button"
                 onClick={() => setSearchOpen((open) => !open)}
-                className="flex min-h-11 flex-1 items-center justify-center gap-2 px-4 text-sm font-medium text-white/55 hover:text-white sm:justify-start"
+                className="flex min-h-11 flex-1 items-center justify-between gap-2 pl-4 text-xl font-medium text-white/55 hover:text-white sm:justify-between"
               >
-                <Search className="h-4 w-4" />
                 Search Pantry
+                <Search className="h-4 w-4" />
               </button>
             </div>
 
@@ -781,13 +778,13 @@ export default function PantryManager() {
 
             <div className="mt-4 flex flex-wrap items-end gap-3 border-b border-white/[0.08] pb-3">
               <label className="min-w-40">
-                <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">
+                <span className="block text-sm font-semibold text-white/50">
                   Perishability
                 </span>
                 <select
                   value={perishability}
                   onChange={(event) => setPerishability(event.target.value as PerishabilityFilter)}
-                  className="mt-1 w-full bg-transparent text-xl text-white/75 outline-none"
+                  className="mt-1 w-full bg-transparent text-xl font-regular text-white/50 outline-none"
                 >
                   <option value="all">All items</option>
                   <option value="evidence">Expiration evidence</option>
@@ -795,13 +792,13 @@ export default function PantryManager() {
                 </select>
               </label>
               <label className="min-w-36">
-                <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">
+                <span className="block text-sm font-semibold text-white/50">
                   Inventory Status
                 </span>
                 <select
                   value={inventory}
                   onChange={(event) => setInventory(event.target.value as InventoryFilter)}
-                  className="mt-1 w-full bg-transparent text-xl text-white/75 outline-none"
+                  className="mt-1 w-full bg-transparent text-xl font-regular text-white/50 outline-none"
                 >
                   <option value="all">All amounts</option>
                   <option value="positive">Positive amount</option>
@@ -887,7 +884,7 @@ export default function PantryManager() {
                 return (
                   <article
                     key={item.key}
-                    className={`relative border-b border-white/[0.1] transition-colors ${expanded ? 'bg-white/[0.055]' : ''}`}
+                    className={`relative transition-colors ${expanded ? 'bg-white/[0.055]' : ''}`}
                   >
                     <div className="flex min-h-[72px] items-start gap-3 px-3 py-4">
                       <button
@@ -896,12 +893,12 @@ export default function PantryManager() {
                         aria-expanded={expanded}
                         className="min-w-0 flex-1 text-left"
                       >
-                        <span className="block text-[15px] font-semibold text-white">{item.name}</span>
-                        <span className="mt-0.5 block text-xs text-white/52">
+                        <span className="block text-xl font-semibold text-white">{item.name}</span>
+                        <span className="mx-4 block text-sm text-white/50">
                           {formatAmount(item.quantity, item.unit)}
                         </span>
                         {evidence && (
-                          <span className="mt-0.5 block text-xs text-white/38">
+                          <span className="mx-4 block text-sm text-white/50">
                             {formatExpirationEvidenceLabel(evidence, todayYmd)}
                           </span>
                         )}
