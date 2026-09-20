@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, MoreHorizontal, Plus, Search, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { useRouter } from 'next/router';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
@@ -9,11 +9,14 @@ import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
 import { PantryQuickStartView } from './PantryQuickStartView';
 import {
-  earliestExpirationEvidence,
+  expirationEvidence,
+  expirationEvidenceTense,
   filterAndSortPantryItems,
   formatExpirationEvidenceLabel,
+  formatPurchaseStateLabel,
   localTodayYmd,
-  sortAcquisitionLots,
+  parentDisplayExpirationEvidence,
+  sortPurchaseHistoryLots,
   type InventoryFilter,
   type PerishabilityFilter,
 } from './pantryPolicy';
@@ -83,6 +86,16 @@ function formatDate(value: string): string {
 function formatAmount(quantity: number | null, unit: string | null): string {
   if (quantity == null) return unit ? `Amount saved · ${unit}` : 'Amount saved';
   return unit ? `${quantity} ${unit}` : String(quantity);
+}
+
+function formatQuantityLine(
+  remaining: number,
+  acquired: number,
+  unit: string | null,
+): string {
+  const remainingText = formatAmount(remaining, unit);
+  const acquiredText = unit ? `${acquired} ${unit}` : String(acquired);
+  return `${remainingText} remaining · ${acquiredText} purchased`;
 }
 
 function formatCurrency(amount: number, currency: string | null): string {
@@ -177,39 +190,41 @@ function LotCard({
   onEdit: () => void;
   todayYmd: string;
 }) {
-  const evidence = earliestExpirationEvidence([lot]);
   const product = [lot.brand_name, lot.product_title].filter(Boolean).join(' · ');
   const packageText = packageLabel(lot);
+  const purchaseState = formatPurchaseStateLabel(lot, todayYmd);
+  const evidence = expirationEvidence(lot);
+  const purchaseStateEmphasis = lot.quantity_remaining === 0
+    || (evidence?.kind === 'exact'
+      && ['expired', 'today'].includes(expirationEvidenceTense(evidence, todayYmd)));
   return (
     <article className="border-t border-white/[0.09] py-4 first:border-t-0 first:pt-0">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {product && <p className="text-sm font-medium text-white">{product}</p>}
-          <p className={`${product ? 'mt-1' : ''} text-xs text-white/65`}>
-            {formatAmount(lot.quantity_remaining, lot.unit)} remaining
-            {' · '}
-            {formatAmount(lot.quantity_acquired, lot.unit)} acquired
+          {product && <p className="text-xl font-semibold text-white">{product}</p>}
+          <p className={`${product ? 'mt-1' : ''} text-sm text-white/50`}>
+            {formatQuantityLine(lot.quantity_remaining, lot.quantity_acquired, lot.unit)}
           </p>
+          <p className="mt-1 text-sm text-white/50">Purchased {formatDate(lot.acquired_on)}</p>
+          <p className={`mt-1 text-sm text-white/50 ${purchaseStateEmphasis ? 'font-semibold' : ''}`}>
+            {purchaseState}
+          </p>
+          {packageText && <p className="mt-1 text-sm text-white/50">{packageText}</p>}
+          {lot.retailer && <p className="mt-1 text-sm text-white/50">{lot.retailer}</p>}
+          {lot.source_haul_id && <p className="mt-1 text-sm text-white/50">From a Haul</p>}
+          {lot.price_amount != null && (
+            <p className="mt-2 text-xl font-semibold text-white/50">
+              {formatCurrency(lot.price_amount, lot.currency)}
+            </p>
+          )}
         </div>
         <button
           type="button"
           onClick={onEdit}
-          className="shrink-0 text-xs font-medium text-white/50 hover:text-white"
+          className="shrink-0 text-sm font-medium text-white/50 hover:text-white"
         >
           Edit
         </button>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/42">
-        <span>Acquired {formatDate(lot.acquired_on)}</span>
-        {evidence && (
-          <span>{formatExpirationEvidenceLabel(evidence, todayYmd)}</span>
-        )}
-        {packageText && <span>{packageText}</span>}
-        {lot.retailer && <span>{lot.retailer}</span>}
-        {lot.price_amount != null && (
-          <span>{formatCurrency(lot.price_amount, lot.currency)}</span>
-        )}
-        {lot.source_haul_id && <span>From a Haul</span>}
       </div>
     </article>
   );
@@ -227,7 +242,6 @@ export default function PantryManager() {
   const [perishability, setPerishability] = useState<PerishabilityFilter>('all');
   const [inventory, setInventory] = useState<InventoryFilter>('all');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [menuKey, setMenuKey] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
   const [addQuery, setAddQuery] = useState('');
@@ -311,7 +325,7 @@ export default function PantryManager() {
       if (!lot.pantry_item_key) continue;
       grouped[lot.pantry_item_key] = [...(grouped[lot.pantry_item_key] ?? []), lot];
     }
-    for (const key of Object.keys(grouped)) grouped[key] = sortAcquisitionLots(grouped[key]);
+    for (const key of Object.keys(grouped)) grouped[key] = sortPurchaseHistoryLots(grouped[key]);
     return grouped;
   }, [lots]);
 
@@ -447,7 +461,6 @@ export default function PantryManager() {
   }
 
   function openAggregateEdit(item: PantryOnHandItem) {
-    setMenuKey(null);
     setEditItem(item);
     setEditQuantity(item.quantity == null ? '' : String(item.quantity));
     setEditUnit(item.unit ?? '');
@@ -507,7 +520,6 @@ export default function PantryManager() {
   }
 
   function openLot(item: PantryOnHandItem, lot: PantryAcquisitionLot | null = null) {
-    setMenuKey(null);
     setLotContext({ pantryKey: item.key, itemName: item.name, lot });
     setLotForm(lot ? lotDraft(lot) : emptyLotDraft(item.unit));
     setLotError(null);
@@ -666,7 +678,7 @@ export default function PantryManager() {
       setExpandedKey(lotContext.pantryKey);
       setLotContext(null);
     } catch (err) {
-      setLotError(err instanceof Error ? err.message : 'Unable to save acquisition details.');
+      setLotError(err instanceof Error ? err.message : 'Unable to save purchase details.');
     } finally {
       setLotBusy(false);
     }
@@ -722,7 +734,7 @@ export default function PantryManager() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 text-white">
       <SignedInPageScroll className="px-4 pt-8 sm:px-6 sm:pt-12">
         <div className="mx-auto w-full max-w-[760px]">
           <header className="text-center">
@@ -879,7 +891,16 @@ export default function PantryManager() {
             <div className="mt-2">
               {visibleItems.map((item) => {
                 const itemLots = lotsByPantryKey[item.key] ?? [];
-                const evidence = earliestExpirationEvidence(itemLots);
+                const evidence = parentDisplayExpirationEvidence(itemLots, todayYmd);
+                const evidenceLabel = evidence
+                  ? formatExpirationEvidenceLabel(evidence, todayYmd)
+                  : null;
+                const evidenceTense = evidence
+                  ? expirationEvidenceTense(evidence, todayYmd)
+                  : null;
+                const isAttentionEvidence = evidence?.kind === 'exact'
+                  && (evidenceTense === 'expired' || evidenceTense === 'today');
+                const showExpiredDot = evidence?.kind === 'exact' && evidenceTense === 'expired';
                 const expanded = expandedKey === item.key;
                 return (
                   <article
@@ -894,81 +915,69 @@ export default function PantryManager() {
                         className="min-w-0 flex-1 text-left"
                       >
                         <span className="block text-xl font-semibold text-white">{item.name}</span>
-                        <span className="mx-4 block text-sm text-white/50">
-                          {formatAmount(item.quantity, item.unit)}
-                        </span>
-                        {evidence && (
-                          <span className="mx-4 block text-sm text-white/50">
-                            {formatExpirationEvidenceLabel(evidence, todayYmd)}
+                        {evidenceLabel && (
+                          <span className={`mt-1 flex items-center gap-1.5 text-sm text-white/50 ${isAttentionEvidence ? 'font-semibold' : ''}`}>
+                            {showExpiredDot && (
+                              <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+                            )}
+                            {evidenceLabel}
                           </span>
                         )}
+                        <span className="mt-1 block text-sm text-white/50">
+                          {formatAmount(item.quantity, item.unit)}
+                        </span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setExpandedKey(expanded ? null : item.key)}
+                        aria-expanded={expanded}
                         aria-label={expanded ? `Collapse ${item.name}` : `Expand ${item.name}`}
-                        className="mt-1 text-white/40 hover:text-white"
+                        onClick={() => setExpandedKey(expanded ? null : item.key)}
+                        className="mt-1 grid h-7 w-8 shrink-0 place-items-center rounded-md text-base text-white/55 hover:text-white focus:outline-none focus-visible:text-white"
                       >
-                        <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                      </button>
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setMenuKey(menuKey === item.key ? null : item.key)}
-                          aria-label={`Actions for ${item.name}`}
-                          className="rounded-full p-1 text-white/70 hover:bg-white/10"
+                        <svg
+                          aria-hidden
+                          className={`h-[15px] w-[15px] flex-shrink-0 transition-transform duration-200 ${
+                            expanded ? 'rotate-180' : ''
+                          }`}
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <MoreHorizontal className="h-5 w-5" />
-                        </button>
-                        {menuKey === item.key && (
-                          <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-white/12 bg-[#211a14] p-1 shadow-2xl">
-                            <button
-                              type="button"
-                              onClick={() => openAggregateEdit(item)}
-                              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-white/75 hover:bg-white/[0.06]"
-                            >
-                              Edit on-hand amount
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openLot(item)}
-                              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-white/75 hover:bg-white/[0.06]"
-                            >
-                              Add acquisition details
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                          <polygon points="12,18 2,6 22,6" />
+                        </svg>
+                      </button>
                     </div>
 
                     {expanded && (
                       <div className="px-4 pb-5 sm:px-6">
-                        <div className="border-t border-white/[0.12] pt-4">
-                          <div className="flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => openAggregateEdit(item)}
+                          className="text-sm font-medium text-white/50 hover:text-white"
+                        >
+                          Edit on-hand amount
+                        </button>
+                        <div className="mt-4 border-t border-white/[0.12] pt-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">
-                                Acquisition details
+                              <p className="text-sm font-semibold text-white/50">
+                                Purchase history
                               </p>
-                              <p className="mt-1 text-xs text-white/42">
-                                Lot history does not change the aggregate on-hand amount.
+                              <p className="mt-1 text-sm text-white/50">
+                                Each purchase is tracked separately from your total on hand.
                               </p>
                             </div>
                             <button
                               type="button"
                               onClick={() => openLot(item)}
-                              className="shrink-0 text-xs font-semibold text-white/65 hover:text-white"
+                              className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-black hover:bg-white/90 focus:outline-none focus:ring-1 focus:ring-white/40"
                             >
-                              + Add details
+                              + Add purchase
                             </button>
                           </div>
                           {itemLots.length === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => openLot(item)}
-                              className="mt-4 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 hover:text-white"
-                            >
-                              Add Product Details
-                            </button>
+                            <p className="mt-4 text-sm text-white/50">
+                              No purchases recorded yet.
+                            </p>
                           ) : (
                             <div className="mt-4">
                               {itemLots.map((lot) => (
@@ -1101,7 +1110,7 @@ export default function PantryManager() {
             Edit on-hand amount
           </h2>
           <p className="mt-1 text-sm text-white/45">
-            {editItem?.name} · Acquisition history stays unchanged.
+            {editItem?.name} · Purchase history stays unchanged.
           </p>
           <div className="mt-5 grid grid-cols-2 gap-3">
             <label>
@@ -1131,15 +1140,15 @@ export default function PantryManager() {
       <AppDialog
         open={Boolean(lotContext)}
         onClose={() => !lotBusy && setLotContext(null)}
-        labelledBy="acquisition-details-title"
+        labelledBy="purchase-details-title"
         panelClassName="border border-white/10 bg-[#211a14] shadow-2xl"
       >
         <div className="p-5">
-          <h2 id="acquisition-details-title" className="text-xl font-semibold text-white">
-            {lotContext?.lot ? 'Edit acquisition details' : 'Add acquisition details'}
+          <h2 id="purchase-details-title" className="text-xl font-semibold text-white">
+            {lotContext?.lot ? 'Edit purchase details' : 'Add purchase details'}
           </h2>
           <p className="mt-1 text-sm text-white/45">
-            {lotContext?.itemName} · This will not change the aggregate on-hand amount.
+            {lotContext?.itemName} · Purchase details do not change your total on-hand amount.
           </p>
           <div className="mt-5 space-y-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1339,7 +1348,7 @@ export default function PantryManager() {
           <div className="mt-5 flex justify-end gap-2">
             <button type="button" onClick={() => setLotContext(null)} disabled={lotBusy} className="px-4 py-2 text-sm text-white/55">Cancel</button>
             <button type="button" onClick={() => void saveLot()} disabled={lotBusy} className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40">
-              {lotBusy ? 'Saving…' : lotContext?.lot ? 'Save changes' : 'Add acquisition'}
+              {lotBusy ? 'Saving…' : lotContext?.lot ? 'Save changes' : 'Add purchase'}
             </button>
           </div>
         </div>
