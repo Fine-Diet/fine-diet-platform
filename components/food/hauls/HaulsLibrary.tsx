@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Search } from 'lucide-react';
 
+import { FoodShoppingViewSwitcher } from '@/components/food/FoodShoppingViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -137,12 +138,12 @@ export default function HaulsLibrary() {
   const history = filtered.filter((haul) => haul.status === 'closed' || haul.status === 'cancelled');
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 text-white">
       <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
-        <div className="mx-auto w-full max-w-[1000px]">
+        <div className="mx-auto w-full max-w-[950px]">
           <header>
-            <p className="text-lg font-semibold text-white">Hauls</p>
-            <h1 className="mt-1 max-w-3xl text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
+            <FoodShoppingViewSwitcher currentView="hauls" />
+            <h1 className="mt-1 max-w-3xl text-[2.5rem] font-regular tracking-tight text-brand-50 sm:text-[2.75rem]">
               Start or continue your haul preparation.
             </h1>
           </header>

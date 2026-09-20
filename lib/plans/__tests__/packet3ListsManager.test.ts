@@ -76,7 +76,16 @@ describe('Packet 3 Food IA and Lists manager', () => {
     expect(manager).toContain('Choose Product');
     expect(manager).toContain('•••');
     expect(manager).toContain('rounded-full border border-white/20');
-    expect(manager).toContain('bg-gradient-to-b');
+    expect(manager).toContain('bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700');
+    expect(manager).toContain('max-w-[950px]');
+    expect(manager).toContain('<FoodShoppingViewSwitcher currentView="lists" />');
+    expect(manager).toContain('text-[2.5rem] font-regular tracking-tight');
+    expect(manager).toContain('sm:text-[2.75rem]');
+    expect(manager).toContain('appearance-none');
+    expect(manager).toContain('polygon points="12,18 2,6 22,6"');
+    expect(manager).not.toContain('min-h-14 flex-1 rounded-full');
+    expect(manager).not.toContain('Delete');
+    expect(manager).toContain('Remove from List');
   });
 
   it('keeps List editing persistent and omits transfer checkboxes', () => {

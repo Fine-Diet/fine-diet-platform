@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 
+import { FoodShoppingViewSwitcher } from '@/components/food/FoodShoppingViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
@@ -469,12 +470,12 @@ export default function ListsManager() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-[#342b20] via-[#211b14] to-[#17120e] text-white">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 text-white">
       <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
-        <div className="mx-auto w-full max-w-[1000px]">
+        <div className="mx-auto w-full max-w-[950px]">
           <header>
-            <p className="text-lg font-semibold text-white">Lists</p>
-            <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
+            <FoodShoppingViewSwitcher currentView="lists" />
+            <h1 className="mt-1 text-[2.5rem] font-regular tracking-tight text-brand-50 sm:text-[2.75rem]">
               Manage your lists
             </h1>
           </header>
@@ -483,24 +484,34 @@ export default function ListsManager() {
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
               Select a List
             </p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <select
-                value={selectedListId ?? ''}
-                onChange={(event) => selectList(event.target.value)}
-                className="min-h-14 flex-1 rounded-full border border-white/20 bg-[#211a14]/80 px-5 text-xl font-semibold text-white outline-none focus:border-white/50"
-                aria-label="Select a List"
-              >
-                {lists.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {listTitle(candidate)}
-                    {candidate.is_default ? ' (Default List)' : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="flex border-b border-white/25">
+              <div className="relative min-w-0 flex-1 pl-1">
+                <select
+                  value={selectedListId ?? ''}
+                  onChange={(event) => selectList(event.target.value)}
+                  className="appearance-none min-h-11 w-full bg-transparent px-0 pr-8 text-xl font-semibold text-white outline-none"
+                  aria-label="Select a List"
+                >
+                  {lists.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {listTitle(candidate)}
+                      {candidate.is_default ? ' (Default List)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-white"
+                >
+                  <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="12,18 2,6 22,6" />
+                  </svg>
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => setNewListOpen(true)}
-                className="min-h-14 rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] hover:bg-white"
+                className="flex min-h-11 shrink-0 items-center justify-center rounded-t-xl bg-brand-50 px-6 py-4 text-xl font-semibold text-[#16110d] hover:bg-white"
               >
                 + New List
               </button>
@@ -513,8 +524,8 @@ export default function ListsManager() {
             </p>
           )}
 
-          <section className="mt-6" aria-label="Search and add items">
-            <div className="flex items-stretch rounded-full border border-white/20">
+          <section className="mt-4" aria-label="Search and add items">
+            <div className="flex items-stretch rounded-xl border border-white/15 bg-transparent">
               <input
                 type="search"
                 value={addQuery}
@@ -524,7 +535,7 @@ export default function ListsManager() {
                 }}
                 disabled={Boolean(list?.plan_id)}
                 placeholder={list?.plan_id ? 'Plan-generated Lists are read-only' : 'Search to add item(s)'}
-                className="min-h-11 min-w-0 flex-1 rounded-full bg-transparent px-5 py-2 text-xl text-white outline-none placeholder:text-white/35 disabled:opacity-50"
+                className="min-h-11 min-w-0 flex-1 bg-transparent px-4 py-2 text-xl text-white outline-none placeholder:text-white/35 disabled:opacity-50"
               />
               <button
                 type="button"
@@ -563,7 +574,7 @@ export default function ListsManager() {
             )}
           </section>
 
-          <section className="mt-5" aria-label="List items">
+          <section className="mt-4" aria-label="List items">
             {loadState === 'loading' ? (
               <div className="space-y-3">
                 {[0, 1, 2].map((value) => (
@@ -575,45 +586,50 @@ export default function ListsManager() {
                 This List is ready for its first item.
               </p>
             ) : (
-              <div className="divide-y divide-white/[0.08]">
+              <div className="divide-y divide-white/[0.06]">
                 {items.map((item) => {
                   const choice = choices[item.id];
                   const price = prices[item.id];
                   const product = productName(choice, price);
                   return (
-                    <article key={item.id} className="relative py-5">
+                    <article key={item.id} className="relative py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <h2 className="text-base font-semibold text-brand-50">{item.name}</h2>
                           {product ? (
                             <>
-                              <p className="mt-1 text-sm text-white/55">{product}</p>
+                              <p className="mt-0.5 text-sm text-white/50">{product}</p>
                               {price?.retailer && (
-                                <p className="mt-0.5 text-xs text-white/40">{price.retailer}</p>
+                                <p className="mt-0.5 text-sm text-white/50">{price.retailer}</p>
                               )}
-                              {price && (
-                                <p className="mt-0.5 text-xs text-white/50">
+                              {price ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPriceItem(item)}
+                                  className="mt-0.5 text-sm text-white/50 hover:text-white/75"
+                                >
                                   {formatGroceryCurrency(price.line_total, price.currency)}
-                                </p>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setPriceItem(item)}
+                                  className="mt-1 text-xs text-white/35 hover:text-white/65"
+                                >
+                                  Find Price
+                                </button>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => setPriceItem(item)}
-                                className="mt-1 text-xs text-white/35 hover:text-white/65"
-                              >
-                                {price ? 'Update Price' : 'Find Price'}
-                              </button>
                             </>
                           ) : (
                             <button
                               type="button"
                               onClick={() => openChooseProduct(item)}
-                              className="mt-2 rounded-full bg-brand-50 px-4 py-1 text-xs font-semibold text-[#16110d] hover:bg-white"
+                              className="mt-1.5 rounded-full bg-brand-50 px-4 py-1 text-xs font-semibold text-[#16110d] hover:bg-white"
                             >
                               Choose Product
                             </button>
                           )}
-                          <div className="mt-3 inline-flex items-center rounded-full border border-white/20 text-xs">
+                          <div className="mt-2 inline-flex items-center rounded-full border border-white/20 text-xs">
                             <button
                               type="button"
                               onClick={() => void changeQuantity(item, -1)}
@@ -637,7 +653,6 @@ export default function ListsManager() {
                           <button
                             type="button"
                             aria-label={`Actions for ${item.name}`}
-                            aria-haspopup="menu"
                             aria-expanded={overflowItemId === item.id}
                             onClick={() =>
                               setOverflowItemId((current) =>
@@ -650,12 +665,10 @@ export default function ListsManager() {
                           </button>
                           {overflowItemId === item.id && (
                             <div
-                              role="menu"
                               className="absolute right-0 top-9 z-20 w-36 rounded-xl border border-white/15 bg-[#211a14] p-1 shadow-2xl"
                             >
                               <button
                                 type="button"
-                                role="menuitem"
                                 onClick={() => {
                                   setOverflowItemId(null);
                                   openEdit(item);
@@ -663,14 +676,6 @@ export default function ListsManager() {
                                 className="w-full rounded-lg px-3 py-2 text-left text-xs text-white/75 hover:bg-white/10 hover:text-white"
                               >
                                 Edit
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => void deleteItem(item)}
-                                className="w-full rounded-lg px-3 py-2 text-left text-xs text-red-100/85 hover:bg-red-500/10"
-                              >
-                                Delete
                               </button>
                             </div>
                           )}
