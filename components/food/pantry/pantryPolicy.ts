@@ -77,20 +77,27 @@ export function expirationEvidence(
   return { date: date.toISOString().slice(0, 10), kind: 'expected' };
 }
 
+export function activeAcquisitionLots(
+  lots: PantryAcquisitionLot[],
+): PantryAcquisitionLot[] {
+  return lots.filter((lot) => lot.quantity_remaining > 0);
+}
+
+export function sortPurchaseHistoryLots(
+  lots: PantryAcquisitionLot[],
+): PantryAcquisitionLot[] {
+  return [...lots].sort(
+    (a, b) =>
+      b.acquired_on.localeCompare(a.acquired_on)
+      || b.created_at.localeCompare(a.created_at),
+  );
+}
+
+/** @deprecated Prefer sortPurchaseHistoryLots for display ordering. */
 export function sortAcquisitionLots(
   lots: PantryAcquisitionLot[],
 ): PantryAcquisitionLot[] {
-  return [...lots].sort((a, b) => {
-    const depletion = Number(a.quantity_remaining === 0) - Number(b.quantity_remaining === 0);
-    if (depletion !== 0) return depletion;
-    const aEvidence = expirationEvidence(a);
-    const bEvidence = expirationEvidence(b);
-    if (aEvidence && bEvidence && aEvidence.date !== bEvidence.date) {
-      return aEvidence.date.localeCompare(bEvidence.date);
-    }
-    if (aEvidence !== bEvidence) return aEvidence ? -1 : 1;
-    return b.acquired_on.localeCompare(a.acquired_on) || b.created_at.localeCompare(a.created_at);
-  });
+  return sortPurchaseHistoryLots(lots);
 }
 
 export function earliestExpirationEvidence(
@@ -101,6 +108,33 @@ export function earliestExpirationEvidence(
     .filter((value): value is ExpirationEvidence => value !== null)
     .sort((a, b) => a.date.localeCompare(b.date));
   return evidence[0] ?? null;
+}
+
+export function earliestActiveExpirationEvidence(
+  lots: PantryAcquisitionLot[],
+): ExpirationEvidence | null {
+  return earliestExpirationEvidence(activeAcquisitionLots(lots));
+}
+
+export function parentExpirationShortState(
+  evidence: ExpirationEvidence,
+  todayYmd: string,
+): 'Expired' | 'Expires today' | null {
+  if (evidence.kind !== 'exact') return null;
+  const tense = expirationEvidenceTense(evidence, todayYmd);
+  if (tense === 'expired') return 'Expired';
+  if (tense === 'today') return 'Expires today';
+  return null;
+}
+
+export function formatPurchaseStateLabel(
+  lot: PantryAcquisitionLot,
+  todayYmd: string,
+): string {
+  if (lot.quantity_remaining === 0) return 'Used up';
+  const evidence = expirationEvidence(lot);
+  if (!evidence) return 'Expiration not set';
+  return formatExpirationEvidenceLabel(evidence, todayYmd);
 }
 
 export function pantryItemMatchesSearch(
@@ -127,7 +161,7 @@ export function filterAndSortPantryItems(args: {
   return items
     .filter((item) => {
       const lots = lotsByPantryKey[item.key] ?? [];
-      const hasEvidence = earliestExpirationEvidence(lots) !== null;
+      const hasEvidence = earliestActiveExpirationEvidence(lots) !== null;
       if (perishability === 'evidence' && !hasEvidence) return false;
       if (perishability === 'no_evidence' && hasEvidence) return false;
       if (inventory === 'positive' && !(item.quantity != null && item.quantity > 0)) return false;
@@ -135,8 +169,8 @@ export function filterAndSortPantryItems(args: {
       return pantryItemMatchesSearch(item, lots, query);
     })
     .sort((a, b) => {
-      const aEvidence = earliestExpirationEvidence(lotsByPantryKey[a.key] ?? []);
-      const bEvidence = earliestExpirationEvidence(lotsByPantryKey[b.key] ?? []);
+      const aEvidence = earliestActiveExpirationEvidence(lotsByPantryKey[a.key] ?? []);
+      const bEvidence = earliestActiveExpirationEvidence(lotsByPantryKey[b.key] ?? []);
       if (aEvidence && bEvidence && aEvidence.date !== bEvidence.date) {
         return aEvidence.date.localeCompare(bEvidence.date);
       }

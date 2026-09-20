@@ -27,8 +27,8 @@ describe('Packet 5 Pantry v2 manager', () => {
     expect(manager).toContain('planService.updatePantryOnHandItem');
     expect(manager).toContain('planService.createPantryAcquisitionLot');
     expect(manager).toContain('planService.updatePantryAcquisitionLot');
-    expect(manager).toContain('This will not change the aggregate on-hand amount.');
-    expect(manager).toContain('Acquisition history stays unchanged.');
+    expect(manager).toContain('Purchase details do not change your total on-hand amount.');
+    expect(manager).toContain('Purchase history stays unchanged.');
   });
 
   it('uses approved shell/dialog primitives and empty-only Quick Start', () => {
@@ -62,5 +62,19 @@ describe('Packet 5 Pantry v2 manager', () => {
     expect(manager).not.toContain('Almost Out');
     expect(manager).not.toContain('Low Stock');
     expect(manager).not.toContain('Food Group');
+  });
+
+  it('uses shared disclosure, purchase history copy, and compact add purchase treatment', () => {
+    expect(manager).toContain('DisclosureTriangle');
+    expect(manager).not.toContain('MoreHorizontal');
+    expect(manager).not.toContain('ChevronDown');
+    expect(manager).toContain('Purchase history');
+    expect(manager).toContain('Each purchase is tracked separately from your total on hand.');
+    expect(manager).toContain('Add purchase');
+    expect(manager).toContain('Edit on-hand amount');
+    expect(manager).toContain('formatPurchaseStateLabel');
+    expect(manager).not.toContain('Acquisition details');
+    expect(manager).not.toContain('Lot history does not change the aggregate on-hand amount.');
+    expect(manager).not.toContain('bg-red-400 animate-pulse');
   });
 });
