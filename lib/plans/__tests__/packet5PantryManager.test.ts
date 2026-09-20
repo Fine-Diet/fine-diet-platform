@@ -70,6 +70,11 @@ describe('Packet 5 Pantry v2 manager', () => {
     expect(manager).toContain('h-[15px] w-[15px]');
     expect(manager).toContain('polygon points="12,18 2,6 22,6"');
     expect(manager).toContain('rotate-180');
+    const triangleButtonClass = manager.match(
+      /className="[^"]*grid h-7 w-8[^"]*"/,
+    )?.[0] ?? '';
+    expect(triangleButtonClass).not.toContain('focus:ring');
+    expect(triangleButtonClass).toContain('focus-visible:text-white');
     expect(manager).not.toContain('parentExpirationShortState');
     expect(manager).toContain('parentDisplayExpirationEvidence');
     expect(manager).not.toContain('MoreHorizontal');

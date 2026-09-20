@@ -932,7 +932,7 @@ export default function PantryManager() {
                         aria-expanded={expanded}
                         aria-label={expanded ? `Collapse ${item.name}` : `Expand ${item.name}`}
                         onClick={() => setExpandedKey(expanded ? null : item.key)}
-                        className="mt-1 grid h-7 w-8 shrink-0 place-items-center rounded-md text-base text-white/55 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                        className="mt-1 grid h-7 w-8 shrink-0 place-items-center rounded-md text-base text-white/55 hover:text-white focus:outline-none focus-visible:text-white"
                       >
                         <svg
                           aria-hidden
