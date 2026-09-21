@@ -27,7 +27,7 @@ export function AppTopNav({ drawerOpen = false, onOpenDrawer }: AppTopNavProps) 
             alt="Fine Diet"
             width={140}
             height={32}
-            className="h-5 w-auto"
+            className="h-[.85rem] w-auto"
           />
           <svg
             className="h-4 w-4 text-brand-50/70"
