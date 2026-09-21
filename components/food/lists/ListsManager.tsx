@@ -480,12 +480,12 @@ export default function ListsManager() {
             </h1>
           </header>
 
-          <section className="mt-8" aria-label="Selected List">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
+          <section className="mt-2" aria-label="Selected List">
+            <p className="text-xs font-semibold text-white/50">
               Select a List
             </p>
             <div className="flex border-b border-white/25">
-              <div className="relative min-w-0 flex-1 pl-1">
+              <div className="relative min-w-0 flex-1 mr-4">
                 <select
                   value={selectedListId ?? ''}
                   onChange={(event) => selectList(event.target.value)}
@@ -511,7 +511,7 @@ export default function ListsManager() {
               <button
                 type="button"
                 onClick={() => setNewListOpen(true)}
-                className="flex min-h-11 shrink-0 items-center justify-center rounded-t-xl bg-brand-50 px-6 py-4 text-xl font-semibold text-[#16110d] hover:bg-white"
+                className="flex min-h-11 shrink-0 items-center justify-center rounded-t-xl bg-brand-50 px-6 py-2 text-xl font-semibold text-[#16110d] hover:bg-white"
               >
                 + New List
               </button>
@@ -524,8 +524,8 @@ export default function ListsManager() {
             </p>
           )}
 
-          <section className="mt-4" aria-label="Search and add items">
-            <div className="flex items-stretch rounded-xl border border-white/15 bg-transparent">
+          <section className="mt-6" aria-label="Search and add items">
+            <div className="flex items-stretch rounded-full border border-white/20 bg-transparent">
               <input
                 type="search"
                 value={addQuery}
@@ -535,13 +535,13 @@ export default function ListsManager() {
                 }}
                 disabled={Boolean(list?.plan_id)}
                 placeholder={list?.plan_id ? 'Plan-generated Lists are read-only' : 'Search to add item(s)'}
-                className="min-h-11 min-w-0 flex-1 bg-transparent px-4 py-2 text-xl text-white outline-none placeholder:text-white/35 disabled:opacity-50"
+                className="min-h-0 min-w-0 flex-1 bg-transparent px-4 py-2 text-xl sm:text-base text-white outline-none placeholder:text-white/50 disabled:opacity-50"
               />
               <button
                 type="button"
                 onClick={addUnresolved}
                 disabled={adding || !addQuery.trim() || Boolean(list?.plan_id)}
-                className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl font-light text-white/60 hover:text-white disabled:opacity-30"
+                className="flex min-h-0 w-11 shrink-0 items-center justify-center rounded-full text-xl font-light text-white/50 hover:text-white disabled:opacity-50"
                 aria-label="Add requested item"
               >
                 +
@@ -586,27 +586,31 @@ export default function ListsManager() {
                 This List is ready for its first item.
               </p>
             ) : (
-              <div className="divide-y divide-white/[0.06]">
+              <div className="divide-y divide-white/[0]">
                 {items.map((item) => {
                   const choice = choices[item.id];
                   const price = prices[item.id];
                   const product = productName(choice, price);
                   return (
-                    <article key={item.id} className="relative py-3">
+                    <article key={item.id} className="relative py-7">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <h2 className="text-base font-semibold text-brand-50">{item.name}</h2>
-                          {product ? (
+                          <h2 className="text-xl font-semibold text-white">{item.name}</h2>
+                          {product && (
                             <>
-                              <p className="mt-0.5 text-sm text-white/50">{product}</p>
+                              <p className="mt-0.5 font-regular text-sm text-white/50">{product}</p>
                               {price?.retailer && (
-                                <p className="mt-0.5 text-sm text-white/50">{price.retailer}</p>
+                                <p className="mt-0.5 font-regular text-sm text-white/50">{price.retailer}</p>
                               )}
-                              {price ? (
+                            </>
+                          )}
+                          <div className="my-1">
+                            {product ? (
+                              price ? (
                                 <button
                                   type="button"
                                   onClick={() => setPriceItem(item)}
-                                  className="mt-0.5 text-sm text-white/50 hover:text-white/75"
+                                  className="block text-xl font-semibold text-white/50 hover:text-white/50"
                                 >
                                   {formatGroceryCurrency(price.line_total, price.currency)}
                                 </button>
@@ -614,22 +618,22 @@ export default function ListsManager() {
                                 <button
                                   type="button"
                                   onClick={() => setPriceItem(item)}
-                                  className="mt-1 text-xs text-white/35 hover:text-white/65"
+                                  className="block text-xs text-white/35 hover:text-white/65"
                                 >
                                   Find Price
                                 </button>
-                              )}
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => openChooseProduct(item)}
-                              className="mt-1.5 rounded-full bg-brand-50 px-4 py-1 text-xs font-semibold text-[#16110d] hover:bg-white"
-                            >
-                              Choose Product
-                            </button>
-                          )}
-                          <div className="mt-2 inline-flex items-center rounded-full border border-white/20 text-xs">
+                              )
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openChooseProduct(item)}
+                                className="rounded-full bg-brand-50 px-4 py-1 my-1.5 text-xs font-semibold text-[#16110d] hover:bg-white"
+                              >
+                                Choose Product
+                              </button>
+                            )}
+                          </div>
+                          <div className="mt-1 flex w-fit items-center rounded-full border border-white/20 text-xs">
                             <button
                               type="button"
                               onClick={() => void changeQuantity(item, -1)}
@@ -638,7 +642,7 @@ export default function ListsManager() {
                             >
                               −
                             </button>
-                            <span className="min-w-14 text-center text-white/75">{quantityLabel(item)}</span>
+                            <span className="min-w-6 text-center text-xl font-semibold text-white/50">{quantityLabel(item)}</span>
                             <button
                               type="button"
                               onClick={() => void changeQuantity(item, 1)}
@@ -659,7 +663,7 @@ export default function ListsManager() {
                                 current === item.id ? null : item.id,
                               )
                             }
-                            className="grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-white/45 hover:bg-white/[0.06] hover:text-white"
+                            className="grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-white/100 hover:text-white/80"
                           >
                             •••
                           </button>
