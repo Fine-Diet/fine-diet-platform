@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 
+import { FoodShoppingViewSwitcher } from '@/components/food/FoodShoppingViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
@@ -30,8 +31,12 @@ type LoadState = 'loading' | 'ready' | 'error';
 type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
 
 function listTitle(list: GeneratedGroceryList): string {
-  return list.title?.trim() || (list.is_default ? 'Essentials' : 'Untitled List');
+  if (list.is_default) return 'Essentials';
+  return list.title?.trim() || 'Untitled List';
 }
+
+const FOOD_PAGE_BACKGROUND_CLASS =
+  'bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 bg-[length:100%_100vh] bg-no-repeat bg-top bg-neutral-700';
 
 function productName(
   choice: GroceryListPurchasingChoice | undefined,
@@ -469,38 +474,48 @@ export default function ListsManager() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-[#342b20] via-[#211b14] to-[#17120e] text-white">
-      <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
-        <div className="mx-auto w-full max-w-[1000px]">
+    <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
+      <SignedInPageScroll reserveFooter={false} className="flex flex-col px-6 pt-10 sm:px-12 sm:pt-14">
+        <div className="mx-auto flex min-h-full w-full max-w-[950px] flex-1 flex-col">
           <header>
-            <p className="text-lg font-semibold text-white">Lists</p>
-            <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
+            <FoodShoppingViewSwitcher currentView="lists" />
+            <h1 className="mt-1 text-[2.5rem] font-regular tracking-tight text-brand-50 sm:text-[2.75rem]">
               Manage your lists
             </h1>
           </header>
 
-          <section className="mt-8" aria-label="Selected List">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
+          <section className="mt-2" aria-label="Selected List">
+            <p className="text-xs font-semibold text-white/50">
               Select a List
             </p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <select
-                value={selectedListId ?? ''}
-                onChange={(event) => selectList(event.target.value)}
-                className="min-h-14 flex-1 rounded-full border border-white/20 bg-[#211a14]/80 px-5 text-xl font-semibold text-white outline-none focus:border-white/50"
-                aria-label="Select a List"
-              >
-                {lists.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {listTitle(candidate)}
-                    {candidate.is_default ? ' (Default List)' : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="flex border-b border-white/25">
+              <div className="relative min-w-0 flex-1 mr-4">
+                <select
+                  value={selectedListId ?? ''}
+                  onChange={(event) => selectList(event.target.value)}
+                  className="appearance-none min-h-11 w-full bg-transparent px-0 pr-8 text-xl font-semibold text-white outline-none"
+                  aria-label="Select a List"
+                >
+                  {lists.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {listTitle(candidate)}
+                      {candidate.is_default ? ' (Default List)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-white"
+                >
+                  <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="12,18 2,6 22,6" />
+                  </svg>
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => setNewListOpen(true)}
-                className="min-h-14 rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] hover:bg-white"
+                className="flex min-h-11 shrink-0 items-center justify-center rounded-t-xl bg-brand-50 px-6 py-2 text-xl font-semibold text-[#16110d] hover:bg-white"
               >
                 + New List
               </button>
@@ -514,7 +529,7 @@ export default function ListsManager() {
           )}
 
           <section className="mt-6" aria-label="Search and add items">
-            <div className="flex items-stretch rounded-full border border-white/20">
+            <div className="flex items-stretch rounded-full border border-white/20 bg-transparent">
               <input
                 type="search"
                 value={addQuery}
@@ -524,13 +539,13 @@ export default function ListsManager() {
                 }}
                 disabled={Boolean(list?.plan_id)}
                 placeholder={list?.plan_id ? 'Plan-generated Lists are read-only' : 'Search to add item(s)'}
-                className="min-h-11 min-w-0 flex-1 rounded-full bg-transparent px-5 py-2 text-xl text-white outline-none placeholder:text-white/35 disabled:opacity-50"
+                className="min-h-11 min-w-0 flex-1 bg-transparent px-4 py-2 text-xl text-white outline-none placeholder:text-white/35 disabled:opacity-50"
               />
               <button
                 type="button"
                 onClick={addUnresolved}
                 disabled={adding || !addQuery.trim() || Boolean(list?.plan_id)}
-                className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl font-light text-white/60 hover:text-white disabled:opacity-30"
+                className="flex min-h-0 w-11 shrink-0 items-center justify-center rounded-full text-xl font-light text-white/50 hover:text-white disabled:opacity-50"
                 aria-label="Add requested item"
               >
                 +
@@ -563,7 +578,7 @@ export default function ListsManager() {
             )}
           </section>
 
-          <section className="mt-5" aria-label="List items">
+          <section className="mt-4" aria-label="List items">
             {loadState === 'loading' ? (
               <div className="space-y-3">
                 {[0, 1, 2].map((value) => (
@@ -575,45 +590,54 @@ export default function ListsManager() {
                 This List is ready for its first item.
               </p>
             ) : (
-              <div className="divide-y divide-white/[0.08]">
+              <div className="divide-y divide-white/[0]">
                 {items.map((item) => {
                   const choice = choices[item.id];
                   const price = prices[item.id];
                   const product = productName(choice, price);
                   return (
-                    <article key={item.id} className="relative py-5">
+                    <article key={item.id} className="relative py-7">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <h2 className="text-base font-semibold text-brand-50">{item.name}</h2>
-                          {product ? (
+                          <h2 className="text-xl font-semibold text-white">{item.name}</h2>
+                          {product && (
                             <>
-                              <p className="mt-1 text-sm text-white/55">{product}</p>
+                              <p className="mt-0.5 font-regular text-sm text-white/50">{product}</p>
                               {price?.retailer && (
-                                <p className="mt-0.5 text-xs text-white/40">{price.retailer}</p>
+                                <p className="mt-0.5 font-regular text-sm text-white/50">{price.retailer}</p>
                               )}
-                              {price && (
-                                <p className="mt-0.5 text-xs text-white/50">
+                            </>
+                          )}
+                          <div className="my-1">
+                            {product ? (
+                              price ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPriceItem(item)}
+                                  className="block text-xl font-semibold text-white/50 hover:text-white/50"
+                                >
                                   {formatGroceryCurrency(price.line_total, price.currency)}
-                                </p>
-                              )}
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setPriceItem(item)}
+                                  className="block text-xs text-white/35 hover:text-white/65"
+                                >
+                                  Find Price
+                                </button>
+                              )
+                            ) : (
                               <button
                                 type="button"
-                                onClick={() => setPriceItem(item)}
-                                className="mt-1 text-xs text-white/35 hover:text-white/65"
+                                onClick={() => openChooseProduct(item)}
+                                className="rounded-full bg-brand-50 px-5 py-1 my-1.5 text-sm font-semibold text-[#16110d] hover:bg-white"
                               >
-                                {price ? 'Update Price' : 'Find Price'}
+                                Choose Product
                               </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => openChooseProduct(item)}
-                              className="mt-2 rounded-full bg-brand-50 px-4 py-1 text-xs font-semibold text-[#16110d] hover:bg-white"
-                            >
-                              Choose Product
-                            </button>
-                          )}
-                          <div className="mt-3 inline-flex items-center rounded-full border border-white/20 text-xs">
+                            )}
+                          </div>
+                          <div className="mt-1 flex w-fit items-center rounded-full border border-white/20 text-xs">
                             <button
                               type="button"
                               onClick={() => void changeQuantity(item, -1)}
@@ -622,7 +646,7 @@ export default function ListsManager() {
                             >
                               −
                             </button>
-                            <span className="min-w-14 text-center text-white/75">{quantityLabel(item)}</span>
+                            <span className="min-w-6 text-center text-xl font-semibold text-white/50">{quantityLabel(item)}</span>
                             <button
                               type="button"
                               onClick={() => void changeQuantity(item, 1)}
@@ -637,25 +661,22 @@ export default function ListsManager() {
                           <button
                             type="button"
                             aria-label={`Actions for ${item.name}`}
-                            aria-haspopup="menu"
                             aria-expanded={overflowItemId === item.id}
                             onClick={() =>
                               setOverflowItemId((current) =>
                                 current === item.id ? null : item.id,
                               )
                             }
-                            className="grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-white/45 hover:bg-white/[0.06] hover:text-white"
+                            className="grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-white/100 hover:text-white/80"
                           >
                             •••
                           </button>
                           {overflowItemId === item.id && (
                             <div
-                              role="menu"
                               className="absolute right-0 top-9 z-20 w-36 rounded-xl border border-white/15 bg-[#211a14] p-1 shadow-2xl"
                             >
                               <button
                                 type="button"
-                                role="menuitem"
                                 onClick={() => {
                                   setOverflowItemId(null);
                                   openEdit(item);
@@ -663,14 +684,6 @@ export default function ListsManager() {
                                 className="w-full rounded-lg px-3 py-2 text-left text-xs text-white/75 hover:bg-white/10 hover:text-white"
                               >
                                 Edit
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => void deleteItem(item)}
-                                className="w-full rounded-lg px-3 py-2 text-left text-xs text-red-100/85 hover:bg-red-500/10"
-                              >
-                                Delete
                               </button>
                             </div>
                           )}
@@ -686,9 +699,12 @@ export default function ListsManager() {
             </p>
           </section>
 
-          <section className="mb-8 mt-8 rounded-[24px] border border-white/25 bg-white/[0.035] px-6 py-8 sm:px-10">
-            <h2 className="text-xl font-semibold text-brand-50">Ready to shop?</h2>
-            <p className="mt-1 text-sm leading-relaxed text-white/45">
+          <section
+            aria-label="Ready to shop"
+            className="mt-8 flex min-h-[320px] flex-1 flex-col rounded-t-[24px] border border-b-0 border-white/25 bg-transparent px-6 pt-8 sm:px-10 pb-[calc(var(--app-footer-clearance,7rem)+env(safe-area-inset-bottom,0px))]"
+          >
+            <h2 className="text-3xl font-semibold text-brand-50">Ready to shop?</h2>
+            <p className="mt-1 text-sm text-white/45">
               {readiness.state === 'needs_resolution'
                 ? 'Some requested needs still need a verified food match. Add them from search results before building a Haul; choosing a purchasing product does not replace the need.'
                 : 'Create a haul to combine items from one or more lists.'}

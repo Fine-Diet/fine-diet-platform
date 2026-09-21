@@ -1,10 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 
-const manager = fs.readFileSync(
-  path.join(process.cwd(), 'components/food/lists/ListsManager.tsx'),
-  'utf8',
-);
+const root = process.cwd();
+const read = (relativePath: string) =>
+  fs.readFileSync(path.join(root, relativePath), 'utf8');
+
+const manager = read('components/food/lists/ListsManager.tsx');
+const haulsLibrary = read('components/food/hauls/HaulsLibrary.tsx');
 
 describe('Packet 11F presentation after Packet 3 Lists migration', () => {
   it('uses the approved Lists title, selector, intake, and quiet count', () => {
@@ -13,6 +15,25 @@ describe('Packet 11F presentation after Packet 3 Lists migration', () => {
     expect(manager).toContain('+ New List');
     expect(manager).toContain('Search to add item(s)');
     expect(manager).toContain('total item');
+    expect(manager).toContain('max-w-[950px]');
+    expect(manager).toContain('<FoodShoppingViewSwitcher currentView="lists" />');
+    expect(manager).toContain('text-[2.5rem] font-regular tracking-tight');
+    expect(manager).toContain('sm:text-[2.75rem]');
+    expect(manager).toContain('appearance-none');
+    expect(manager).toContain('polygon points="12,18 2,6 22,6"');
+    expect(manager).toContain("if (list.is_default) return 'Essentials'");
+    expect(manager).toContain('bg-[length:100%_100vh]');
+    expect(manager).toContain('bg-no-repeat');
+    expect(manager).toContain('bg-top');
+    expect(manager).toContain('rounded-t-[24px]');
+    expect(manager).toContain('border-b-0');
+    expect(manager).toContain('bg-transparent');
+    expect(manager).toContain('min-h-[320px]');
+    expect(manager).not.toContain('mb-8 mt-8 rounded-[24px] border border-white/25 bg-white/[0.035]');
+    expect(manager).not.toContain('min-h-14 flex-1 rounded-full');
+    expect(manager).not.toContain('Delete');
+    expect(manager).toContain('Remove from List');
+    expect(manager).not.toMatch(/\bScan\b/);
   });
 
   it('uses the approved need/product grammar', () => {
@@ -30,5 +51,18 @@ describe('Packet 11F presentation after Packet 3 Lists migration', () => {
     expect(manager).toContain('Build a Haul');
     expect(manager).toContain('<SignedInPageScroll');
     expect(manager).toContain('<JournalFooterNav');
+  });
+
+  it('uses the approved Hauls foundational page treatment', () => {
+    expect(haulsLibrary).toContain('max-w-[950px]');
+    expect(haulsLibrary).toContain('bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700');
+    expect(haulsLibrary).toContain('bg-[length:100%_100vh]');
+    expect(haulsLibrary).toContain('bg-no-repeat');
+    expect(haulsLibrary).toContain('bg-top');
+    expect(haulsLibrary).toContain('bg-neutral-700');
+    expect(haulsLibrary).toContain('<FoodShoppingViewSwitcher currentView="hauls" />');
+    expect(haulsLibrary).toContain('Start or continue your haul preparation.');
+    expect(haulsLibrary).toContain('text-[2.5rem] font-regular tracking-tight');
+    expect(haulsLibrary).toContain('sm:text-[2.75rem]');
   });
 });
