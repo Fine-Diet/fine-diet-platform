@@ -68,12 +68,31 @@ describe('evaluateGroceryListReadiness', () => {
     expect(decision.reasonCodes).toContain('unresolved_identity');
   });
 
-  it('needs_resolution when pending rows have an unsafe amount', () => {
+  it('is ready_to_shop when pending rows have canonical identity and null quantity', () => {
     const decision = evaluateGroceryListReadiness({
       items: [item({ quantity: null })],
     });
+    expect(decision.state).toBe('ready_to_shop');
+    expect(decision.counts.pendingUnsafeAmount).toBe(0);
+    expect(decision.reasonCodes).not.toContain('unsafe_amount');
+  });
+
+  it('needs_resolution when pending rows have an unsafe amount', () => {
+    const decision = evaluateGroceryListReadiness({
+      items: [item({ quantity: -1 })],
+    });
     expect(decision.state).toBe('needs_resolution');
     expect(decision.reasonCodes).toContain('unsafe_amount');
+    expect(decision.counts.pendingUnsafeAmount).toBe(1);
+  });
+
+  it('still needs_resolution for missing identity even when quantity is null', () => {
+    const decision = evaluateGroceryListReadiness({
+      items: [item({ food_object_id: null, quantity: null })],
+    });
+    expect(decision.state).toBe('needs_resolution');
+    expect(decision.reasonCodes).toContain('unresolved_identity');
+    expect(decision.reasonCodes).not.toContain('unsafe_amount');
   });
 
   it('interprets bought/have/skipped as explicit shopping state, not inferred coverage', () => {

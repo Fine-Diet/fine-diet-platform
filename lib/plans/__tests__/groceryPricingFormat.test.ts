@@ -1,10 +1,16 @@
+import fs from 'fs';
+import path from 'path';
+
 import {
   formatGroceryCurrency,
   formatGroceryHaulCoverage,
   formatGroceryHaulSummaryHeadline,
   formatGroceryHaulUnpricedLine,
+  formatGroceryPriceProviderError,
   formatGroceryPriceQuotaMessage,
   GROCERY_HAUL_ESTIMATE_DISCLAIMER,
+  GROCERY_PRICE_PROVIDER_UNAVAILABLE_MANUAL,
+  GROCERY_PRICE_PROVIDER_UNAVAILABLE_TRY_AGAIN,
 } from '../groceryPricingFormat';
 import type { GroceryHaulSummary, GroceryPriceSearchQuota } from '../groceryPricingTypes';
 
@@ -39,6 +45,43 @@ describe('groceryPricingFormat', () => {
       upgrade_required: true,
     };
     expect(formatGroceryPriceQuotaMessage(quota)).toContain('Upgrade for more searches');
+  });
+
+  it('maps provider errors to stable user-facing copy', () => {
+    const rawDiagnostic =
+      'SerpAPI request timed out after 12000ms (abort_source=provider_timeout, elapsed_ms=12001)';
+    const cases = [
+      { code: 'timeout' as const, message: rawDiagnostic },
+      { code: 'provider_error' as const, message: rawDiagnostic },
+      { code: 'invalid_response' as const, message: rawDiagnostic },
+      { code: 'disabled' as const, message: 'disabled' },
+    ];
+
+    for (const error of cases) {
+      const copy = formatGroceryPriceProviderError(error);
+      expect(copy).not.toContain('SerpAPI');
+      expect(copy).not.toContain('provider_timeout');
+      expect(copy).not.toContain('abort_source');
+      expect(copy).not.toContain('elapsed_ms');
+      expect(copy).not.toContain(rawDiagnostic);
+    }
+
+    expect(formatGroceryPriceProviderError({ code: 'timeout', message: rawDiagnostic })).toBe(
+      GROCERY_PRICE_PROVIDER_UNAVAILABLE_TRY_AGAIN,
+    );
+    expect(formatGroceryPriceProviderError({ code: 'disabled', message: 'disabled' })).toBe(
+      GROCERY_PRICE_PROVIDER_UNAVAILABLE_MANUAL,
+    );
+    expect(formatGroceryPriceProviderError(null)).toBe(GROCERY_PRICE_PROVIDER_UNAVAILABLE_TRY_AGAIN);
+  });
+
+  it('uses the formatter in grocery pricing UI instead of raw provider messages', () => {
+    const ui = fs.readFileSync(
+      path.join(process.cwd(), 'components/grocery/GroceryPricingUi.tsx'),
+      'utf8',
+    );
+    expect(ui).toContain('formatGroceryPriceProviderError(searchResult.provider_error)');
+    expect(ui).not.toContain('provider_error?.message');
   });
 
   it('formats haul summary headline and coverage', () => {

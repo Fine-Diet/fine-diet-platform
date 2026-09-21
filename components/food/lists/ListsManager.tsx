@@ -363,7 +363,7 @@ export default function ListsManager() {
   function openEdit(item: GroceryItem) {
     setEditItem(item);
     setEditName(item.name);
-    setEditQuantity(item.quantity == null ? '' : String(item.quantity));
+    setEditQuantity(item.quantity == null ? '1' : String(item.quantity));
     setEditUnit(item.unit ?? '');
     setEditNotes(item.notes ?? '');
     setEditError(null);
@@ -371,7 +371,7 @@ export default function ListsManager() {
 
   async function saveEdit() {
     if (!selectedListId || !editItem || savingEdit) return;
-    const quantity = editQuantity.trim() === '' ? null : Number(editQuantity);
+    const quantity = editQuantity.trim() === '' ? 1 : Number(editQuantity);
     if (!editName.trim()) {
       setEditError('Need is required.');
       return;

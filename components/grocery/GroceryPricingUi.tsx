@@ -18,6 +18,7 @@ import {
   formatGroceryHaulSummaryHeadline,
   formatGroceryHaulUnpricedLine,
   formatFullHaulTaxLine,
+  formatGroceryPriceProviderError,
   formatGroceryPriceQuotaMessage,
   GROCERY_HAUL_ESTIMATE_DISCLAIMER,
 } from '@/lib/plans/groceryPricingFormat';
@@ -539,7 +540,7 @@ export function GroceryPricePanel({
               {searchResult.outcome === 'provider_error' && (
                 <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2">
                   <p className="text-sm text-red-200 antialiased">
-                    {searchResult.provider_error?.message ?? 'Price provider unavailable.'}
+                    {formatGroceryPriceProviderError(searchResult.provider_error)}
                   </p>
                 </div>
               )}

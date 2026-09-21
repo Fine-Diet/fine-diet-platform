@@ -4,6 +4,9 @@
  * Deterministic, explainable decision over persisted list truth only.
  * Pricing, retailer scenarios, Full Haul Estimate, and Pantry coverage
  * never classify a list. A list can be ready_to_shop with zero prices.
+ *
+ * Missing quantity on a pending item defaults to 1 for Haul readiness and
+ * execution; only invalid negative or non-finite amounts block via unsafe_amount.
  */
 
 import type { GroceryItem, GroceryItemStatus } from '@/lib/plans/types';
@@ -74,7 +77,10 @@ export function groceryListReadinessCounts(
     have: countByStatus(items, 'have'),
     skipped: countByStatus(items, 'skipped'),
     pendingUnresolvedIdentity: pendingItems.filter((item) => !item.food_object_id).length,
-    pendingUnsafeAmount: pendingItems.filter((item) => item.quantity == null).length,
+    pendingUnsafeAmount: pendingItems.filter((item) => {
+      if (item.quantity == null) return false;
+      return !Number.isFinite(Number(item.quantity)) || Number(item.quantity) < 0;
+    }).length,
   };
 }
 

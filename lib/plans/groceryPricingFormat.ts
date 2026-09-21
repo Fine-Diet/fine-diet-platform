@@ -1,4 +1,24 @@
-import type { GroceryHaulSummary, FullHaulEstimate, GroceryPriceSearchQuota } from './groceryPricingTypes';
+import type {
+  GroceryHaulSummary,
+  FullHaulEstimate,
+  GroceryPriceSearchProviderError,
+  GroceryPriceSearchQuota,
+} from './groceryPricingTypes';
+
+export const GROCERY_PRICE_PROVIDER_UNAVAILABLE_TRY_AGAIN =
+  'Price search is temporarily unavailable. Try again or use Manual entry.';
+
+export const GROCERY_PRICE_PROVIDER_UNAVAILABLE_MANUAL =
+  'Price search is temporarily unavailable. Use Manual entry.';
+
+export function formatGroceryPriceProviderError(
+  error: GroceryPriceSearchProviderError | null | undefined,
+): string {
+  if (error?.code === 'disabled') {
+    return GROCERY_PRICE_PROVIDER_UNAVAILABLE_MANUAL;
+  }
+  return GROCERY_PRICE_PROVIDER_UNAVAILABLE_TRY_AGAIN;
+}
 
 export function formatGroceryCurrency(amount: number, currency = 'USD'): string {
   return new Intl.NumberFormat('en-US', {

@@ -433,6 +433,13 @@ function normalizeQuantity(value: unknown): number | null {
   return num;
 }
 
+function normalizeNewListItemQuantity(value: unknown): number {
+  if (value == null || value === '') return 1;
+  const quantity = normalizeQuantity(value);
+  if (quantity == null) return 1;
+  return quantity;
+}
+
 function normalizeOptionalString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -462,7 +469,7 @@ export async function addGroceryListItem(
       person_id: personId,
       added_by_person_id: personId,
       name,
-      quantity: normalizeQuantity(input.quantity),
+      quantity: normalizeNewListItemQuantity(input.quantity),
       unit: normalizeOptionalString(input.unit),
       notes: normalizeOptionalString(input.notes),
       food_object_id: normalizeOptionalString(input.food_object_id),
