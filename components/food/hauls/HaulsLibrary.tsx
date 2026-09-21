@@ -21,6 +21,9 @@ import {
 
 type LoadState = 'loading' | 'ready' | 'error';
 
+const FOOD_PAGE_BACKGROUND_CLASS =
+  'bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 bg-[length:100%_100vh] bg-no-repeat bg-top bg-neutral-700';
+
 function displayTitle(haul: GroceryHaulCollectionItem): string {
   return haul.title?.trim() || `Haul · ${formatHaulDate(haul.shopping_date)}`;
 }
@@ -138,7 +141,7 @@ export default function HaulsLibrary() {
   const history = filtered.filter((haul) => haul.status === 'closed' || haul.status === 'cancelled');
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 text-white">
+    <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
       <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
         <div className="mx-auto w-full max-w-[950px]">
           <header>

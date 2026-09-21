@@ -21,7 +21,15 @@ describe('Packet 11F presentation after Packet 3 Lists migration', () => {
     expect(manager).toContain('sm:text-[2.75rem]');
     expect(manager).toContain('appearance-none');
     expect(manager).toContain('polygon points="12,18 2,6 22,6"');
-    expect(manager).toContain("list.is_default ? 'Essentials'");
+    expect(manager).toContain("if (list.is_default) return 'Essentials'");
+    expect(manager).toContain('bg-[length:100%_100vh]');
+    expect(manager).toContain('bg-no-repeat');
+    expect(manager).toContain('bg-top');
+    expect(manager).toContain('rounded-t-[24px]');
+    expect(manager).toContain('border-b-0');
+    expect(manager).toContain('bg-transparent');
+    expect(manager).toContain('min-h-[320px]');
+    expect(manager).not.toContain('mb-8 mt-8 rounded-[24px] border border-white/25 bg-white/[0.035]');
     expect(manager).not.toContain('min-h-14 flex-1 rounded-full');
     expect(manager).not.toContain('Delete');
     expect(manager).toContain('Remove from List');
@@ -48,6 +56,10 @@ describe('Packet 11F presentation after Packet 3 Lists migration', () => {
   it('uses the approved Hauls foundational page treatment', () => {
     expect(haulsLibrary).toContain('max-w-[950px]');
     expect(haulsLibrary).toContain('bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700');
+    expect(haulsLibrary).toContain('bg-[length:100%_100vh]');
+    expect(haulsLibrary).toContain('bg-no-repeat');
+    expect(haulsLibrary).toContain('bg-top');
+    expect(haulsLibrary).toContain('bg-neutral-700');
     expect(haulsLibrary).toContain('<FoodShoppingViewSwitcher currentView="hauls" />');
     expect(haulsLibrary).toContain('Start or continue your haul preparation.');
     expect(haulsLibrary).toContain('text-[2.5rem] font-regular tracking-tight');

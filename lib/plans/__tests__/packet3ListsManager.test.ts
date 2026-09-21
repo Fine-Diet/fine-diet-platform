@@ -77,6 +77,11 @@ describe('Packet 3 Food IA and Lists manager', () => {
     expect(manager).toContain('•••');
     expect(manager).toContain('rounded-full border border-white/20');
     expect(manager).toContain('bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700');
+    expect(manager).toContain('bg-[length:100%_100vh]');
+    expect(manager).toContain('bg-no-repeat');
+    expect(manager).toContain('bg-top');
+    expect(manager).toContain('bg-neutral-700');
+    expect(manager).toContain("if (list.is_default) return 'Essentials'");
     expect(manager).toContain('max-w-[950px]');
     expect(manager).toContain('<FoodShoppingViewSwitcher currentView="lists" />');
     expect(manager).toContain('text-[2.5rem] font-regular tracking-tight');

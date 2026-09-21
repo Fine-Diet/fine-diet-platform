@@ -31,8 +31,12 @@ type LoadState = 'loading' | 'ready' | 'error';
 type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
 
 function listTitle(list: GeneratedGroceryList): string {
-  return list.title?.trim() || (list.is_default ? 'Essentials' : 'Untitled List');
+  if (list.is_default) return 'Essentials';
+  return list.title?.trim() || 'Untitled List';
 }
+
+const FOOD_PAGE_BACKGROUND_CLASS =
+  'bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 bg-[length:100%_100vh] bg-no-repeat bg-top bg-neutral-700';
 
 function productName(
   choice: GroceryListPurchasingChoice | undefined,
@@ -470,9 +474,9 @@ export default function ListsManager() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 text-white">
-      <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
-        <div className="mx-auto w-full max-w-[950px]">
+    <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
+      <SignedInPageScroll reserveFooter={false} className="flex flex-col px-6 pt-10 sm:px-12 sm:pt-14">
+        <div className="mx-auto flex min-h-full w-full max-w-[950px] flex-1 flex-col">
           <header>
             <FoodShoppingViewSwitcher currentView="lists" />
             <h1 className="mt-1 text-[2.5rem] font-regular tracking-tight text-brand-50 sm:text-[2.75rem]">
@@ -535,7 +539,7 @@ export default function ListsManager() {
                 }}
                 disabled={Boolean(list?.plan_id)}
                 placeholder={list?.plan_id ? 'Plan-generated Lists are read-only' : 'Search to add item(s)'}
-                className="min-h-0 min-w-0 flex-1 bg-transparent px-4 py-2 text-xl sm:text-base text-white outline-none placeholder:text-white/50 disabled:opacity-50"
+                className="min-h-11 min-w-0 flex-1 bg-transparent px-4 py-2 text-xl text-white outline-none placeholder:text-white/35 disabled:opacity-50"
               />
               <button
                 type="button"
@@ -695,7 +699,10 @@ export default function ListsManager() {
             </p>
           </section>
 
-          <section className="mb-8 mt-8 rounded-[24px] border border-white/25 bg-white/[0.035] px-6 py-8 sm:px-10">
+          <section
+            aria-label="Ready to shop"
+            className="mt-8 flex min-h-[320px] flex-1 flex-col rounded-t-[24px] border border-b-0 border-white/25 bg-transparent px-6 pt-8 sm:px-10 pb-[calc(var(--app-footer-clearance,7rem)+env(safe-area-inset-bottom,0px))]"
+          >
             <h2 className="text-xl font-semibold text-brand-50">Ready to shop?</h2>
             <p className="mt-1 text-sm leading-relaxed text-white/45">
               {readiness.state === 'needs_resolution'
