@@ -17,7 +17,8 @@ describe('Food Home typography and width', () => {
   });
 
   it('sizes the hero eyebrow, headline, and description', () => {
-    expect(surface).toContain('text-2xl font-semibold text-brand-50">Food</p>');
+    expect(surface).toContain('<FoodHomeViewSwitcher currentView="overview"');
+    expect(surface).toContain('text-brand-50"');
     expect(surface).toContain('text-[2.5rem] font-normal');
     expect(surface).toContain('sm:text-[2.75rem]');
     expect(surface).toContain('text-sm font-normal text-white/30');
