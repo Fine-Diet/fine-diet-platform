@@ -16,7 +16,8 @@ describe('Packet 11F presentation after Packet 3 Lists migration', () => {
     expect(manager).toContain('Search to add item(s)');
     expect(manager).toContain('total item');
     expect(manager).toContain('max-w-[950px]');
-    expect(manager).toContain('<FoodShoppingViewSwitcher currentView="lists" />');
+    expect(manager).toContain('currentView="lists"');
+    expect(manager).toContain('align="left"');
     expect(manager).toContain('text-[2.5rem] font-regular tracking-tight');
     expect(manager).toContain('sm:text-[2.75rem]');
     expect(manager).toContain('appearance-none');
@@ -60,7 +61,8 @@ describe('Packet 11F presentation after Packet 3 Lists migration', () => {
     expect(haulsLibrary).toContain('bg-no-repeat');
     expect(haulsLibrary).toContain('bg-top');
     expect(haulsLibrary).toContain('bg-neutral-700');
-    expect(haulsLibrary).toContain('<FoodShoppingViewSwitcher currentView="hauls" />');
+    expect(haulsLibrary).toContain('currentView="hauls"');
+    expect(haulsLibrary).toContain('align="left"');
     expect(haulsLibrary).toContain('Start or continue your haul preparation.');
     expect(haulsLibrary).toContain('text-[2.5rem] font-regular tracking-tight');
     expect(haulsLibrary).toContain('sm:text-[2.75rem]');

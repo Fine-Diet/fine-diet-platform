@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 
-import { FoodShoppingViewSwitcher } from '@/components/food/FoodShoppingViewSwitcher';
+import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
@@ -478,7 +478,11 @@ export default function ListsManager() {
       <SignedInPageScroll reserveFooter={false} className="flex flex-col px-6 pt-10 sm:px-12 sm:pt-14">
         <div className="mx-auto flex min-h-full w-full max-w-[950px] flex-1 flex-col">
           <header>
-            <FoodShoppingViewSwitcher currentView="lists" />
+            <FoodSectionViewSwitcher
+              currentView="lists"
+              align="left"
+              anchorBackgroundClass="bg-[#17130f]"
+            />
             <h1 className="mt-1 text-[2.5rem] font-regular tracking-tight text-brand-50 sm:text-[2.75rem]">
               Manage your lists
             </h1>

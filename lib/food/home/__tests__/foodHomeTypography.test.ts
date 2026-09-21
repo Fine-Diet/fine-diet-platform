@@ -17,7 +17,8 @@ describe('Food Home typography and width', () => {
   });
 
   it('sizes the hero eyebrow, headline, and description', () => {
-    expect(surface).toContain('<FoodHomeViewSwitcher currentView="overview"');
+    expect(surface).toContain('currentView="overview"');
+    expect(surface).toContain('align="center"');
     expect(surface).toContain('text-brand-50"');
     expect(surface).toContain('text-[2.5rem] font-normal');
     expect(surface).toContain('sm:text-[2.75rem]');

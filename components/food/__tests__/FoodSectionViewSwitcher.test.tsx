@@ -7,7 +7,7 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
-import { FoodHomeViewSwitcher } from '../FoodHomeViewSwitcher';
+import { FoodSectionViewSwitcher } from '../FoodSectionViewSwitcher';
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -67,7 +67,7 @@ function findLink(container: HTMLElement, label: string): HTMLAnchorElement {
   return link as HTMLAnchorElement;
 }
 
-describe('FoodHomeViewSwitcher', () => {
+describe('FoodSectionViewSwitcher', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -85,20 +85,44 @@ describe('FoodHomeViewSwitcher', () => {
     container.remove();
   });
 
-  it('renders collapsed Overview as Food › Overview', async () => {
+  const allViews = [
+    { currentView: 'overview' as const, label: 'Overview' },
+    { currentView: 'pantry' as const, label: 'Pantry' },
+    { currentView: 'recipes' as const, label: 'Recipes' },
+    { currentView: 'lists' as const, label: 'Lists' },
+    { currentView: 'hauls' as const, label: 'Hauls' },
+  ];
+
+  it.each(allViews)('renders collapsed $label as Food › $label', async ({ currentView, label }) => {
     await act(async () => {
-      root.render(<FoodHomeViewSwitcher currentView="overview" />);
+      root.render(<FoodSectionViewSwitcher currentView={currentView} />);
     });
     expect(container.textContent).toContain('Food');
     expect(container.textContent).toContain('›');
-    expect(container.textContent).toContain('Overview');
-    expect(container.textContent).not.toContain('Pantry');
-    expect(container.textContent).not.toContain('Recipes');
+    expect(container.textContent).toContain(label);
   });
 
-  it('expands to Pantry, Recipes, Lists, and Hauls in canonical order on desktop', async () => {
+  it('links Food to the canonical food route', async () => {
     await act(async () => {
-      root.render(<FoodHomeViewSwitcher currentView="overview" />);
+      root.render(<FoodSectionViewSwitcher currentView="overview" />);
+    });
+    expect(findLink(container, 'Food').getAttribute('href')).toBe(APP_ROUTES.food);
+  });
+
+  it('links Pantry, Recipes, Lists, and Hauls to canonical routes', async () => {
+    await act(async () => {
+      root.render(<FoodSectionViewSwitcher currentView="overview" />);
+    });
+    await act(async () => findButton(container, 'Overview').click());
+    expect(findLink(container, 'Pantry').getAttribute('href')).toBe(APP_ROUTES.foodPantry);
+    expect(findLink(container, 'Recipes').getAttribute('href')).toBe(APP_ROUTES.foodMeals);
+    expect(findLink(container, 'Lists').getAttribute('href')).toBe(APP_ROUTES.foodLists);
+    expect(findLink(container, 'Hauls').getAttribute('href')).toBe(APP_ROUTES.foodHauls);
+  });
+
+  it('expands to all views in canonical order on desktop', async () => {
+    await act(async () => {
+      root.render(<FoodSectionViewSwitcher currentView="overview" />);
     });
     await act(async () => findButton(container, 'Overview').click());
     const labels = Array.from(container.querySelectorAll('button, a'))
@@ -109,27 +133,49 @@ describe('FoodHomeViewSwitcher', () => {
     expect(labels).toEqual(['Overview', 'Pantry', 'Recipes', 'Lists', 'Hauls']);
   });
 
-  it('links Food to the canonical food route', async () => {
+  it('omits the current view from mobile sibling rail siblings', async () => {
+    mockMatchMedia(false);
     await act(async () => {
-      root.render(<FoodHomeViewSwitcher currentView="overview" />);
+      root.render(<FoodSectionViewSwitcher currentView="lists" />);
     });
-    expect(findLink(container, 'Food').getAttribute('href')).toBe(APP_ROUTES.food);
+    await act(async () => findButton(container, 'Lists').click());
+    const rail = container.querySelector('[data-food-section-sibling-rail]');
+    expect(rail?.textContent).toContain('Overview');
+    expect(rail?.textContent).toContain('Pantry');
+    expect(rail?.textContent).toContain('Recipes');
+    expect(rail?.textContent).toContain('Hauls');
+    expect(rail?.textContent).not.toContain('Lists');
   });
 
-  it('links Pantry, Recipes, Lists, and Hauls to canonical routes', async () => {
+  it('keeps sibling order canonical after filtering the current view', async () => {
+    mockMatchMedia(false);
     await act(async () => {
-      root.render(<FoodHomeViewSwitcher currentView="overview" />);
+      root.render(<FoodSectionViewSwitcher currentView="pantry" />);
     });
-    await act(async () => findButton(container, 'Overview').click());
-    expect(findLink(container, 'Pantry').getAttribute('href')).toBe(APP_ROUTES.foodPantry);
-    expect(findLink(container, 'Recipes').getAttribute('href')).toBe(APP_ROUTES.foodMeals);
-    expect(findLink(container, 'Lists').getAttribute('href')).toBe(APP_ROUTES.foodLists);
-    expect(findLink(container, 'Hauls').getAttribute('href')).toBe(APP_ROUTES.foodHauls);
+    await act(async () => findButton(container, 'Pantry').click());
+    const railLabels = Array.from(
+      container.querySelectorAll('[data-food-section-sibling-rail] a'),
+    ).map((node) => node.textContent?.trim());
+    expect(railLabels).toEqual(['Overview', 'Recipes', 'Lists', 'Hauls']);
+  });
+
+  it('applies center alignment state', async () => {
+    await act(async () => {
+      root.render(<FoodSectionViewSwitcher currentView="overview" align="center" />);
+    });
+    expect(container.querySelector('[data-food-section-align="center"]')).toBeTruthy();
+  });
+
+  it('applies left alignment state', async () => {
+    await act(async () => {
+      root.render(<FoodSectionViewSwitcher currentView="lists" align="left" />);
+    });
+    expect(container.querySelector('[data-food-section-align="left"]')).toBeTruthy();
   });
 
   it('collapses on Escape and returns focus to the trigger', async () => {
     await act(async () => {
-      root.render(<FoodHomeViewSwitcher currentView="overview" />);
+      root.render(<FoodSectionViewSwitcher currentView="overview" />);
     });
     const trigger = findButton(container, 'Overview');
     await act(async () => trigger.click());
@@ -142,7 +188,7 @@ describe('FoodHomeViewSwitcher', () => {
 
   it('collapses on outside click', async () => {
     await act(async () => {
-      root.render(<FoodHomeViewSwitcher currentView="overview" />);
+      root.render(<FoodSectionViewSwitcher currentView="overview" />);
     });
     const trigger = findButton(container, 'Overview');
     await act(async () => trigger.click());
@@ -154,7 +200,7 @@ describe('FoodHomeViewSwitcher', () => {
 
   it('does not render a dropdown or popover panel', async () => {
     await act(async () => {
-      root.render(<FoodHomeViewSwitcher currentView="overview" />);
+      root.render(<FoodSectionViewSwitcher currentView="overview" />);
     });
     await act(async () => findButton(container, 'Overview').click());
     expect(container.querySelector('[role="menu"]')).toBeNull();
@@ -167,12 +213,12 @@ describe('FoodHomeViewSwitcher', () => {
       mockMatchMedia(false);
     });
 
-    it('keeps Overview outside the sibling scroll rail', async () => {
+    it('keeps the current view outside the sibling scroll rail', async () => {
       await act(async () => {
-        root.render(<FoodHomeViewSwitcher currentView="overview" />);
+        root.render(<FoodSectionViewSwitcher currentView="overview" />);
       });
       await act(async () => findButton(container, 'Overview').click());
-      const rail = container.querySelector('[data-food-home-sibling-rail]');
+      const rail = container.querySelector('[data-food-section-sibling-rail]');
       expect(rail).toBeTruthy();
       expect(rail?.textContent).toContain('Pantry');
       expect(rail?.textContent).not.toContain('Overview');
@@ -180,10 +226,10 @@ describe('FoodHomeViewSwitcher', () => {
 
     it('renders sibling rail with horizontal overflow classes when expanded', async () => {
       await act(async () => {
-        root.render(<FoodHomeViewSwitcher currentView="overview" />);
+        root.render(<FoodSectionViewSwitcher currentView="overview" />);
       });
       await act(async () => findButton(container, 'Overview').click());
-      const rail = container.querySelector('[data-food-home-sibling-rail]');
+      const rail = container.querySelector('[data-food-section-sibling-rail]');
       expect(rail?.className).toContain('overflow-x-auto');
       expect(rail?.className).toContain('scrollbar-hide');
       expect(rail?.className).toContain('touch-pan-x');
@@ -191,22 +237,35 @@ describe('FoodHomeViewSwitcher', () => {
 
     it('hides sibling rail while collapsed', async () => {
       await act(async () => {
-        root.render(<FoodHomeViewSwitcher currentView="overview" />);
+        root.render(<FoodSectionViewSwitcher currentView="overview" />);
       });
-      expect(container.querySelector('[data-food-home-sibling-rail]')).toBeNull();
+      expect(container.querySelector('[data-food-section-sibling-rail]')).toBeNull();
     });
 
     it('resets sibling rail scroll position when reopened', async () => {
       await act(async () => {
-        root.render(<FoodHomeViewSwitcher currentView="overview" />);
+        root.render(<FoodSectionViewSwitcher currentView="overview" />);
       });
       await act(async () => findButton(container, 'Overview').click());
-      const rail = container.querySelector('[data-food-home-sibling-rail]') as HTMLDivElement;
+      const rail = container.querySelector('[data-food-section-sibling-rail]') as HTMLDivElement;
       rail.scrollLeft = 120;
       await act(async () => findButton(container, 'Overview').click());
       await act(async () => findButton(container, 'Overview').click());
-      const reopenedRail = container.querySelector('[data-food-home-sibling-rail]') as HTMLDivElement;
+      const reopenedRail = container.querySelector('[data-food-section-sibling-rail]') as HTMLDivElement;
       expect(reopenedRail.scrollLeft).toBe(0);
+    });
+
+    it('scrolls focused siblings into view', async () => {
+      await act(async () => {
+        root.render(<FoodSectionViewSwitcher currentView="overview" />);
+      });
+      await act(async () => findButton(container, 'Overview').click());
+      const sibling = findLink(container, 'Hauls');
+      const scrollIntoView = jest.fn();
+      sibling.scrollIntoView = scrollIntoView;
+      await act(async () => sibling.focus());
+      sibling.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
+      expect(scrollIntoView).toHaveBeenCalled();
     });
   });
 });

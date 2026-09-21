@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { FoodHomeViewSwitcher } from './FoodHomeViewSwitcher';
+import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { RecipeEntryMenu, type RecipeEntryAction } from './RecipeEntryMenu';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import {
@@ -90,7 +90,12 @@ export function FoodHomeStatusSurface({
     <>
       <StackedPageHero className="flex min-h-[90vh] items-center bg-gradient-to-b from-[#342b20] via-[#211b14] to-[#17120e] px-6 sm:px-12">
         <div className="mx-auto w-full max-w-[950px] text-center">
-          <FoodHomeViewSwitcher currentView="overview" className="text-brand-50" />
+          <FoodSectionViewSwitcher
+            currentView="overview"
+            align="center"
+            anchorBackgroundClass="bg-[#342b20]"
+            className="text-brand-50"
+          />
           <h1 className="mx-auto mt-1 max-w-md text-[2.5rem] font-normal leading-[1] text-brand-50 sm:text-[2.75rem]">
             Remain prepared for what&apos;s next
           </h1>

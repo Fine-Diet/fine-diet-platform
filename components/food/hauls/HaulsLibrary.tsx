@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Search } from 'lucide-react';
 
-import { FoodShoppingViewSwitcher } from '@/components/food/FoodShoppingViewSwitcher';
+import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -145,7 +145,11 @@ export default function HaulsLibrary() {
       <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
         <div className="mx-auto w-full max-w-[950px]">
           <header>
-            <FoodShoppingViewSwitcher currentView="hauls" />
+            <FoodSectionViewSwitcher
+              currentView="hauls"
+              align="left"
+              anchorBackgroundClass="bg-[#17130f]"
+            />
             <h1 className="mt-1 max-w-3xl text-[2.5rem] font-regular tracking-tight text-brand-50 sm:text-[2.75rem]">
               Start or continue your haul preparation.
             </h1>

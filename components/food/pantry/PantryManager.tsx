@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import { useRouter } from 'next/router';
 
+import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
@@ -738,7 +739,11 @@ export default function PantryManager() {
       <SignedInPageScroll className="px-4 pt-8 sm:px-6 sm:pt-12">
         <div className="mx-auto w-full max-w-[760px]">
           <header className="text-center">
-            <p className="text-2xl font-semibold text-white">Pantry</p>
+            <FoodSectionViewSwitcher
+              currentView="pantry"
+              align="center"
+              anchorBackgroundClass="bg-[#17130f]"
+            />
             <h1 className="text-[2.5rem] font-medium tracking-tight text-brand-50 sm:text-[2.75rem] leading-[1]">
               Your inventory truth <br /> as a feed
             </h1>

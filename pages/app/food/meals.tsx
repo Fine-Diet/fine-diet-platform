@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
+import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { CreateMealDocumentPanel } from '@/components/meals/CreateMealDocumentPanel';
 import {
@@ -883,13 +884,16 @@ export default function MealLibraryPage() {
     <div className="min-h-screen bg-[#16110d] text-white flex flex-col">
       <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 sm:px-5">
         <div className="mx-auto max-w-[760px]">
+          <FoodSectionViewSwitcher
+            currentView="recipes"
+            align="left"
+            anchorBackgroundClass="bg-[#16110d]"
+            className="mb-4"
+          />
           <section className="rounded-[28px] border border-white/[0.06] bg-white/[0.035] p-5 shadow-large sm:p-7">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200/70 antialiased">
-                  Meal Library
-                </p>
-                <h1 className="mt-2 text-3xl font-semibold leading-tight text-brand-50 antialiased sm:text-4xl">
+                <h1 className="text-3xl font-semibold leading-tight text-brand-50 antialiased sm:text-4xl">
                   Recipes &amp; reusable meals
                 </h1>
                 <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/60 antialiased">

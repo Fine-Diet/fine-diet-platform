@@ -6,9 +6,9 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { cn } from '@/lib/utils';
 
-export type FoodHomeView = 'overview' | 'pantry' | 'recipes' | 'lists' | 'hauls';
+export type FoodSectionView = 'overview' | 'pantry' | 'recipes' | 'lists' | 'hauls';
 
-const VIEW_OPTIONS: Array<{ id: FoodHomeView; label: string; href: string }> = [
+const VIEW_OPTIONS: Array<{ id: FoodSectionView; label: string; href: string }> = [
   { id: 'overview', label: 'Overview', href: APP_ROUTES.food },
   { id: 'pantry', label: 'Pantry', href: APP_ROUTES.foodPantry },
   { id: 'recipes', label: 'Recipes', href: APP_ROUTES.foodMeals },
@@ -16,11 +16,9 @@ const VIEW_OPTIONS: Array<{ id: FoodHomeView; label: string; href: string }> = [
   { id: 'hauls', label: 'Hauls', href: APP_ROUTES.foodHauls },
 ];
 
-const SIBLING_OPTIONS = VIEW_OPTIONS.filter((option) => option.id !== 'overview');
-
 const EXPANDED_MAX_WIDTH = '32rem';
 
-const COLLAPSED_MAX_WIDTH: Record<FoodHomeView, string> = {
+const COLLAPSED_MAX_WIDTH: Record<FoodSectionView, string> = {
   overview: '6rem',
   pantry: '4.5rem',
   recipes: '5.5rem',
@@ -60,12 +58,19 @@ function useIsDesktop() {
   return isDesktop;
 }
 
-export interface FoodHomeViewSwitcherProps {
-  currentView: FoodHomeView;
+export interface FoodSectionViewSwitcherProps {
+  currentView: FoodSectionView;
+  align?: 'center' | 'left';
+  anchorBackgroundClass?: string;
   className?: string;
 }
 
-export function FoodHomeViewSwitcher({ currentView, className }: FoodHomeViewSwitcherProps) {
+export function FoodSectionViewSwitcher({
+  currentView,
+  align = 'center',
+  anchorBackgroundClass,
+  className,
+}: FoodSectionViewSwitcherProps) {
   const [expanded, setExpanded] = useState(false);
   const regionRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -74,7 +79,9 @@ export function FoodHomeViewSwitcher({ currentView, className }: FoodHomeViewSwi
   const isDesktop = useIsDesktop();
 
   const currentOption = VIEW_OPTIONS.find((option) => option.id === currentView) ?? VIEW_OPTIONS[0];
+  const siblingOptions = VIEW_OPTIONS.filter((option) => option.id !== currentView);
   const collapsedMaxWidth = COLLAPSED_MAX_WIDTH[currentView];
+  const isCentered = align === 'center';
 
   useEffect(() => {
     if (!expanded || isDesktop) return;
@@ -114,14 +121,15 @@ export function FoodHomeViewSwitcher({ currentView, className }: FoodHomeViewSwi
         ref={regionRef}
         className={cn(
           'flex items-center gap-2 text-2xl font-semibold',
-          expanded ? 'w-full max-w-full' : 'justify-center',
+          expanded ? 'w-full max-w-full' : isCentered ? 'justify-center' : '',
           className,
         )}
+        data-food-section-align={align}
       >
         <div
           className={cn(
             'relative z-20 flex shrink-0 items-center gap-2',
-            expanded && 'bg-[#342b20] pr-1',
+            expanded && anchorBackgroundClass && cn(anchorBackgroundClass, 'pr-1'),
           )}
         >
           <Link href={APP_ROUTES.food}>Food</Link>
@@ -143,11 +151,11 @@ export function FoodHomeViewSwitcher({ currentView, className }: FoodHomeViewSwi
             <div
               ref={mobileRailRef}
               id={optionsId}
-              data-food-home-sibling-rail=""
+              data-food-section-sibling-rail=""
               className="overflow-x-auto overflow-y-hidden whitespace-nowrap touch-pan-x scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none]"
             >
               <div className="flex w-max items-center gap-5">
-                {SIBLING_OPTIONS.map((option) => (
+                {siblingOptions.map((option) => (
                   <Link
                     key={option.id}
                     href={option.href}
@@ -169,7 +177,12 @@ export function FoodHomeViewSwitcher({ currentView, className }: FoodHomeViewSwi
   return (
     <div
       ref={regionRef}
-      className={cn('flex items-center justify-center gap-2 text-2xl font-semibold', className)}
+      className={cn(
+        'flex items-center gap-2 text-2xl font-semibold',
+        isCentered ? 'justify-center' : '',
+        className,
+      )}
+      data-food-section-align={align}
     >
       <Link href={APP_ROUTES.food}>Food</Link>
       <span aria-hidden className="text-4xl font-light leading-none">›</span>
