@@ -301,6 +301,9 @@ describe('Packet 12 Food Home status surface', () => {
     expect(surface).toContain('<FoodHomeViewSwitcher currentView="overview"');
     expect(switcher).toContain("label: 'Recipes', href: APP_ROUTES.foodMeals");
     expect(switcher).toContain("label: 'Pantry', href: APP_ROUTES.foodPantry");
+    expect(switcher).toContain('data-food-home-sibling-rail');
+    expect(switcher).toContain('overflow-x-auto');
+    expect(switcher).toContain('scrollbar-hide');
     expect(lists).toContain('<FoodShoppingViewSwitcher currentView="lists" />');
     expect(topNav).toContain('/images/home/Fine-Diet-Logo.svg');
     expect(topNav).not.toContain('Fine Diet App');
