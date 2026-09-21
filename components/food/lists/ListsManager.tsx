@@ -631,7 +631,7 @@ export default function ListsManager() {
                               <button
                                 type="button"
                                 onClick={() => openChooseProduct(item)}
-                                className="rounded-full bg-brand-50 px-4 py-1 my-1.5 text-xs font-semibold text-[#16110d] hover:bg-white"
+                                className="rounded-full bg-brand-50 px-5 py-1 my-1.5 text-sm font-semibold text-[#16110d] hover:bg-white"
                               >
                                 Choose Product
                               </button>
@@ -703,8 +703,8 @@ export default function ListsManager() {
             aria-label="Ready to shop"
             className="mt-8 flex min-h-[320px] flex-1 flex-col rounded-t-[24px] border border-b-0 border-white/25 bg-transparent px-6 pt-8 sm:px-10 pb-[calc(var(--app-footer-clearance,7rem)+env(safe-area-inset-bottom,0px))]"
           >
-            <h2 className="text-xl font-semibold text-brand-50">Ready to shop?</h2>
-            <p className="mt-1 text-sm leading-relaxed text-white/45">
+            <h2 className="text-3xl font-semibold text-brand-50">Ready to shop?</h2>
+            <p className="mt-1 text-sm text-white/45">
               {readiness.state === 'needs_resolution'
                 ? 'Some requested needs still need a verified food match. Add them from search results before building a Haul; choosing a purchasing product does not replace the need.'
                 : 'Create a haul to combine items from one or more lists.'}
