@@ -23,11 +23,14 @@ describe('Packet 5 Pantry v2 manager', () => {
   });
 
   it('uses one batch lot read and separate aggregate and lot writes', () => {
+    const purchaseEditor = read('components/food/pantry/PantryPurchaseEditor.tsx');
     expect(manager).toContain('planService.listPantryAcquisitionLots()');
     expect(manager).toContain('planService.updatePantryOnHandItem');
     expect(manager).toContain('planService.createPantryAcquisitionLot');
     expect(manager).toContain('planService.updatePantryAcquisitionLot');
-    expect(manager).toContain('Purchase details do not change your total on-hand amount.');
+    expect(purchaseEditor).toContain(
+      'Purchase details do not change your total on-hand amount.',
+    );
     expect(manager).toContain('Purchase history stays unchanged.');
   });
 
@@ -45,12 +48,29 @@ describe('Packet 5 Pantry v2 manager', () => {
   });
 
   it('requires postal search location and optional retailer in product lookup', () => {
-    expect(manager).toContain('Search location');
-    expect(manager).toContain('Retailer (optional)');
+    const purchaseEditor = read('components/food/pantry/PantryPurchaseEditor.tsx');
+    const lookupPanel = read('components/food/pantry/PantryProductLookupPanel.tsx');
+    const summary = read('components/food/itemManagement/PurchaseDetailsSummary.tsx');
+    expect(lookupPanel).toContain('ZIP/postal code');
+    expect(lookupPanel).toContain('Retailer filter (optional)');
     expect(manager).toContain('loadGroceryPriceSearchPrefs');
     expect(manager).toContain('saveGroceryPriceSearchPrefs');
+    expect(summary).toContain('Find / update details');
     expect(manager).not.toContain('navigator.geolocation');
     expect(manager).not.toContain('Use my location');
+  });
+
+  it('uses item-management purchase editor contract', () => {
+    const purchaseEditor = read('components/food/pantry/PantryPurchaseEditor.tsx');
+    expect(manager).toContain('<PantryPurchaseEditor');
+    expect(manager).toContain('validatePantryLotSave');
+    expect(purchaseEditor).toContain('Edit purchase');
+    expect(purchaseEditor).toContain('Amount acquired');
+    expect(purchaseEditor).toContain('Purchased on');
+    expect(purchaseEditor).toContain('PurchaseDetailsSummary');
+    expect(manager).not.toContain('Quantity remaining must be between');
+    expect(purchaseEditor).not.toContain('>Currency<');
+    expect(purchaseEditor).not.toContain('Remaining *');
   });
 
   it('exposes only factual Pantry filters and does not invent a Food Group', () => {
