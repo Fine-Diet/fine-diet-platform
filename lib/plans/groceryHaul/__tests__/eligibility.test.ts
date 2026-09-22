@@ -69,6 +69,16 @@ describe('resolveGroceryHaulCreateEligibility', () => {
     ).toEqual({ eligible: false, blockReason: 'archived' });
   });
 
+  it('allows haul creation when identity is present and quantity is null', () => {
+    const readiness = evaluateGroceryListReadiness({
+      items: [item({ quantity: null })],
+    });
+    expect(readiness.state).toBe('ready_to_shop');
+    expect(resolveGroceryHaulCreateEligibility({ readinessState: readiness.state })).toEqual({
+      eligible: true,
+    });
+  });
+
   it('does not use pricing completeness as a gate', () => {
     const unpriced = evaluateGroceryListReadiness({
       items: [item()],

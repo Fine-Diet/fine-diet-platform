@@ -261,6 +261,52 @@ describe('list lifecycle guards', () => {
 });
 
 // ============================================================================
+// Manual add quantity defaults
+// ============================================================================
+
+describe('addGroceryListItem quantity defaults', () => {
+  it('persists quantity 1 when quantity is omitted, null, or blank', async () => {
+    installFake();
+    const list = await createNamedGroceryList(PERSON_A, 'Defaults');
+
+    const omitted = await addGroceryListItem(PERSON_A, list.id, { name: 'Milk' });
+    expect(omitted.quantity).toBe(1);
+
+    const explicitNull = await addGroceryListItem(PERSON_A, list.id, {
+      name: 'Eggs',
+      quantity: null,
+    });
+    expect(explicitNull.quantity).toBe(1);
+
+    const blank = await addGroceryListItem(PERSON_A, list.id, {
+      name: 'Bread',
+      quantity: '',
+    });
+    expect(blank.quantity).toBe(1);
+  });
+
+  it('preserves explicit zero and positive quantities', async () => {
+    installFake();
+    const list = await createNamedGroceryList(PERSON_A, 'Explicit amounts');
+
+    const zero = await addGroceryListItem(PERSON_A, list.id, { name: 'Limes', quantity: 0 });
+    expect(zero.quantity).toBe(0);
+
+    const two = await addGroceryListItem(PERSON_A, list.id, { name: 'Apples', quantity: 2 });
+    expect(two.quantity).toBe(2);
+  });
+
+  it('rejects negative quantities on add', async () => {
+    installFake();
+    const list = await createNamedGroceryList(PERSON_A, 'Invalid');
+
+    await expect(
+      addGroceryListItem(PERSON_A, list.id, { name: 'Salt', quantity: -1 }),
+    ).rejects.toThrow(GroceryListValidationError);
+  });
+});
+
+// ============================================================================
 // Packet 11D — overview readiness summaries (Packet 10, bulk read)
 // ============================================================================
 

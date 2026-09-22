@@ -113,6 +113,14 @@ describe('Packet 3 Food IA and Lists manager', () => {
     expect(manager).not.toContain('pantry_acquisition_lots');
   });
 
+  it('defaults null list item quantity to one in display and edit flows', () => {
+    const manager = read('components/food/lists/ListsManager.tsx');
+    expect(manager).toContain('item.quantity ?? 1');
+    expect(manager).toContain("item.quantity == null ? '1' : String(item.quantity)");
+    expect(manager).toContain("editQuantity.trim() === '' ? 1 : Number(editQuantity)");
+    expect(manager).toContain('evaluateGroceryListReadiness');
+  });
+
   it('uses Packet 1 shell and dialog primitives with footer clearance', () => {
     const manager = read('components/food/lists/ListsManager.tsx');
     expect(manager).toContain('<SignedInPageScroll');
