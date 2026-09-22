@@ -8,7 +8,12 @@ import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitch
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
+import { PantryPurchaseEditor, type PurchaseDetailsMode } from './PantryPurchaseEditor';
 import { PantryQuickStartView } from './PantryQuickStartView';
+import {
+  type PantryLotDraft,
+  validatePantryLotSave,
+} from './pantryLotSave';
 import {
   expirationEvidence,
   expirationEvidenceTense,
@@ -37,7 +42,6 @@ import type { PantryProductSearchOffer } from '@/lib/plans/pantryProductSearchTy
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 import {
   planService,
-  type PantryAcquisitionLotInput,
 } from '@/lib/plans/planService';
 import type {
   PantryAcquisitionLot,
@@ -54,22 +58,7 @@ import { savePantryQuickStartWrites } from '@/lib/plans/pantryQuickStart/save';
 type LoadState = 'loading' | 'ready' | 'error';
 type FoodCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
 
-interface LotDraft {
-  acquiredOn: string;
-  expiresOn: string;
-  expectedShelfLifeDays: string;
-  quantityAcquired: string;
-  quantityRemaining: string;
-  unit: string;
-  productTitle: string;
-  brandName: string;
-  packageSize: string;
-  packageUnit: string;
-  packageCount: string;
-  retailer: string;
-  priceAmount: string;
-  currency: string;
-}
+type LotDraft = PantryLotDraft;
 
 const inputClass =
   'mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-xl text-white outline-none placeholder:text-white/25 focus:border-white/40';
@@ -159,29 +148,6 @@ function lotDraft(lot: PantryAcquisitionLot): LotDraft {
   };
 }
 
-function optionalNumber(value: string): number | null {
-  return value.trim() ? Number(value) : null;
-}
-
-function lotInputFromDraft(draft: LotDraft): PantryAcquisitionLotInput {
-  return {
-    acquired_on: draft.acquiredOn,
-    expires_on: draft.expiresOn || null,
-    expected_shelf_life_days: optionalNumber(draft.expectedShelfLifeDays),
-    quantity_acquired: Number(draft.quantityAcquired),
-    quantity_remaining: Number(draft.quantityRemaining),
-    unit: draft.unit.trim() || null,
-    product_title: draft.productTitle.trim() || null,
-    brand_name: draft.brandName.trim() || null,
-    package_size: optionalNumber(draft.packageSize),
-    package_unit: draft.packageUnit.trim() || null,
-    package_count: optionalNumber(draft.packageCount),
-    retailer: draft.retailer.trim() || null,
-    price_amount: optionalNumber(draft.priceAmount),
-    currency: draft.priceAmount.trim() ? draft.currency.trim().toUpperCase() || 'USD' : null,
-  };
-}
-
 function LotCard({
   lot,
   onEdit,
@@ -268,7 +234,8 @@ export default function PantryManager() {
   const [lotForm, setLotForm] = useState<LotDraft>(() => emptyLotDraft(null));
   const [lotBusy, setLotBusy] = useState(false);
   const [lotError, setLotError] = useState<string | null>(null);
-  const [productSearchOpen, setProductSearchOpen] = useState(false);
+  const [purchaseDetailsMode, setPurchaseDetailsMode] =
+    useState<PurchaseDetailsMode>('summary');
   const [productSearchQuery, setProductSearchQuery] = useState('');
   const [productSearchPostal, setProductSearchPostal] = useState('');
   const [productSearchRetailer, setProductSearchRetailer] = useState('');
@@ -509,7 +476,7 @@ export default function PantryManager() {
   }
 
   function resetProductSearch() {
-    setProductSearchOpen(false);
+    setPurchaseDetailsMode('summary');
     setProductSearchQuery('');
     setProductSearchPostal('');
     setProductSearchRetailer('');
@@ -524,6 +491,7 @@ export default function PantryManager() {
     setLotContext({ pantryKey: item.key, itemName: item.name, lot });
     setLotForm(lot ? lotDraft(lot) : emptyLotDraft(item.unit));
     setLotError(null);
+    setPurchaseDetailsMode('summary');
     resetProductSearch();
   }
 
@@ -532,7 +500,6 @@ export default function PantryManager() {
     const savedPostal = tryNormalizePostalCode(prefs.postal_code);
     const defaultQuery = lotForm.productTitle.trim() || lotContext?.itemName || '';
     const lotRetailer = lotForm.retailer.trim();
-    setProductSearchOpen(true);
     setProductSearchQuery(defaultQuery);
     setProductSearchPostal(savedPostal.ok ? savedPostal.value : '');
     setProductSearchRetailer(lotRetailer || prefs.retailer.trim());
@@ -616,7 +583,7 @@ export default function PantryManager() {
 
   function selectProductOffer(offer: PantryProductSearchOffer) {
     setLotForm((current) => applyPantryProductOfferToLotDraft(current, offer));
-    setProductSearchOpen(false);
+    setPurchaseDetailsMode('summary');
     setProductSearchState('idle');
     setProductSearchOffers([]);
     setProductSearchError(null);
@@ -641,18 +608,9 @@ export default function PantryManager() {
 
   async function saveLot() {
     if (!lotContext) return;
-    const input = lotInputFromDraft(lotForm);
-    if (!input.acquired_on) return setLotError('Acquired date is required.');
-    if (!Number.isFinite(input.quantity_acquired) || input.quantity_acquired <= 0) {
-      return setLotError('Quantity acquired must be greater than zero.');
-    }
-    if (
-      !Number.isFinite(input.quantity_remaining)
-      || input.quantity_remaining < 0
-      || input.quantity_remaining > input.quantity_acquired
-    ) {
-      return setLotError('Quantity remaining must be between zero and quantity acquired.');
-    }
+    const validated = validatePantryLotSave(lotForm, lotContext.lot);
+    if (!validated.ok) return setLotError(validated.error);
+    const input = validated.input;
     setLotBusy(true);
     setLotError(null);
     try {
@@ -1142,222 +1100,39 @@ export default function PantryManager() {
         </div>
       </AppDialog>
 
-      <AppDialog
+      <PantryPurchaseEditor
         open={Boolean(lotContext)}
+        itemName={lotContext?.itemName ?? ''}
+        existingLot={lotContext?.lot ?? null}
+        lotForm={lotForm}
+        lotBusy={lotBusy}
+        lotError={lotError}
+        purchaseDetailsMode={purchaseDetailsMode}
+        inputClassName={inputClass}
+        productSearchQuery={productSearchQuery}
+        onProductSearchQueryChange={setProductSearchQuery}
+        productSearchPostal={productSearchPostal}
+        onProductSearchPostalChange={setProductSearchPostal}
+        onProductSearchPostalBlur={() => setProductSearchPostalTouched(true)}
+        productSearchRetailer={productSearchRetailer}
+        onProductSearchRetailerChange={setProductSearchRetailer}
+        productSearchPostalTouched={productSearchPostalTouched}
+        productSearchPostalValidation={productSearchPostalValidation}
+        productSearchCanSubmit={productSearchCanSubmit}
+        productSearchState={productSearchState}
+        productSearchScopeLabel={productSearchScopeLabel}
+        productSearchOffers={productSearchOffers}
+        productSearchError={productSearchError}
+        productSearchProvenance={productSearchProvenance}
         onClose={() => !lotBusy && setLotContext(null)}
-        labelledBy="purchase-details-title"
-        panelClassName="border border-white/10 bg-[#211a14] shadow-2xl"
-      >
-        <div className="p-5">
-          <h2 id="purchase-details-title" className="text-xl font-semibold text-white">
-            {lotContext?.lot ? 'Edit purchase details' : 'Add purchase details'}
-          </h2>
-          <p className="mt-1 text-sm text-white/45">
-            {lotContext?.itemName} · Purchase details do not change your total on-hand amount.
-          </p>
-          <div className="mt-5 space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label>
-                <span className="text-xs text-white/55">Acquired date *</span>
-                <input type="date" value={lotForm.acquiredOn} onChange={(event) => updateLotForm({ acquiredOn: event.target.value })} className={inputClass} />
-              </label>
-              <label>
-                <span className="text-xs text-white/55">Expiration date</span>
-                <input type="date" value={lotForm.expiresOn} onChange={(event) => updateLotForm({ expiresOn: event.target.value })} className={inputClass} />
-              </label>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <label>
-                <span className="text-xs text-white/55">Acquired *</span>
-                <input type="number" min="0.01" step="any" value={lotForm.quantityAcquired} onChange={(event) => updateAcquiredQuantity(event.target.value)} className={inputClass} />
-              </label>
-              <label>
-                <span className="text-xs text-white/55">Remaining *</span>
-                <input type="number" min="0" step="any" value={lotForm.quantityRemaining} onChange={(event) => updateLotForm({ quantityRemaining: event.target.value })} className={inputClass} />
-              </label>
-              <label className="col-span-2 sm:col-span-1">
-                <span className="text-xs text-white/55">Unit</span>
-                <input value={lotForm.unit} onChange={(event) => updateLotForm({ unit: event.target.value })} className={inputClass} />
-              </label>
-            </div>
-            {!lotContext?.lot && (
-              <p className="-mt-2 text-xs text-white/35">
-                Remaining starts equal to the amount acquired; change it if some has already been used.
-              </p>
-            )}
-            <label className="block">
-              <span className="text-xs text-white/55">Expected shelf life in days</span>
-              <input type="number" min="1" step="1" value={lotForm.expectedShelfLifeDays} onChange={(event) => updateLotForm({ expectedShelfLifeDays: event.target.value })} className={inputClass} />
-            </label>
-            <div className="border-t border-white/[0.08] pt-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Product details</p>
-                <button
-                  type="button"
-                  onClick={() => (productSearchOpen ? resetProductSearch() : openProductSearch())}
-                  className="text-xs font-medium text-brand-50 hover:text-white"
-                >
-                  {productSearchOpen ? 'Hide product lookup' : 'Find product details'}
-                </button>
-              </div>
-              {productSearchOpen && (
-                <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="space-y-3">
-                    <label className="block">
-                      <span className="text-xs text-white/55">Product query</span>
-                      <input
-                        value={productSearchQuery}
-                        onChange={(event) => setProductSearchQuery(event.target.value)}
-                        placeholder="Search retail products"
-                        className={inputClass}
-                      />
-                    </label>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="text-xs text-white/55">Search location</span>
-                        <input
-                          value={productSearchPostal}
-                          onChange={(event) => setProductSearchPostal(event.target.value)}
-                          onBlur={() => setProductSearchPostalTouched(true)}
-                          placeholder="ZIP or postal code"
-                          autoComplete="postal-code"
-                          className={inputClass}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs text-white/55">Retailer (optional)</span>
-                        <input
-                          value={productSearchRetailer}
-                          onChange={(event) => setProductSearchRetailer(event.target.value)}
-                          placeholder="Any retailer"
-                          className={inputClass}
-                        />
-                      </label>
-                    </div>
-                    {productSearchPostalTouched && !productSearchPostalValidation.ok && (
-                      <p className="text-xs text-red-200" role="alert">
-                        {productSearchPostalValidation.message}
-                      </p>
-                    )}
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => void runProductSearch()}
-                        disabled={productSearchState === 'searching' || !productSearchCanSubmit}
-                        className="shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white hover:bg-white/[0.06] disabled:opacity-40"
-                      >
-                        {productSearchState === 'searching' ? 'Searching…' : 'Search'}
-                      </button>
-                    </div>
-                  </div>
-                  {productSearchState === 'searching' && productSearchPostalValidation.ok && (
-                    <p className="mt-3 text-xs text-white/45">
-                      {productSearchScopeLabel(
-                        productSearchPostalValidation.value,
-                        productSearchRetailer,
-                      )}
-                    </p>
-                  )}
-                  {productSearchState === 'zero_results' && (
-                    <p className="mt-3 text-xs text-white/45">No retail matches found. You can still enter product details manually.</p>
-                  )}
-                  {productSearchState === 'quota_exceeded' && productSearchError && (
-                    <p className="mt-3 text-xs text-amber-200" role="alert">{productSearchError}</p>
-                  )}
-                  {productSearchState === 'error' && productSearchError && (
-                    <p className="mt-3 text-xs text-red-200" role="alert">{productSearchError}</p>
-                  )}
-                  {productSearchState === 'results' && productSearchProvenance && (
-                    <p className="mt-3 text-xs text-white/45">
-                      {productSearchScopeLabel(
-                        productSearchProvenance.requested_postal_code,
-                        productSearchProvenance.retailer ?? '',
-                      )}
-                    </p>
-                  )}
-                  {productSearchState === 'results' && productSearchOffers.length > 0 && (
-                    <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto">
-                      {productSearchOffers.map((offer) => (
-                        <li key={offer.provider_result_id}>
-                          <button
-                            type="button"
-                            onClick={() => selectProductOffer(offer)}
-                            className="flex w-full items-start gap-3 rounded-lg border border-white/10 px-3 py-2 text-left hover:bg-white/[0.05]"
-                          >
-                            {offer.image_url && (
-                              <img
-                                src={offer.image_url}
-                                alt=""
-                                className="mt-0.5 h-10 w-10 shrink-0 rounded object-cover"
-                              />
-                            )}
-                            <span className="min-w-0">
-                              <span className="block text-sm font-medium text-white">{offer.title}</span>
-                              <span className="mt-0.5 block text-xs text-white/50">
-                                {[
-                                  offer.retailer,
-                                  offer.price != null
-                                    ? formatCurrency(offer.price, offer.currency)
-                                    : null,
-                                  offer.package_text
-                                    ?? (offer.package_size != null
-                                      ? `${offer.package_size}${offer.package_unit ? ` ${offer.package_unit}` : ''}`
-                                      : null),
-                                ].filter(Boolean).join(' · ')}
-                              </span>
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label>
-                  <span className="text-xs text-white/55">Product title</span>
-                  <input value={lotForm.productTitle} onChange={(event) => updateLotForm({ productTitle: event.target.value })} className={inputClass} />
-                </label>
-                <label>
-                  <span className="text-xs text-white/55">Brand</span>
-                  <input value={lotForm.brandName} onChange={(event) => updateLotForm({ brandName: event.target.value })} className={inputClass} />
-                </label>
-                <label>
-                  <span className="text-xs text-white/55">Package size</span>
-                  <input type="number" min="0.01" step="any" value={lotForm.packageSize} onChange={(event) => updateLotForm({ packageSize: event.target.value })} className={inputClass} />
-                </label>
-                <label>
-                  <span className="text-xs text-white/55">Package unit</span>
-                  <input value={lotForm.packageUnit} onChange={(event) => updateLotForm({ packageUnit: event.target.value })} className={inputClass} />
-                </label>
-                <label>
-                  <span className="text-xs text-white/55">Package count</span>
-                  <input type="number" min="1" step="1" value={lotForm.packageCount} onChange={(event) => updateLotForm({ packageCount: event.target.value })} className={inputClass} />
-                </label>
-                <label>
-                  <span className="text-xs text-white/55">Retailer</span>
-                  <input value={lotForm.retailer} onChange={(event) => updateLotForm({ retailer: event.target.value })} className={inputClass} />
-                </label>
-                <label>
-                  <span className="text-xs text-white/55">Price</span>
-                  <input type="number" min="0" step="0.01" value={lotForm.priceAmount} onChange={(event) => updateLotForm({ priceAmount: event.target.value })} className={inputClass} />
-                </label>
-                <label>
-                  <span className="text-xs text-white/55">Currency</span>
-                  <input maxLength={3} value={lotForm.currency} onChange={(event) => updateLotForm({ currency: event.target.value.toUpperCase() })} className={inputClass} />
-                </label>
-              </div>
-            </div>
-          </div>
-          {lotError && <p className="mt-3 text-sm text-red-200" role="alert">{lotError}</p>}
-          <div className="mt-5 flex justify-end gap-2">
-            <button type="button" onClick={() => setLotContext(null)} disabled={lotBusy} className="px-4 py-2 text-sm text-white/55">Cancel</button>
-            <button type="button" onClick={() => void saveLot()} disabled={lotBusy} className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40">
-              {lotBusy ? 'Saving…' : lotContext?.lot ? 'Save changes' : 'Add purchase'}
-            </button>
-          </div>
-        </div>
-      </AppDialog>
+        onSave={() => void saveLot()}
+        onUpdateLotForm={updateLotForm}
+        onUpdateAcquiredQuantity={updateAcquiredQuantity}
+        onSetPurchaseDetailsMode={setPurchaseDetailsMode}
+        onOpenProductSearch={openProductSearch}
+        onRunProductSearch={() => void runProductSearch()}
+        onSelectProductOffer={selectProductOffer}
+      />
 
       <JournalFooterNav />
     </div>
