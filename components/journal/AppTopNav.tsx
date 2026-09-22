@@ -1,6 +1,8 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
+
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 interface AppTopNavProps {
@@ -20,7 +22,13 @@ export function AppTopNav({ drawerOpen = false, onOpenDrawer }: AppTopNavProps) 
           aria-label="Open navigation menu"
           className="-ml-1 inline-flex items-center gap-1.5 rounded-full px-1 text-base font-semibold text-brand-50 antialiased transition-colors hover:text-white"
         >
-          <span className="font-sans">Fine Diet App</span>
+          <Image
+            src="/images/home/Fine-Diet-Logo.svg"
+            alt="Fine Diet"
+            width={140}
+            height={32}
+            className="h-[.85rem] w-auto"
+          />
           <svg
             className="h-4 w-4 text-brand-50/70"
             fill="none"

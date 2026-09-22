@@ -293,6 +293,24 @@ describe('Packet 12 Food Home status surface', () => {
     expect(status).toContain("action: 'Open Hauls'");
   });
 
+  it('uses centered Food Overview switcher on Food Home only', () => {
+    const surface = read('components/food/home/FoodHomeStatusSurface.tsx');
+    const lists = read('components/food/lists/ListsManager.tsx');
+    const topNav = read('components/journal/AppTopNav.tsx');
+    const switcher = read('components/food/FoodSectionViewSwitcher.tsx');
+    expect(surface).toContain('currentView="overview"');
+    expect(surface).toContain('align="center"');
+    expect(switcher).toContain("label: 'Recipes', href: APP_ROUTES.foodMeals");
+    expect(switcher).toContain("label: 'Pantry', href: APP_ROUTES.foodPantry");
+    expect(switcher).toContain('data-food-section-sibling-rail');
+    expect(switcher).toContain('overflow-x-auto');
+    expect(switcher).toContain('scrollbar-hide');
+    expect(lists).toContain('currentView="lists"');
+    expect(lists).toContain('align="left"');
+    expect(topNav).toContain('/images/home/Fine-Diet-Logo.svg');
+    expect(topNav).not.toContain('Fine Diet App');
+  });
+
   it('offers only supported recipe terminal paths from Home', () => {
     const view = read('components/food/home/FoodHomeView.tsx');
     const menu = read('components/food/home/RecipeEntryMenu.tsx');

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 
+import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { RecipeEntryMenu, type RecipeEntryAction } from './RecipeEntryMenu';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import {
@@ -89,11 +90,14 @@ export function FoodHomeStatusSurface({
     <>
       <StackedPageHero className="flex min-h-[90vh] items-center bg-gradient-to-b from-[#342b20] via-[#211b14] to-[#17120e] px-6 sm:px-12">
         <div className="mx-auto w-full max-w-[950px] text-center">
-          <p className="text-2xl font-semibold text-brand-50">Food</p>
+          <FoodSectionViewSwitcher
+            currentView="overview"
+            align="center"
+            anchorBackgroundClass="bg-[#342b20]"
+            className="text-brand-50"
+          />
           <h1 className="mx-auto mt-1 max-w-md text-[2.5rem] font-normal leading-[1] text-brand-50 sm:text-[2.75rem]">
-            Remain prepared for
-            <br />
-            What&apos;s next
+            Remain prepared for what&apos;s next
           </h1>
           <p className="mt-3 text-sm font-normal text-white/30">
             Know what&apos;s on hand, what&apos;s needed, and what comes next.
