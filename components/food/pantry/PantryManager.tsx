@@ -606,6 +606,24 @@ export default function PantryManager() {
     }));
   }
 
+  async function deletePurchaseLot() {
+    if (!lotContext?.lot) return;
+    const message =
+      'Remove this purchase from history? This removes purchase details only and does not change your total on-hand amount.';
+    if (!window.confirm(message)) return;
+    setLotBusy(true);
+    setLotError(null);
+    try {
+      await planService.deletePantryAcquisitionLot(lotContext.lot.id);
+      setLots((current) => current.filter((lot) => lot.id !== lotContext.lot!.id));
+      setLotContext(null);
+    } catch (err) {
+      setLotError(err instanceof Error ? err.message : 'Unable to remove purchase.');
+    } finally {
+      setLotBusy(false);
+    }
+  }
+
   async function saveLot() {
     if (!lotContext) return;
     const validated = validatePantryLotSave(lotForm, lotContext.lot);
@@ -1132,6 +1150,9 @@ export default function PantryManager() {
         onOpenProductSearch={openProductSearch}
         onRunProductSearch={() => void runProductSearch()}
         onSelectProductOffer={selectProductOffer}
+        onRemovePurchase={
+          lotContext?.lot ? () => void deletePurchaseLot() : undefined
+        }
       />
 
       <JournalFooterNav />
