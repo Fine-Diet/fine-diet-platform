@@ -397,6 +397,10 @@ function extractSafeSerpApiErrorDetail(body: unknown): string | null {
   return null;
 }
 
+export function isSerpApiNoShoppingResultsError(message: string): boolean {
+  return /hasn't returned any results/i.test(message.trim());
+}
+
 function sanitizeSerpApiErrorDetail(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -487,7 +491,7 @@ export const serpApiGroceryPriceProvider: GroceryPriceProviderAdapter = {
         ? `https://serpapi.test/search.json?q=${encodeURIComponent(query.query)}`
         : buildSerpApiUrl(query, context);
       const raw = await fetchFn(url, { signal });
-      if (raw.error) {
+      if (raw.error && !isSerpApiNoShoppingResultsError(raw.error)) {
         throw new GroceryPriceProviderError('provider_error', raw.error);
       }
       const retrievedAt = new Date().toISOString();

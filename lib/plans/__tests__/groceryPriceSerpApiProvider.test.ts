@@ -123,6 +123,14 @@ describe('groceryPriceSerpApiProvider', () => {
     expect(outcome).toEqual({ kind: 'zero_results' });
   });
 
+  it('treats SerpAPI no-results error text as an empty shopping response', async () => {
+    setSerpApiFetchOverride(async () => ({
+      error: "Google hasn't returned any results for this query.",
+    }));
+    const outcome = await searchWithQueryFallback(BASE_CONTEXT);
+    expect(outcome).toEqual({ kind: 'zero_results' });
+  });
+
   it('throws provider_error when all strategies fail', async () => {
     setSerpApiFetchOverride(async () => {
       throw new GroceryPriceProviderError('timeout', 'timed out');
