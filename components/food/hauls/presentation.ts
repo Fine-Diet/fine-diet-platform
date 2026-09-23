@@ -1,4 +1,5 @@
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
+import { isExecutableShoppingExecutionRow } from '@/lib/plans/groceryHaul/activePreparation';
 import { computeFactualAcquiredSubtotal } from '@/lib/plans/groceryHaul/estimate';
 import type {
   GroceryHaulCollectionItem,
@@ -120,8 +121,7 @@ export function acquiredStoreLabel(
 }
 
 export function isExecutableShoppingRow(item: GroceryHaulExecutionItem): boolean {
-  if (item.current_preparation) return item.current_preparation.is_executable;
-  return item.prepared_quantity > 0;
+  return isExecutableShoppingExecutionRow(item);
 }
 
 export function currentPlanInstructionLabel(item: GroceryHaulExecutionItem): string {

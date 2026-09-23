@@ -825,6 +825,8 @@ export interface GroceryHaulExecutionSummary {
   pending_count: number;
   in_basket_count: number;
   skipped_count: number;
+  /** Rows kept for audit but excluded from executable Shopping View (e.g. qty 0). */
+  excluded_count: number;
 }
 
 export interface GroceryHaulExecutionDetail {

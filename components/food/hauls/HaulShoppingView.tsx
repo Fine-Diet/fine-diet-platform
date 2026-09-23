@@ -278,12 +278,33 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
           </div>
         ) : execution.items.filter(isExecutableShoppingRow).length === 0 ? (
           <div className="mx-auto max-w-[800px]">
-            <p role="alert" className="rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-              This active Haul has no executable shopping rows. That is an inconsistent execution state, not an empty shopping list.
-            </p>
-            <Link href={APP_ROUTES.foodHauls} className="mt-4 inline-flex rounded-full border border-white/20 px-5 py-2 text-sm font-semibold">
-              Back to Hauls
-            </Link>
+            {execution.items.length === 0 ? (
+              <>
+                <p role="alert" className="rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                  This active Haul has no executable shopping rows. That is an inconsistent execution state, not an empty shopping list.
+                </p>
+                <Link href={APP_ROUTES.foodHauls} className="mt-4 inline-flex rounded-full border border-white/20 px-5 py-2 text-sm font-semibold">
+                  Back to Hauls
+                </Link>
+              </>
+            ) : (
+              <>
+                <h1 className="text-3xl font-light text-brand-50">Nothing to shop right now</h1>
+                <p className="mt-3 text-sm text-white/55">
+                  Every item is currently excluded from shopping
+                  {execution.summary.excluded_count > 0
+                    ? ` (${execution.summary.excluded_count} excluded).`
+                    : '.'}
+                  {' '}Edit preparation to restore quantities or products, then return here.
+                </p>
+                <Link
+                  href={haulPrepareHref(haulId)}
+                  className="mt-5 inline-flex rounded-full bg-brand-50 px-6 py-3 text-sm font-semibold text-[#16110d]"
+                >
+                  Edit preparation
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           <div className="mx-auto w-full max-w-[1000px]">

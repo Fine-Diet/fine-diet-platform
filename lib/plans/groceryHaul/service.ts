@@ -37,6 +37,7 @@ import {
   GROCERY_HAUL_ADD_LISTS_RPC_NAME,
   GROCERY_HAUL_CREATE_MULTI_RPC_NAME,
   GROCERY_HAUL_CREATE_RPC_NAME,
+  GROCERY_HAUL_EXECUTION_BASKET_RPC_NAME,
   GROCERY_HAUL_EXECUTION_READINESS_RPC_NAME,
   GROCERY_HAUL_EXECUTION_START_RPC_NAME,
   GROCERY_HAUL_OPEN_STATUSES,
@@ -45,7 +46,11 @@ import {
   isGroceryHaulShoppingDate,
   isGroceryHaulStatus,
 } from './schema';
-import { acquisitionPatchFromHaulItem, assertHaulItemPreparationAllowed } from './activePreparation';
+import {
+  acquisitionOverlayToJson,
+  assertHaulItemPreparationAllowed,
+  isExecutableShoppingExecutionRow,
+} from './activePreparation';
 import { computeFactualAcquiredSubtotal, computeGroceryHaulPreparationEstimate } from './estimate';
 
 export class GroceryHaulValidationError extends Error {
@@ -1289,16 +1294,18 @@ export async function getGroceryHaulExecution(
     );
   });
   const readiness = await getGroceryHaulExecutionReadiness(personId, haulId);
+  const executableItems = items.filter(isExecutableShoppingExecutionRow);
   return {
     haul,
     summary: {
       haul_id: haulId,
       status: haul.status,
       shopping_started_at: haul.shopping_started_at,
-      total_count: items.length,
-      pending_count: items.filter((item) => item.state === 'pending').length,
-      in_basket_count: items.filter((item) => item.state === 'in_basket').length,
-      skipped_count: items.filter((item) => item.state === 'skipped').length,
+      total_count: executableItems.length,
+      pending_count: executableItems.filter((item) => item.state === 'pending').length,
+      in_basket_count: executableItems.filter((item) => item.state === 'in_basket').length,
+      skipped_count: executableItems.filter((item) => item.state === 'skipped').length,
+      excluded_count: items.length - executableItems.length,
     },
     items,
     readiness,
@@ -1395,30 +1402,36 @@ export async function updateGroceryHaulExecutionItem(args: {
     patch.acquired_price_currency = haul.currency;
   }
   const hasAcquisitionPatch = Object.keys(acquisition).length > 0;
-  if (
-    args.state === 'in_basket'
-    && currentState === 'pending'
-    && !hasAcquisitionPatch
-  ) {
-    const { data: haulItemRow, error: haulItemError } = await supabaseAdmin
+  if (args.state === 'in_basket' && currentState === 'pending') {
+    const { data: basketRow, error: basketError } = await supabaseAdmin.rpc(
+      GROCERY_HAUL_EXECUTION_BASKET_RPC_NAME,
+      {
+        p_person_id: args.personId,
+        p_haul_id: args.haulId,
+        p_execution_item_id: args.executionItemId,
+        p_acquisition_overlay: acquisitionOverlayToJson(acquisition),
+      },
+    );
+    if (basketError) {
+      if (basketError.message.includes('HAUL_EXECUTION_NOT_EXECUTABLE')) {
+        throw new GroceryHaulValidationError(
+          'Excluded items cannot be added to the basket until quantity is greater than zero.',
+        );
+      }
+      throwExecutionRpcError(rpcMessage(basketError));
+    }
+    if (!basketRow) throw new GroceryHaulNotFoundError('Grocery haul execution item not found.');
+    const { data: haulItemRow } = await supabaseAdmin
       .from('grocery_haul_items')
       .select('*')
-      .eq('id', String(currentExecution.haul_item_id))
+      .eq('id', String((basketRow as Record<string, unknown>).haul_item_id))
       .eq('haul_id', args.haulId)
       .eq('person_id', args.personId)
       .maybeSingle();
-    if (haulItemError) {
-      throw new Error(`Failed to load grocery haul item for basket transition: ${haulItemError.message}`);
-    }
-    if (!haulItemRow) throw new GroceryHaulNotFoundError('Grocery haul item not found.');
-    const haulItem = mapHaulItem(haulItemRow as Record<string, unknown>);
-    if (haulItem.final_quantity <= 0) {
-      throw new GroceryHaulValidationError(
-        'Excluded items cannot be added to the basket until quantity is greater than zero.',
-      );
-    }
-    Object.assign(patch, acquisitionPatchFromHaulItem(haulItem, haul.currency));
-    patch.state = 'in_basket';
+    const currentPreparation = haulItemRow
+      ? currentPreparationFromHaulItem(mapHaulItem(haulItemRow as Record<string, unknown>))
+      : null;
+    return mapExecutionItem(basketRow as Record<string, unknown>, null, currentPreparation);
   }
 
   if (Object.keys(patch).length === 0) {

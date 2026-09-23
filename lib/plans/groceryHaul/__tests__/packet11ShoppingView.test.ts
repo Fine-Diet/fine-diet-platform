@@ -280,7 +280,8 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(shop).not.toContain('Complete Shopping');
     expect(shop).not.toContain('Finish Haul');
     expect(shop).not.toMatch(/\$\d+\s*[–-]\s*\$?\d+/);
-    expect(shop).toContain('no executable shopping rows');
+    expect(shop).toContain('Nothing to shop right now');
+    expect(shop).toContain('Edit preparation');
   });
 
   it('does not add completion, Pantry side effects, or DDL', () => {
