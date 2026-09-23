@@ -1,8 +1,8 @@
 import type { Row } from '@/lib/plans/__tests__/testSupabaseFake';
 import {
-  acquiredBaselineDiffersFromRow,
   acquisitionPatchFromHaulItem,
   mergeAcquisitionOverlay,
+  shouldPreservePendingAcquisitionOutcome,
 } from '../activePreparation';
 import type { GroceryHaulAcquisitionPatch } from '@/lib/plans/types';
 
@@ -68,7 +68,12 @@ export function simulateMarkGroceryHaulExecutionInBasket(
   const overlay = params.p_acquisition_overlay ?? {};
   const baseline = acquisitionPatchFromHaulItem(haulItemRowToPatchItem(item) as never, currency);
   const preserveSubstitute = Object.keys(overlay).length === 0
-    && acquiredBaselineDiffersFromRow(execution, baseline);
+    && shouldPreservePendingAcquisitionOutcome({
+      acquisitionUpdatedAt: execution.acquisition_updated_at == null
+        ? null
+        : String(execution.acquisition_updated_at),
+      preparationUpdatedAt: item.updated_at == null ? null : String(item.updated_at),
+    });
 
   const next = { ...execution, state: 'in_basket' };
   if (!preserveSubstitute) {

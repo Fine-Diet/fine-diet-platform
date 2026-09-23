@@ -67,24 +67,12 @@ BEGIN
   END IF;
 
   v_overlay := COALESCE(p_acquisition_overlay, '{}'::JSONB);
-  v_preserve_substitute := v_overlay = '{}'::JSONB AND (
-    v_execution.acquired_quantity IS DISTINCT FROM v_item.final_quantity
-    OR v_execution.acquired_food_object_id IS DISTINCT FROM v_item.selected_food_object_id
-    OR v_execution.acquired_product_title IS DISTINCT FROM v_item.product_title
-    OR v_execution.acquired_brand_name IS DISTINCT FROM v_item.brand_name
-    OR v_execution.acquired_purchase_unit IS DISTINCT FROM v_item.purchase_unit
-    OR v_execution.acquired_package_size IS DISTINCT FROM v_item.package_size
-    OR v_execution.acquired_package_unit IS DISTINCT FROM v_item.package_unit
-    OR v_execution.acquired_package_count IS DISTINCT FROM v_item.package_count
-    OR v_execution.acquired_retailer IS DISTINCT FROM v_item.retailer
-    OR v_execution.acquired_store_location IS DISTINCT FROM v_item.store_location
-    OR v_execution.acquired_postal_code IS DISTINCT FROM v_item.postal_code
-    OR v_execution.acquired_price_amount IS DISTINCT FROM v_item.price_amount
-    OR v_execution.acquired_price_currency IS DISTINCT FROM COALESCE(
-      v_item.price_currency,
-      CASE WHEN v_item.price_amount IS NULL THEN NULL ELSE v_currency END
-    )
-  );
+  v_preserve_substitute := v_overlay = '{}'::JSONB
+    AND v_execution.acquisition_updated_at IS NOT NULL
+    AND (
+      v_item.updated_at IS NULL
+      OR v_execution.acquisition_updated_at >= v_item.updated_at
+    );
 
   IF v_preserve_substitute THEN
     UPDATE public.grocery_haul_execution_items
@@ -155,6 +143,9 @@ BEGIN
     v_price_currency := NULLIF(v_overlay->>'acquired_price_currency', '');
   ELSIF v_overlay ? 'acquired_price_amount' AND v_price IS NOT NULL THEN
     v_price_currency := v_currency;
+  END IF;
+  IF v_price IS NULL THEN
+    v_price_currency := NULL;
   END IF;
 
   UPDATE public.grocery_haul_execution_items

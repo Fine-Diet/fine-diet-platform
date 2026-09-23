@@ -12,7 +12,6 @@ jest.mock('@/lib/supabaseServerClient', () => ({
 }));
 
 import {
-  acquiredBaselineDiffersFromRow,
   acquisitionPatchFromHaulItem,
   mergeAcquisitionOverlay,
 } from '../activePreparation';
@@ -86,6 +85,7 @@ function installFake(executionState: 'pending' | 'in_basket' | 'skipped' = 'pend
       acquired_package_unit: 'box',
       acquired_price_amount: 4,
       acquired_price_currency: 'USD',
+      acquisition_updated_at: null,
     }],
     generated_grocery_lists: [{ id: 'list-1', person_id: PERSON, title: 'Essentials' }],
   };
@@ -139,6 +139,8 @@ describe('Active Haul pending-line preparation contract', () => {
     expect(basketSql).toContain('FOR UPDATE');
     expect(basketSql).toContain('mark_grocery_haul_execution_in_basket');
     expect(basketSql).toContain('acquired_package_unit');
+    expect(basketSql).toContain('acquisition_updated_at IS NOT NULL');
+    expect(basketSql).toContain('IF v_price IS NULL THEN');
   });
 
   it('merges partial acquisition overlays on top of the current preparation baseline', () => {
@@ -258,23 +260,38 @@ describe('Active Haul pending-line preparation contract', () => {
     );
   });
 
-  it('preserves a pending substitute when In Basket is clicked without a new acquisition patch', async () => {
+  it('captures newly edited current preparation after activation seed when In Basket has no overlay', async () => {
     const fake = installFake('pending');
+    const execution = fake.getTable('grocery_haul_execution_items')[0];
+    execution.acquired_product_title = 'Activation oats';
+    execution.acquired_retailer = 'Activation Market';
+    execution.acquisition_updated_at = null;
+    const item = fake.getTable('grocery_haul_items')[0];
+    item.product_title = 'Edited after activation';
+    item.retailer = 'Edited Market';
+    item.updated_at = '2026-09-08T16:00:00.000Z';
+
+    const updated = await updateGroceryHaulExecutionItem({
+      personId: PERSON,
+      haulId: 'haul-1',
+      executionItemId: 'execution-1',
+      state: 'in_basket',
+    });
+    expect(updated.acquired_product_title).toBe('Edited after activation');
+    expect(updated.acquired_retailer).toBe('Edited Market');
+  });
+
+  it('preserves a pending substitute when acquisition intent is newer than preparation', async () => {
+    const fake = installFake('pending');
+    fake.getTable('grocery_haul_items')[0].updated_at = '2026-09-08T15:00:00.000Z';
     fake.getTable('grocery_haul_execution_items')[0] = {
       ...fake.getTable('grocery_haul_execution_items')[0],
       acquired_product_title: 'Substitute oats',
       acquired_retailer: 'Substitute Market',
       acquired_package_unit: 'can',
       acquired_price_amount: 2.5,
+      acquisition_updated_at: '2026-09-08T16:00:00.000Z',
     };
-    const baseline = acquisitionPatchFromHaulItem(
-      fake.getTable('grocery_haul_items')[0] as unknown as GroceryHaulItem,
-      'USD',
-    );
-    expect(acquiredBaselineDiffersFromRow(
-      fake.getTable('grocery_haul_execution_items')[0],
-      baseline,
-    )).toBe(true);
 
     const updated = await updateGroceryHaulExecutionItem({
       personId: PERSON,
@@ -284,6 +301,80 @@ describe('Active Haul pending-line preparation contract', () => {
     });
     expect(updated.acquired_product_title).toBe('Substitute oats');
     expect(updated.acquired_package_unit).toBe('can');
+  });
+
+  it('uses later current preparation when prep edit follows a pending substitute', async () => {
+    const fake = installFake('pending');
+    fake.getTable('grocery_haul_execution_items')[0] = {
+      ...fake.getTable('grocery_haul_execution_items')[0],
+      acquired_product_title: 'Substitute oats',
+      acquisition_updated_at: '2026-09-08T15:00:00.000Z',
+    };
+    const item = fake.getTable('grocery_haul_items')[0];
+    item.product_title = 'Later prep edit';
+    item.updated_at = '2026-09-08T17:00:00.000Z';
+
+    const updated = await updateGroceryHaulExecutionItem({
+      personId: PERSON,
+      haulId: 'haul-1',
+      executionItemId: 'execution-1',
+      state: 'in_basket',
+    });
+    expect(updated.acquired_product_title).toBe('Later prep edit');
+  });
+
+  it('re-baskets a prior acquisition outcome after return to pending when prep was not edited later', async () => {
+    const fake = installFake('pending');
+    const item = fake.getTable('grocery_haul_items')[0];
+    item.updated_at = '2026-09-08T15:00:00.000Z';
+    fake.getTable('grocery_haul_execution_items')[0] = {
+      ...fake.getTable('grocery_haul_execution_items')[0],
+      acquired_product_title: 'Established substitute',
+      acquired_price_amount: 2.5,
+      acquisition_updated_at: '2026-09-08T16:00:00.000Z',
+    };
+
+    const first = await updateGroceryHaulExecutionItem({
+      personId: PERSON,
+      haulId: 'haul-1',
+      executionItemId: 'execution-1',
+      state: 'in_basket',
+    });
+    expect(first.acquired_product_title).toBe('Established substitute');
+
+    fake.getTable('grocery_haul_execution_items')[0].state = 'pending';
+    const second = await updateGroceryHaulExecutionItem({
+      personId: PERSON,
+      haulId: 'haul-1',
+      executionItemId: 'execution-1',
+      state: 'in_basket',
+    });
+    expect(second.acquired_product_title).toBe('Established substitute');
+  });
+
+  it('clears acquired currency when overlay sets price_amount to null', () => {
+    const item = {
+      final_quantity: 2,
+      selected_food_object_id: null,
+      product_title: 'Current oats',
+      brand_name: null,
+      purchase_unit: null,
+      package_size: null,
+      package_unit: 'box',
+      package_count: null,
+      retailer: 'Current Market',
+      store_location: null,
+      postal_code: null,
+      price_amount: 4,
+      price_currency: 'USD',
+    } as GroceryHaulItem;
+    const merged = mergeAcquisitionOverlay(
+      acquisitionPatchFromHaulItem(item, 'USD'),
+      { price_amount: null },
+      'USD',
+    );
+    expect(merged.acquired_price_amount).toBeNull();
+    expect(merged.acquired_price_currency).toBeNull();
   });
 
   it('reports executable-only progress counts and excluded audit rows', async () => {

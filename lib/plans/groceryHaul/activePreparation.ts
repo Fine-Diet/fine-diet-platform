@@ -120,6 +120,16 @@ export function acquisitionOverlayToJson(
   return overlay;
 }
 
+/** True when a pending explicit acquisition/substitute should win over current preparation. */
+export function shouldPreservePendingAcquisitionOutcome(args: {
+  acquisitionUpdatedAt: string | null;
+  preparationUpdatedAt: string | null;
+}): boolean {
+  if (!args.acquisitionUpdatedAt) return false;
+  if (!args.preparationUpdatedAt) return true;
+  return Date.parse(args.acquisitionUpdatedAt) >= Date.parse(args.preparationUpdatedAt);
+}
+
 export function isExecutableShoppingExecutionRow(
   item: {
     current_preparation: { is_executable: boolean } | null;
