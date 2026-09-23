@@ -1561,6 +1561,20 @@ export const planService = {
     );
   },
 
+  async changePersistentGroceryListItemNeed(
+    listId: string,
+    itemId: string,
+    input: { food_object_id: string },
+  ): Promise<{ item: GroceryItem; cleared_purchasing: boolean }> {
+    return await request(
+      `/api/journal/food/grocery-lists/${listId}/items/${itemId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'change_need', ...input }),
+      },
+    );
+  },
+
   async getPersistentGroceryPurchasingChoices(
     listId: string,
   ): Promise<Record<string, import('./types').GroceryListPurchasingChoice>> {

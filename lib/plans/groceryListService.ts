@@ -31,6 +31,8 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { deletePurchasingChoice } from './groceryListPurchasingChoiceStore';
+import { deleteListPriceObservationsForItem } from './groceryListPriceObservationStore';
 import type {
   GeneratedGroceryList,
   GroceryItem,
@@ -515,6 +517,11 @@ export async function updateGroceryListItem(
 
   const patch: Record<string, unknown> = {};
   if (input.name !== undefined) {
+    if (existing.food_object_id) {
+      throw new GroceryListValidationError(
+        'Resolved list needs cannot be renamed directly. Use change_need.',
+      );
+    }
     const name = typeof input.name === 'string' ? input.name.trim() : '';
     if (!name) throw new GroceryListValidationError('name cannot be empty.');
     patch.name = name;
@@ -540,6 +547,77 @@ export async function updateGroceryListItem(
     .single();
   if (error || !data) throw new Error(`Failed to update grocery item: ${error?.message ?? 'not found'}`);
   return data as unknown as GroceryItem;
+}
+
+export async function changeGroceryListItemNeed(
+  personId: string,
+  listId: string,
+  itemId: string,
+  input: { food_object_id: unknown },
+): Promise<{ item: GroceryItem; cleared_purchasing: boolean }> {
+  assertPersonId(personId);
+  await loadListOwnedByPerson(personId, listId);
+
+  const foodObjectId =
+    typeof input.food_object_id === 'string' ? input.food_object_id.trim() : '';
+  if (!foodObjectId) {
+    throw new GroceryListValidationError('food_object_id is required.');
+  }
+
+  const { data: existing, error: existingErr } = await supabaseAdmin
+    .from('grocery_items')
+    .select('*')
+    .eq('id', itemId)
+    .eq('grocery_list_id', listId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (existingErr) throw new Error(`Failed to load grocery item: ${existingErr.message}`);
+  if (!existing) throw new GroceryListNotFoundError('Grocery item not found.');
+
+  const { data: food, error: foodErr } = await supabaseAdmin
+    .from('food_objects')
+    .select('id, canonical_name')
+    .eq('id', foodObjectId)
+    .maybeSingle();
+  if (foodErr || !food) {
+    throw new GroceryListValidationError(
+      `Canonical food not found: ${foodErr?.message ?? 'missing'}`,
+    );
+  }
+
+  const needName = String(food.canonical_name ?? '').trim();
+  if (!needName) {
+    throw new GroceryListValidationError('Canonical food is missing a name.');
+  }
+
+  const previousFoodObjectId = (existing.food_object_id as string | null) ?? null;
+  const identityChanged = previousFoodObjectId !== food.id;
+
+  const { data, error } = await supabaseAdmin
+    .from('grocery_items')
+    .update({
+      name: needName,
+      food_object_id: food.id,
+    })
+    .eq('id', itemId)
+    .eq('person_id', personId)
+    .select('*')
+    .single();
+  if (error || !data) {
+    throw new Error(`Failed to change list need: ${error?.message ?? 'not found'}`);
+  }
+
+  let clearedPurchasing = false;
+  if (identityChanged) {
+    await deletePurchasingChoice(personId, listId, itemId);
+    await deleteListPriceObservationsForItem(personId, listId, itemId);
+    clearedPurchasing = true;
+  }
+
+  return {
+    item: data as unknown as GroceryItem,
+    cleared_purchasing: clearedPurchasing,
+  };
 }
 
 export async function deleteGroceryListItem(
