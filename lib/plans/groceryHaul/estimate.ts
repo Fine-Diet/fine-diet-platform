@@ -1,4 +1,5 @@
 import type {
+  GroceryHaulExecutionItemState,
   GroceryHaulItem,
   GroceryHaulPreparationEstimate,
   GroceryHaulStoreEstimate,
@@ -112,16 +113,22 @@ export function computeGroceryHaulPreparationEstimate(
 }
 
 type AcquiredSpendLine = {
+  state: GroceryHaulExecutionItemState;
   acquired_price_amount: number | null;
   acquired_quantity: number | null;
 };
 
-/** Persisted acquired price × quantity only; null when no priced acquisitions exist. */
+/**
+ * Sum of persisted acquired price × quantity for in-basket rows only.
+ * Pending/skipped rows may still carry seeded prepared values at activation.
+ */
 export function computeFactualAcquiredSubtotal(
   items: readonly AcquiredSpendLine[],
 ): number | null {
   const priced = items.filter(
-    (item) => item.acquired_price_amount != null && item.acquired_quantity != null,
+    (item) => item.state === 'in_basket'
+      && item.acquired_price_amount != null
+      && item.acquired_quantity != null,
   );
   if (priced.length === 0) return null;
   return money(priced.reduce(

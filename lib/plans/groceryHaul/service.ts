@@ -878,7 +878,7 @@ export async function listGroceryHaulsForPerson(
 
   const { data: executionRows, error: executionErr } = await supabaseAdmin
     .from('grocery_haul_execution_items')
-    .select('haul_id, acquired_price_amount, acquired_quantity')
+    .select('haul_id, state, acquired_price_amount, acquired_quantity')
     .in('haul_id', haulIds)
     .eq('person_id', personId);
 
@@ -886,11 +886,16 @@ export async function listGroceryHaulsForPerson(
     throw new Error(`Failed to load grocery haul execution spend: ${executionErr.message}`);
   }
 
-  const executionByHaul = new Map<string, Array<{ acquired_price_amount: number | null; acquired_quantity: number | null }>>();
+  const executionByHaul = new Map<string, Array<{
+    state: string;
+    acquired_price_amount: number | null;
+    acquired_quantity: number | null;
+  }>>();
   for (const row of executionRows ?? []) {
     const haulId = String(row.haul_id);
     const current = executionByHaul.get(haulId) ?? [];
     current.push({
+      state: String(row.state),
       acquired_price_amount: row.acquired_price_amount == null ? null : Number(row.acquired_price_amount),
       acquired_quantity: row.acquired_quantity == null ? null : Number(row.acquired_quantity),
     });
@@ -926,7 +931,13 @@ export async function listGroceryHaulsForPerson(
       execution_item_count: estimate.execution_item_count,
       unpriced_item_count: estimate.unpriced_item_count,
       estimated_total: estimate.estimated_total,
-      acquired_subtotal: computeFactualAcquiredSubtotal(executionByHaul.get(haulId) ?? []),
+      acquired_subtotal: computeFactualAcquiredSubtotal(
+        (executionByHaul.get(haulId) ?? []).map((item) => ({
+          state: item.state as GroceryHaulExecutionItemState,
+          acquired_price_amount: item.acquired_price_amount,
+          acquired_quantity: item.acquired_quantity,
+        })),
+      ),
       currency,
       budget_amount: h.budget_amount == null ? null : Number(h.budget_amount),
       store_names: storeNames,

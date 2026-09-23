@@ -302,7 +302,7 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
                   href={haulPrepareHref(haulId)}
                   className="rounded-full border border-white/20 px-5 py-2.5 text-sm font-semibold text-brand-50 hover:bg-white/[0.04]"
                 >
-                  Edit
+                  View preparation
                 </Link>
               </div>
             </header>

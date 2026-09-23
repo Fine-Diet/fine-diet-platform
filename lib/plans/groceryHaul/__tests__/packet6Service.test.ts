@@ -132,11 +132,25 @@ describe('Packet 6 Haul preparation service', () => {
     fake.getTable('grocery_haul_execution_items').push({
       haul_id: 'haul-1',
       person_id: PERSON,
+      state: 'in_basket',
       acquired_price_amount: 4,
       acquired_quantity: 2,
     });
     const rows = await listGroceryHaulsForPerson(PERSON);
     expect(rows[0].acquired_subtotal).toBe(8);
+  });
+
+  it('ignores seeded pending execution prices when deriving acquired_subtotal', async () => {
+    const fake = installFake('active');
+    fake.getTable('grocery_haul_execution_items').push({
+      haul_id: 'haul-1',
+      person_id: PERSON,
+      state: 'pending',
+      acquired_price_amount: 4,
+      acquired_quantity: 2,
+    });
+    const rows = await listGroceryHaulsForPerson(PERSON);
+    expect(rows[0].acquired_subtotal).toBeNull();
   });
 
   it('returns complete memberships, persisted resolutions, and one estimate in fixed queries', async () => {

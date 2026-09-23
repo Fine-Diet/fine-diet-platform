@@ -248,7 +248,7 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(library).not.toContain('Shopping in progress');
     expect(library).not.toContain('History');
     expect(shop).toContain('haulPrepareHref(haulId)');
-    expect(shop).toContain('Edit');
+    expect(shop).toContain('View preparation');
     expect(builder).toContain("router.query.prepare === '1'");
     expect(builder).toContain('preparationReadOnly');
     expect(builder).toContain('APP_ROUTE_BUILDERS.foodHaulShop(haulId)');
@@ -256,11 +256,15 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(builder).toContain('<HistoricalHaul detail={detail} />');
   });
 
-  it('shows a factual acquired subtotal only from persisted price × quantity and does not invent completion', () => {
+  it('shows a factual acquired subtotal only from in-basket price × quantity and does not invent completion', () => {
     expect(factualAcquiredSubtotal([
-      executionItem({ acquired_price_amount: 3, acquired_quantity: 2 }),
-      executionItem({ id: 'execution-2', acquired_price_amount: null, acquired_quantity: 1 }),
+      executionItem({ state: 'in_basket', acquired_price_amount: 3, acquired_quantity: 2 }),
+      executionItem({ id: 'execution-2', state: 'pending', acquired_price_amount: 3, acquired_quantity: 2 }),
+      executionItem({ id: 'execution-3', acquired_price_amount: null, acquired_quantity: 1 }),
     ])).toBe(6);
+    expect(factualAcquiredSubtotal([
+      executionItem({ state: 'pending', acquired_price_amount: 3, acquired_quantity: 2 }),
+    ])).toBeNull();
     expect(factualAcquiredSubtotal([
       executionItem({ acquired_price_amount: null, acquired_quantity: 1 }),
     ])).toBeNull();
