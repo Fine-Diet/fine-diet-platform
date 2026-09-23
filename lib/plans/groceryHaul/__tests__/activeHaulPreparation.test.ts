@@ -148,6 +148,15 @@ describe('Active Haul pending-line preparation contract', () => {
     expect(basketSql).toContain('acquired_package_unit');
     expect(basketSql).toContain('acquisition_updated_at IS NOT NULL');
     expect(basketSql).toContain('IF v_price IS NULL THEN');
+    const basketFn = 'public.mark_grocery_haul_execution_in_basket(UUID, UUID, UUID, JSONB)';
+    expect(basketSql).toContain(`REVOKE ALL ON FUNCTION ${basketFn} FROM PUBLIC`);
+    expect(basketSql).toContain(`REVOKE EXECUTE ON FUNCTION ${basketFn} FROM anon`);
+    expect(basketSql).toContain(`REVOKE EXECUTE ON FUNCTION ${basketFn} FROM authenticated`);
+    expect(basketSql).toContain(`GRANT EXECUTE ON FUNCTION ${basketFn} TO service_role`);
+    expect(basketSql).not.toMatch(/GRANT EXECUTE[\s\S]*mark_grocery_haul_execution_in_basket[\s\S]* TO anon/);
+    expect(basketSql).not.toMatch(
+      /GRANT EXECUTE[\s\S]*mark_grocery_haul_execution_in_basket[\s\S]* TO authenticated/,
+    );
   });
 
   it('merges partial acquisition overlays on top of the current preparation baseline', () => {

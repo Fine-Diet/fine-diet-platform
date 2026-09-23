@@ -176,4 +176,6 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.mark_grocery_haul_execution_in_basket(UUID, UUID, UUID, JSONB) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.mark_grocery_haul_execution_in_basket(UUID, UUID, UUID, JSONB) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.mark_grocery_haul_execution_in_basket(UUID, UUID, UUID, JSONB) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.mark_grocery_haul_execution_in_basket(UUID, UUID, UUID, JSONB) TO service_role;
