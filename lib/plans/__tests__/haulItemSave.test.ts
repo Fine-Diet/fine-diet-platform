@@ -101,6 +101,28 @@ describe('haul item save patch', () => {
     });
   });
 
+  it('allows quote-only save when store_location is unchanged in the draft', () => {
+    const item = haulItem({ store_location: 'Downtown' });
+    const draft = haulDraftFromItem(item);
+    draft.pendingSourcePriceObservationId = 'price-2';
+    draft.priceAmount = '';
+    expect(validateHaulItemSave(item, draft)).toBeNull();
+    expect(buildHaulItemPreparationPatch(item, draft)).toEqual({
+      source_price_observation_id: 'price-2',
+    });
+  });
+
+  it('persists same-value manual price during context change when manualPriceIntent is set', () => {
+    const item = haulItem();
+    const draft = haulDraftFromItem(item);
+    draft.retailer = 'Whole Foods';
+    draft.priceAmount = '4.99';
+    expect(buildHaulItemPreparationPatch(item, draft, { manualPriceIntent: true })).toMatchObject({
+      retailer: 'Whole Foods',
+      price_amount: 4.99,
+    });
+  });
+
   it('blocks quote selection while context edits are pending', () => {
     const item = haulItem();
     const draft = haulDraftFromItem(item);
