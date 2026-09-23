@@ -1,9 +1,12 @@
 import type { GroceryHaulItem } from '@/lib/plans/types';
 
-import { buildHaulItemPreparationPatch } from '@/components/food/hauls/haulItemSave';
+import {
+  buildHaulItemPreparationPatch,
+  validateHaulItemSave,
+} from '@/components/food/hauls/haulItemSave';
 import {
   haulDraftFromItem,
-  haulSourcedPriceInvalidated,
+  haulSourcedPriceWouldClearOnSave,
 } from '@/components/food/hauls/haulPurchasingDetails';
 
 function haulItem(overrides: Partial<GroceryHaulItem> = {}): GroceryHaulItem {
@@ -49,6 +52,21 @@ describe('haul item save patch', () => {
     const item = haulItem();
     const draft = haulDraftFromItem(item);
     draft.pendingSourcePriceObservationId = 'price-2';
+    draft.priceAmount = '';
+    expect(buildHaulItemPreparationPatch(item, draft)).toEqual({
+      source_price_observation_id: 'price-2',
+    });
+  });
+
+  it('switches List quote from an existing manual price without sending price_amount', () => {
+    const item = haulItem({
+      price_source: 'manual',
+      source_price_observation_id: null,
+      price_amount: 6.25,
+    });
+    const draft = haulDraftFromItem(item);
+    draft.pendingSourcePriceObservationId = 'price-2';
+    draft.priceAmount = '';
     expect(buildHaulItemPreparationPatch(item, draft)).toEqual({
       source_price_observation_id: 'price-2',
     });
@@ -58,21 +76,46 @@ describe('haul item save patch', () => {
     const item = haulItem();
     const draft = haulDraftFromItem(item);
     draft.retailer = 'Whole Foods';
-    expect(haulSourcedPriceInvalidated(item, draft)).toBe(true);
+    expect(haulSourcedPriceWouldClearOnSave(item, draft)).toBe(true);
     const patch = buildHaulItemPreparationPatch(item, draft);
     expect(patch).toEqual({ retailer: 'Whole Foods' });
     expect(patch).not.toHaveProperty('price_amount');
   });
 
-  it('persists manual price without final_quantity', () => {
+  it('keeps draft price visible after context is reverted before save', () => {
+    const item = haulItem({ price_source: 'manual', source_price_observation_id: null });
+    const draft = haulDraftFromItem(item);
+    draft.retailer = 'Whole Foods';
+    draft.retailer = 'Target';
+    expect(haulSourcedPriceWouldClearOnSave(item, draft)).toBe(false);
+  });
+
+  it('allows explicit manual price replacement while context changed', () => {
+    const item = haulItem();
+    const draft = haulDraftFromItem(item);
+    draft.retailer = 'Whole Foods';
+    draft.priceAmount = '6.25';
+    expect(buildHaulItemPreparationPatch(item, draft, { manualPriceIntent: true })).toMatchObject({
+      retailer: 'Whole Foods',
+      price_amount: 6.25,
+    });
+  });
+
+  it('blocks quote selection while context edits are pending', () => {
+    const item = haulItem();
+    const draft = haulDraftFromItem(item);
+    draft.retailer = 'Whole Foods';
+    draft.pendingSourcePriceObservationId = 'price-2';
+    expect(validateHaulItemSave(item, draft)).toMatch(/before applying a List price/i);
+  });
+
+  it('persists manual price without sending price_currency', () => {
     const item = haulItem({ price_source: 'manual', source_price_observation_id: null });
     const draft = haulDraftFromItem(item);
     draft.priceAmount = '6.25';
     const patch = buildHaulItemPreparationPatch(item, draft);
-    expect(patch).toEqual({
-      price_amount: 6.25,
-      price_currency: 'USD',
-    });
+    expect(patch).toEqual({ price_amount: 6.25 });
+    expect(patch).not.toHaveProperty('price_currency');
     expect(patch).not.toHaveProperty('final_quantity');
   });
 });

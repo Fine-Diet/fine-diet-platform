@@ -14,19 +14,21 @@ import type {
 } from '@/lib/plans/types';
 
 import { sourceDemandLabel } from './presentation';
-import { buildHaulItemPreparationPatch } from './haulItemSave';
+import { buildHaulItemPreparationPatch, validateHaulItemSave } from './haulItemSave';
 import {
   type HaulPurchasingDraft,
   haulDraftFromItem,
   haulPurchasingHasDetails,
   haulPurchasingSummaryInput,
-  haulSourcedPriceInvalidated,
+  haulSourcedPriceWouldClearOnSave,
 } from './haulPurchasingDetails';
+import { haulListQuoteCompatibleWithPreparedProduct } from '@/lib/plans/groceryHaul/haulListQuoteCompatibility';
 
 export type HaulEditorSubpanel = 'main' | 'change_product' | 'manual_price' | 'source_quotes';
 
 interface HaulItemEditorProps {
   haulId: string;
+  haulCurrency: string;
   item: GroceryHaulItem | null;
   openInProductSearch?: boolean;
   onClose: () => void;
@@ -73,23 +75,15 @@ function FoodSearchResultsList({
 }
 
 function applyDraftPatch(
-  item: GroceryHaulItem,
   draft: HaulPurchasingDraft,
   patch: Partial<HaulPurchasingDraft>,
 ): HaulPurchasingDraft {
-  const next = { ...draft, ...patch };
-  const contextTouched = Object.keys(patch).some(
-    (key) => key !== 'priceAmount' && key !== 'pendingSourcePriceObservationId',
-  );
-  if (contextTouched && item.price_source === 'sourced') {
-    next.priceAmount = '';
-    next.pendingSourcePriceObservationId = null;
-  }
-  return next;
+  return { ...draft, ...patch };
 }
 
 export function HaulItemEditor({
   haulId,
+  haulCurrency,
   item,
   openInProductSearch = false,
   onClose,
@@ -103,11 +97,13 @@ export function HaulItemEditor({
   const [listQuotes, setListQuotes] = useState<GroceryListPriceObservation[]>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [manualPriceIntent, setManualPriceIntent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!item) return;
     setDraft(haulDraftFromItem(item));
+    setManualPriceIntent(false);
     setSubpanel(openInProductSearch ? 'change_product' : 'main');
     setProductSearchQuery(item.product_title ?? item.name_snapshot);
     setProductSearchResults([]);
@@ -154,7 +150,12 @@ export function HaulItemEditor({
       .getPersistentGroceryPriceQuotes(item.source_grocery_list_id)
       .then((bundle) => {
         if (cancelled) return;
-        setListQuotes(bundle.pool_by_item_id[item.grocery_item_id!] ?? []);
+        const pool = bundle.pool_by_item_id[item.grocery_item_id!] ?? [];
+        setListQuotes(
+          pool.filter((observation) =>
+            haulListQuoteCompatibleWithPreparedProduct(observation, item, haulCurrency),
+          ),
+        );
       })
       .catch(() => {
         if (!cancelled) setListQuotes([]);
@@ -165,20 +166,23 @@ export function HaulItemEditor({
     return () => {
       cancelled = true;
     };
-  }, [item, subpanel]);
+  }, [item, subpanel, haulCurrency]);
 
   if (!item || !draft) return null;
 
   const editableItem = item;
 
-  const sourcedInvalidated = haulSourcedPriceInvalidated(editableItem, draft);
-  const summaryInput = haulPurchasingSummaryInput(editableItem, draft);
+  const sourcedWouldClear = haulSourcedPriceWouldClearOnSave(editableItem, draft);
+  const summaryInput = haulPurchasingSummaryInput(
+    editableItem,
+    draft,
+    haulCurrency,
+    manualPriceIntent,
+  );
   const hasDetails = haulPurchasingHasDetails(draft);
 
   function updateDraft(patch: Partial<HaulPurchasingDraft>) {
-    setDraft((current) =>
-      current ? applyDraftPatch(editableItem, current, patch) : current,
-    );
+    setDraft((current) => (current ? applyDraftPatch(current, patch) : current));
   }
 
   function selectProduct(candidate: ResolveCandidate) {
@@ -193,21 +197,32 @@ export function HaulItemEditor({
   }
 
   function selectListQuote(observation: GroceryListPriceObservation) {
+    const retailerChanged =
+      (observation.retailer ?? '').trim() !== (editableItem.retailer ?? '').trim();
+    const postalChanged =
+      (observation.postal_code ?? '').trim() !== (editableItem.postal_code ?? '').trim();
     setDraft((current) =>
       current
         ? {
             ...current,
             pendingSourcePriceObservationId: observation.id,
             priceAmount: '',
+            ...(retailerChanged || postalChanged ? { storeLocation: '' } : {}),
           }
         : current,
     );
+    setManualPriceIntent(false);
     setSubpanel('main');
   }
 
   async function save() {
     if (saving || !draft) return;
-    const patch = buildHaulItemPreparationPatch(editableItem, draft);
+    const validationError = validateHaulItemSave(editableItem, draft);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    const patch = buildHaulItemPreparationPatch(editableItem, draft, { manualPriceIntent });
     if (!patch) {
       onClose();
       return;
@@ -467,12 +482,13 @@ export function HaulItemEditor({
               min="0"
               step="0.01"
               value={draft.priceAmount}
-              onChange={(event) =>
+              onChange={(event) => {
+                setManualPriceIntent(true);
                 updateDraft({
                   priceAmount: event.target.value,
                   pendingSourcePriceObservationId: null,
-                })
-              }
+                });
+              }}
               className={INPUT_CLASS}
             />
           </label>
@@ -482,7 +498,7 @@ export function HaulItemEditor({
       {subpanel === 'main' && (
         <div className="mt-6">
           <ItemManagementSection title="Purchasing">
-            {sourcedInvalidated && (
+            {sourcedWouldClear && (
               <p className="mb-3 text-xs text-amber-100/80" role="status">
                 Sourced List price will clear when you save these context changes.
               </p>
@@ -514,6 +530,13 @@ export function HaulItemEditor({
                   className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d]"
                 >
                   Choose product
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubpanel('manual_price')}
+                  className="rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-white hover:bg-white/[0.06]"
+                >
+                  Edit manually
                 </button>
               </div>
             )}

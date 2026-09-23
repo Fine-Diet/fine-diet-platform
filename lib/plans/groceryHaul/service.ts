@@ -9,6 +9,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { haulListQuoteCompatibleWithPreparedProduct } from './haulListQuoteCompatibility';
 import type {
   GroceryHaul,
   GroceryHaulAcquisitionPatch,
@@ -619,6 +620,20 @@ export async function updateGroceryHaulItemPreparation(args: {
       if (!observation) {
         throw new GroceryHaulValidationError('Selected price observation is not valid for this item.');
       }
+      if (
+        !haulListQuoteCompatibleWithPreparedProduct(
+          observation,
+          {
+            selected_food_object_id: currentItem.selected_food_object_id,
+            product_title: currentItem.product_title,
+          },
+          haul.currency,
+        )
+      ) {
+        throw new GroceryHaulValidationError(
+          'Selected price observation is not compatible with this Haul product.',
+        );
+      }
       patch.product_title = observation.product_title;
       patch.brand_name = observation.brand_name;
       patch.package_size = observation.package_size;
@@ -626,6 +641,13 @@ export async function updateGroceryHaulItemPreparation(args: {
       patch.package_count = observation.package_count;
       patch.retailer = observation.retailer;
       patch.postal_code = observation.postal_code;
+      const observationRetailer = nullableText(observation.retailer as string | null);
+      const observationPostal = nullableText(observation.postal_code as string | null);
+      const currentRetailer = nullableText(currentItem.retailer as string | null);
+      const currentPostal = nullableText(currentItem.postal_code as string | null);
+      if (observationRetailer !== currentRetailer || observationPostal !== currentPostal) {
+        patch.store_location = null;
+      }
       patch.price_amount = observation.unit_price;
       patch.price_currency = observation.currency;
       patch.price_source = observation.source === 'manual' ? 'manual' : 'sourced';
