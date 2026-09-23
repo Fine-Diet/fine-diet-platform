@@ -64,8 +64,12 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     const editor = read('components/food/hauls/HaulItemEditor.tsx');
     expect(builder).toContain('More actions for');
     expect(builder).toContain('Edit');
-    expect(editor).toContain('These purchasing details belong to this Haul only');
-    expect(editor).toContain('patch.price_amount = nextPrice');
+    expect(editor).toContain('ItemManagementDialog');
+    expect(editor).toContain('Source need snapshot is read-only');
+    expect(editor).toContain('buildHaulItemPreparationPatch');
+    expect(editor).toContain('pendingSourcePriceObservationId');
+    expect(editor).not.toContain('Final Haul quantity');
+    expect(editor).not.toContain('final_quantity');
     expect(editor).not.toContain('updatePersistentGroceryItem');
   });
 

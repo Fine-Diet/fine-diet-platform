@@ -1289,6 +1289,7 @@ export const planService = {
       postal_code?: string | null;
       price_amount?: number | null;
       price_currency?: string | null;
+      source_price_observation_id?: string | null;
     },
   ): Promise<GroceryHaulItem> {
     const res = await request<{ item: GroceryHaulItem }>(
