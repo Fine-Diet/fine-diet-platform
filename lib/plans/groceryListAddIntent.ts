@@ -60,12 +60,48 @@ export type GroceryAddSuggestion = {
   did_you_mean: boolean;
 };
 
-function isProductCandidate(result: FoodSearchResult): boolean {
+export function isGroceryProductSearchCandidate(result: FoodSearchResult): boolean {
   const food = result.food;
   if (food.brandName?.trim()) return true;
   if (food.sourceType === 'branded') return true;
   if (food.upc) return true;
   return false;
+}
+
+function isGroceryUserOwnedFood(result: FoodSearchResult): boolean {
+  return result.source === 'user' || result.food.sourceType === 'user';
+}
+
+/** Branded / scanned / UPC-backed, or user-owned foods with product identity. */
+export function isGroceryPrimaryProductChoiceCandidate(result: FoodSearchResult): boolean {
+  if (isGroceryProductSearchCandidate(result)) return true;
+  if (!isGroceryUserOwnedFood(result)) return false;
+  return Boolean(result.food.brandName?.trim() || result.food.upc);
+}
+
+/**
+ * Purchasing-first ordering: primary product signals, then generic/common fallback.
+ * Does not mutate Need identity semantics — caller still uses resolvePersistentGroceryItemForList.
+ */
+export function buildGroceryProductChoiceCandidates(
+  results: FoodSearchResult[],
+): FoodSearchResult[] {
+  const seen = new Set<string>();
+  const primary: FoodSearchResult[] = [];
+  const fallback: FoodSearchResult[] = [];
+
+  for (const result of results) {
+    const id = result.food.id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (isGroceryPrimaryProductChoiceCandidate(result)) {
+      primary.push(result);
+    } else {
+      fallback.push(result);
+    }
+  }
+
+  return [...primary, ...fallback];
 }
 
 function suggestionLabel(result: FoodSearchResult): string {
@@ -111,7 +147,7 @@ export function groupGroceryAddSuggestions(options: {
         !intentNorm.includes(labelNorm.split(' — ').pop() ?? labelNorm));
 
     const suggestion: GroceryAddSuggestion = {
-      group: isProductCandidate(result) ? 'product' : 'ingredient',
+      group: isGroceryProductSearchCandidate(result) ? 'product' : 'ingredient',
       food_object_id: id,
       label,
       source_label: result.source_label ?? result.source ?? null,
@@ -123,3 +159,20 @@ export function groupGroceryAddSuggestions(options: {
 
   return { ingredients, products };
 }
+
+/** Verified foods that satisfy a Need (common / ingredient-oriented), not purchasing products. */
+export function filterGroceryNeedResolveCandidates(
+  results: FoodSearchResult[],
+): FoodSearchResult[] {
+  const seen = new Set<string>();
+  const filtered: FoodSearchResult[] = [];
+  for (const result of results) {
+    if (isGroceryProductSearchCandidate(result)) continue;
+    const id = result.food.id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    filtered.push(result);
+  }
+  return filtered;
+}
+

@@ -15,7 +15,11 @@ export function formatGroceryPriceProviderError(
   error: GroceryPriceSearchProviderError | null | undefined,
 ): string {
   if (error?.code === 'disabled') {
-    return GROCERY_PRICE_PROVIDER_UNAVAILABLE_MANUAL;
+    const base = GROCERY_PRICE_PROVIDER_UNAVAILABLE_MANUAL;
+    if (process.env.NODE_ENV === 'development') {
+      return `${base} For localhost, set SERPAPI_API_KEY in .env.local and ensure .env.production.local does not override it with an empty value.`;
+    }
+    return base;
   }
   return GROCERY_PRICE_PROVIDER_UNAVAILABLE_TRY_AGAIN;
 }

@@ -20,8 +20,14 @@ describe('Packet 6 Lists item-management convergence', () => {
   it('separates need change from purchasing product change', () => {
     expect(editor).toContain('Change need');
     expect(editor).toContain('Change product');
+    expect(editor).toContain('NeedResolveResultsList');
+    expect(editor).toContain('ProductChoiceResultsList');
     expect(manager).toContain('resolvePersistentGroceryItemForList');
     expect(manager).toContain('changePersistentGroceryListItemNeed');
+    expect(manager).toContain('grocery_list_need_resolve');
+    expect(manager).toContain('grocery_list_product_choice');
+    expect(manager).toContain('buildGroceryProductChoiceCandidates');
+    expect(manager).not.toContain('resolveDefaultIntakeProfile');
   });
 
   it('keeps notes progressive and hides currency in manual purchasing', () => {

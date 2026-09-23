@@ -16,10 +16,13 @@ import { GroceryPricePanel } from '@/components/grocery/GroceryPricingUi';
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 import {
+  buildGroceryProductChoiceCandidates,
+  filterGroceryNeedResolveCandidates,
   groupGroceryAddSuggestions,
   parseGroceryAddIntent,
   type GroceryAddSuggestion,
 } from '@/lib/plans/groceryListAddIntent';
+import { formatGroceryListNeedQuantityLabel } from '@/lib/plans/groceryListNeedQuantity';
 import { formatGroceryCurrency } from '@/lib/plans/groceryPricingFormat';
 import { listPriceToHaulObservation } from '@/lib/plans/groceryListPriceObservationDisplay';
 import { resolveGroceryHaulCreateEligibility } from '@/lib/plans/groceryHaul/eligibility';
@@ -56,8 +59,29 @@ function productName(
 }
 
 function quantityLabel(item: GroceryItem): string {
-  const quantity = item.quantity ?? 1;
-  return item.unit ? `${quantity} ${item.unit}` : String(quantity);
+  return formatGroceryListNeedQuantityLabel(item.quantity, item.unit);
+}
+
+async function fetchListsFoodSearch(
+  query: string,
+  options: { pageContext: string; section?: string },
+  signal: AbortSignal,
+): Promise<FoodSearchResult[]> {
+  const params = new URLSearchParams({
+    q: query,
+    limit: '12',
+    consumer: 'flat',
+    pageContext: options.pageContext,
+  });
+  if (options.section) {
+    params.set('section', options.section);
+  }
+  const response = await fetch(`/api/foods/search?${params.toString()}`, {
+    credentials: 'include',
+    signal,
+  });
+  const body = (await response.json()) as { results?: FoodSearchResult[] };
+  return body.results ?? [];
 }
 
 export default function ListsManager() {
@@ -258,13 +282,21 @@ export default function ListsManager() {
       setSearchingNeed(true);
       setEditError(null);
       try {
-        const params = new URLSearchParams({ q: query, limit: '10' });
-        const response = await fetch(`/api/foods/search?${params.toString()}`, {
-          credentials: 'include',
-          signal: controller.signal,
-        });
-        const body = (await response.json()) as { results?: ResolveCandidate[] };
-        setNeedSearchResults(body.results ?? []);
+        const [common, myFoods] = await Promise.all([
+          fetchListsFoodSearch(
+            query,
+            { pageContext: 'grocery_list_need_resolve', section: 'common' },
+            controller.signal,
+          ),
+          fetchListsFoodSearch(
+            query,
+            { pageContext: 'grocery_list_need_resolve', section: 'my_foods' },
+            controller.signal,
+          ),
+        ]);
+        setNeedSearchResults(
+          filterGroceryNeedResolveCandidates([...myFoods, ...common]),
+        );
       } catch {
         if (!controller.signal.aborted) setNeedSearchResults([]);
       } finally {
@@ -289,13 +321,31 @@ export default function ListsManager() {
       setSearchingProduct(true);
       setEditError(null);
       try {
-        const params = new URLSearchParams({ q: query, limit: '10' });
-        const response = await fetch(`/api/foods/search?${params.toString()}`, {
-          credentials: 'include',
-          signal: controller.signal,
-        });
-        const body = (await response.json()) as { results?: ResolveCandidate[] };
-        setProductSearchResults(body.results ?? []);
+        const [branded, scanned, myFoods, common] = await Promise.all([
+          fetchListsFoodSearch(
+            query,
+            { pageContext: 'grocery_list_product_choice', section: 'branded' },
+            controller.signal,
+          ),
+          fetchListsFoodSearch(
+            query,
+            { pageContext: 'grocery_list_product_choice', section: 'scanned' },
+            controller.signal,
+          ),
+          fetchListsFoodSearch(
+            query,
+            { pageContext: 'grocery_list_product_choice', section: 'my_foods' },
+            controller.signal,
+          ),
+          fetchListsFoodSearch(
+            query,
+            { pageContext: 'grocery_list_product_choice', section: 'common' },
+            controller.signal,
+          ),
+        ]);
+        setProductSearchResults(
+          buildGroceryProductChoiceCandidates([...branded, ...scanned, ...myFoods, ...common]),
+        );
       } catch {
         if (!controller.signal.aborted) setProductSearchResults([]);
       } finally {
