@@ -1529,6 +1529,7 @@ export const planService = {
     input: {
       purchase_quantity?: number | null;
       purchase_unit?: string | null;
+      shopping_display_name?: string | null;
     },
   ): Promise<{ choice: import('./types').GroceryListPurchasingChoice }> {
     return await request(

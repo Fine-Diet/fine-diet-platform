@@ -83,6 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           itemId,
           purchase_quantity: body.purchase_quantity,
           purchase_unit: body.purchase_unit,
+          shopping_display_name: body.shopping_display_name,
         });
         return res.status(200).json(result);
       }

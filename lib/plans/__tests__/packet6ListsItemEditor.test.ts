@@ -30,6 +30,11 @@ describe('Packet 6 Lists item-management convergence', () => {
     expect(editor).toContain('PurchaseDetailsSummary');
   });
 
+  it('keeps the new choice when changing product clears only local price', () => {
+    expect(manager).toContain('clearLocalPriceForItem');
+    expect(manager).not.toMatch(/setChoices\(\(current\) => \(\{ \.\.\.current, \[editItem\.id\]: result\.choice \}\)\);\s*clearLocalPurchasingForItem/);
+  });
+
   it('routes list price discovery through item management', () => {
     expect(manager).toContain('openPriceSearchFromEditor');
     expect(manager).toContain('open={Boolean(editItem) && !pricePanelItem}');

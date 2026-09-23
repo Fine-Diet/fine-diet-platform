@@ -184,6 +184,7 @@ export async function patchPurchasingChoiceDetails(
   patch: {
     purchase_quantity?: number | null;
     purchase_unit?: string | null;
+    shopping_display_name?: string | null;
   },
 ): Promise<GroceryListPurchasingChoice> {
   const { data, error } = await supabaseAdmin

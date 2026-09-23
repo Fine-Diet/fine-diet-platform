@@ -237,9 +237,105 @@ describe('changeGroceryListItemNeed', () => {
       itemId: ITEM_ID,
       purchase_quantity: 2,
       purchase_unit: 'bag',
+      shopping_display_name: 'Organic Baby Spinach',
     });
 
     expect(result.choice.purchase_quantity).toBe(2);
     expect(result.choice.purchase_unit).toBe('bag');
+    expect(result.choice.shopping_display_name).toBe('Organic Baby Spinach');
+  });
+
+  it('clears stale purchasing when change_need corrects name for the same food id', async () => {
+    const fake = installFake({
+      generated_grocery_lists: [listRow],
+      grocery_items: [
+        {
+          id: ITEM_ID,
+          grocery_list_id: LIST_ID,
+          person_id: PERSON,
+          name: 'Old casual spinach label',
+          food_object_id: 'food-spinach',
+          quantity: 1,
+          unit: 'cup',
+          notes: null,
+          status: 'pending',
+        },
+      ],
+      food_objects: [{ id: 'food-spinach', canonical_name: 'Spinach' }],
+      grocery_list_purchasing_choices: [
+        {
+          id: 'choice-1',
+          grocery_list_id: LIST_ID,
+          grocery_item_id: ITEM_ID,
+          person_id: PERSON,
+          status: 'list_owner_resolved',
+          match_key: 'food-product::cup',
+          food_object_id: 'food-product',
+          shopping_display_name: 'Brand Spinach',
+          required_name_snapshot: 'Old casual spinach label',
+          required_unit_snapshot: 'cup',
+        },
+      ],
+      grocery_list_item_active_quotes: [
+        {
+          id: 'active-1',
+          person_id: PERSON,
+          grocery_list_id: LIST_ID,
+          grocery_item_id: ITEM_ID,
+          observation_id: 'price-1',
+        },
+      ],
+    });
+
+    const result = await changeGroceryListItemNeed(PERSON, LIST_ID, ITEM_ID, {
+      food_object_id: 'food-spinach',
+    });
+
+    expect(result.item.name).toBe('Spinach');
+    expect(result.item.food_object_id).toBe('food-spinach');
+    expect(result.cleared_purchasing).toBe(true);
+    expect(fake.getTable('grocery_list_purchasing_choices')).toHaveLength(0);
+    expect(fake.getTable('grocery_list_item_active_quotes')).toHaveLength(0);
+  });
+
+  it('preserves purchasing on exact change_need no-op', async () => {
+    const fake = installFake({
+      generated_grocery_lists: [listRow],
+      grocery_items: [
+        {
+          id: ITEM_ID,
+          grocery_list_id: LIST_ID,
+          person_id: PERSON,
+          name: 'Spinach',
+          food_object_id: 'food-spinach',
+          quantity: 1,
+          unit: 'cup',
+          notes: null,
+          status: 'pending',
+        },
+      ],
+      food_objects: [{ id: 'food-spinach', canonical_name: 'Spinach' }],
+      grocery_list_purchasing_choices: [
+        {
+          id: 'choice-1',
+          grocery_list_id: LIST_ID,
+          grocery_item_id: ITEM_ID,
+          person_id: PERSON,
+          status: 'list_owner_resolved',
+          match_key: 'food-product::cup',
+          food_object_id: 'food-product',
+          shopping_display_name: 'Brand Spinach',
+          required_name_snapshot: 'Spinach',
+          required_unit_snapshot: 'cup',
+        },
+      ],
+    });
+
+    const result = await changeGroceryListItemNeed(PERSON, LIST_ID, ITEM_ID, {
+      food_object_id: 'food-spinach',
+    });
+
+    expect(result.cleared_purchasing).toBe(false);
+    expect(fake.getTable('grocery_list_purchasing_choices')).toHaveLength(1);
   });
 });
