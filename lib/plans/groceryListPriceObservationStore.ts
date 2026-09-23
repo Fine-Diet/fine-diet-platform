@@ -189,24 +189,6 @@ export type AppendListPriceObservationInput = {
   match_confidence?: number | null;
 };
 
-export async function deleteListPriceObservationsForItem(
-  personId: string,
-  listId: string,
-  itemId: string,
-): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('grocery_list_price_observations')
-    .delete()
-    .eq('person_id', personId)
-    .eq('grocery_list_id', listId)
-    .eq('grocery_item_id', itemId);
-  if (error) {
-    throw new Error(
-      `Failed to delete grocery list price observations: ${error.message}`,
-    );
-  }
-}
-
 export async function appendListPriceObservation(
   input: AppendListPriceObservationInput,
 ): Promise<GroceryListPriceObservation> {

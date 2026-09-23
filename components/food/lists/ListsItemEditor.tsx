@@ -47,6 +47,7 @@ export interface ListsItemEditorProps {
   onNotesChange: (value: string) => void;
   choice: GroceryListPurchasingChoice | undefined;
   price: GroceryListPriceObservation | undefined;
+  hasPurchasingChoice: boolean;
   subpanel: ListsEditorSubpanel;
   onSubpanelChange: (panel: ListsEditorSubpanel) => void;
   needSearchQuery: string;
@@ -121,6 +122,7 @@ export function ListsItemEditor({
   onNotesChange,
   choice,
   price,
+  hasPurchasingChoice,
   subpanel,
   onSubpanelChange,
   needSearchQuery,
@@ -291,6 +293,11 @@ export function ListsItemEditor({
 
       {subpanel === 'manual_price' && (
         <div className="mt-6 space-y-4">
+          {!hasPurchasingChoice && (
+            <p className="text-sm text-amber-100/80" role="status">
+              Choose a product before editing purchase quantity or unit.
+            </p>
+          )}
           <label className="block">
             <span className="text-xs text-white/55">Product title</span>
             <input
@@ -305,6 +312,7 @@ export function ListsItemEditor({
               <input
                 value={manualDraft.purchaseQuantity}
                 onChange={(event) => onManualDraftChange({ purchaseQuantity: event.target.value })}
+                disabled={!hasPurchasingChoice || busy}
                 className={INPUT_CLASS}
               />
             </label>
@@ -313,6 +321,7 @@ export function ListsItemEditor({
               <input
                 value={manualDraft.purchaseUnit}
                 onChange={(event) => onManualDraftChange({ purchaseUnit: event.target.value })}
+                disabled={!hasPurchasingChoice || busy}
                 className={INPUT_CLASS}
               />
             </label>

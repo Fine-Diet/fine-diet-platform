@@ -99,6 +99,7 @@ describe('Packet 3 Food IA and Lists manager', () => {
     expect(manager).toContain('<ListsItemEditor');
     expect(manager).toContain('planService.updatePersistentGroceryItem');
     expect(manager).toContain('planService.changePersistentGroceryListItemNeed');
+    expect(manager).toContain('updatePersistentGroceryListPurchasingDetails');
     expect(manager).toContain('planService.deletePersistentGroceryItem');
     expect(editor).toContain('Change need');
     expect(editor).toContain('Remove from List');
