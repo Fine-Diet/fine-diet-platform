@@ -25,7 +25,10 @@ import type {
 } from '@/lib/plans/types';
 import { HaulExecutionReadinessDialog } from './HaulExecutionReadinessDialog';
 import { HaulItemEditor } from './HaulItemEditor';
-import { countDistinctAssignedStores } from '@/lib/plans/groceryHaul/estimate';
+import {
+  computeGroceryHaulPreparationEstimate,
+  countDistinctAssignedStores,
+} from '@/lib/plans/groceryHaul/estimate';
 import {
   formatHaulCurrency,
   formatHaulDate,
@@ -462,12 +465,10 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                 {detail.source_lists.map((source) => {
                   const sourceItems = itemsBySource.get(source.grocery_list_id) ?? [];
                   const open = openSourceId === source.grocery_list_id;
-                  const sourceEstimate = sourceItems.reduce(
-                    (sum, item) => sum + (item.final_quantity > 0 && item.price_amount != null
-                      ? item.final_quantity * item.price_amount
-                      : 0),
-                    0,
-                  );
+                  const sourceEstimate = computeGroceryHaulPreparationEstimate(
+                    detail.haul.currency,
+                    sourceItems,
+                  ).estimated_total;
                   return (
                     <div key={source.grocery_list_id} className="border-b border-white/15">
                       <button

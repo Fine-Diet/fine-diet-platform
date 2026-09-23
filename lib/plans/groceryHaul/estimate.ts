@@ -24,13 +24,27 @@ function storeKey(item: GroceryHaulItem): string | null {
   ]);
 }
 
+/**
+ * Control-rail store assignment identity (not canonical estimate.by_store grouping).
+ * Postal/search context alone is never a store. Retailer-level assignments dedupe across ZIP.
+ */
+function storeAssignmentKeyForCount(item: GroceryHaulItem): string | null {
+  const retailer = item.retailer?.trim().toLocaleLowerCase() ?? '';
+  const storeLocation = item.store_location?.trim().toLocaleLowerCase() ?? '';
+  if (!retailer && !storeLocation) return null;
+  if (storeLocation) {
+    return JSON.stringify([retailer, storeLocation]);
+  }
+  return JSON.stringify(['retailer', retailer]);
+}
+
 /** Distinct store assignments among execution-included Haul items (final_quantity > 0). */
 export function countDistinctAssignedStores(items: readonly GroceryHaulItem[]): number {
   const keys = new Set<string>();
   for (const item of items) {
     const quantity = numeric(item.final_quantity) ?? 0;
     if (quantity <= 0) continue;
-    const key = storeKey(item);
+    const key = storeAssignmentKeyForCount(item);
     if (key) keys.add(key);
   }
   return keys.size;
