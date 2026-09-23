@@ -39,6 +39,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       postalCode,
     });
     if (result.outcome === 'provider_error') {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[list price-search] provider_error', {
+          listId,
+          itemId,
+          code: result.provider_error?.code ?? null,
+          message: result.provider_error?.message ?? null,
+          serpApiKeyConfigured: Boolean(
+            (process.env.SERPAPI_API_KEY ?? '').trim().length > 0,
+          ),
+        });
+      }
       return res.status(502).json(result);
     }
     return res.status(200).json(result);
