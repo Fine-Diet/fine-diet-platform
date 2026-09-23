@@ -11,6 +11,10 @@ const ITEM_ID = 'item-1';
 const mockRequireJournalAccess = jest.fn();
 const mockSearchListGroceryItemPrices = jest.fn();
 
+jest.mock('@/lib/supabaseServerClient', () => ({
+  supabaseAdmin: { from: jest.fn() },
+}));
+
 jest.mock('@/lib/access/requireJournalAccess', () => ({
   requireJournalAccess: (...args: unknown[]) => mockRequireJournalAccess(...args),
 }));
@@ -19,9 +23,15 @@ jest.mock('@/lib/plans/groceryListPriceSearchService', () => ({
   searchListGroceryItemPrices: (...args: unknown[]) => mockSearchListGroceryItemPrices(...args),
 }));
 
-jest.mock('@/lib/plans/groceryListPriceObservationService', () => ({
-  GroceryListPriceValidationError: class GroceryListPriceValidationError extends Error {},
-}));
+jest.mock('@/lib/plans/groceryListPriceObservationService', () => {
+  const actual = jest.requireActual<typeof import('@/lib/plans/groceryListPriceObservationService')>(
+    '@/lib/plans/groceryListPriceObservationService',
+  );
+  return {
+    GroceryListPriceValidationError: actual.GroceryListPriceValidationError,
+    isGroceryListPriceValidationError: actual.isGroceryListPriceValidationError,
+  };
+});
 
 jest.mock('@/lib/plans/groceryPriceQuota', () => ({
   GroceryPriceQuotaExceededError: class GroceryPriceQuotaExceededError extends Error {
@@ -29,7 +39,8 @@ jest.mock('@/lib/plans/groceryPriceQuota', () => ({
   },
 }));
 
-import handler from '@/pages/api/journal/food/grocery-lists/[listId]/items/[itemId]/price-search';
+import handler, { config as priceSearchRouteConfig } from '@/pages/api/journal/food/grocery-lists/[listId]/items/[itemId]/price-search';
+import { GroceryListPriceValidationError } from '@/lib/plans/groceryListPriceObservationService';
 
 interface MockResponse {
   statusCode: number;
@@ -67,6 +78,27 @@ describe('list price-search API route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRequireJournalAccess.mockResolvedValue({ personId: CALLER_PERSON });
+  });
+
+  it('exports maxDuration 30 for Vercel serverless budget', () => {
+    expect(priceSearchRouteConfig).toEqual({ maxDuration: 30 });
+  });
+
+  it('returns 400 for list validation errors including unresolved location', async () => {
+    mockSearchListGroceryItemPrices.mockRejectedValue(
+      new GroceryListPriceValidationError('Unable to resolve a market location for that postal code.'),
+    );
+
+    const req = {
+      method: 'POST',
+      query: { listId: LIST_ID, itemId: ITEM_ID },
+      body: { retailer: 'Walmart', postal_code: '99999' },
+    } as unknown as NextApiRequest;
+    const res = createMockRes();
+
+    await handler(req, res);
+    expect(res.statusCode).toBe(400);
+    expect((res.body as { error?: string }).error).toContain('Unable to resolve');
   });
 
   it('returns 502 for provider_error outcomes', async () => {

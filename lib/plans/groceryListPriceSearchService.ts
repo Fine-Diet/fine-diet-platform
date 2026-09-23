@@ -22,6 +22,7 @@ import { listPriceToHaulObservation } from './groceryListPriceObservationDisplay
 import {
   GROCERY_PRICE_CACHE_TTL_DAYS,
   GROCERY_PRICE_SEARCH_EVENT_MAX_AGE_MS,
+  PANTRY_PRODUCT_SEARCH_TIMEOUT_MS,
 } from './groceryPricingConfig';
 import {
   GroceryPriceValidationError,
@@ -37,7 +38,7 @@ import {
 import { finalizeQuotaClaim, reserveGroceryPriceSearchQuota } from './groceryPriceQuotaReservation';
 import { rankGroceryPriceCandidates, toSearchOffer } from './groceryPriceRanking';
 import type { GroceryPriceSearchContext } from './groceryPriceProviderTypes';
-import { GroceryPriceProviderError } from './groceryPriceProviderTypes';
+import { GroceryPriceProviderError, isGroceryPriceProviderError } from './groceryPriceProviderTypes';
 import {
   createLimitedQueryAdapter,
   searchWithQueryFallback,
@@ -53,9 +54,37 @@ import {
 import { formatCanonicalFoodShoppingLabel } from './groceryShoppingDisplay';
 import { capConfirmableOffers } from './groceryPricingOfferDisplay';
 import { GroceryListPriceValidationError } from './groceryListPriceObservationService';
+import {
+  isPantryRetailSearchLocationError,
+  resolvePantryRetailSearchLocation,
+} from './pantryRetailSearchLocation';
+import {
+  recordListPriceSearchLocationResolution,
+  recordListPriceSearchQueryStrategiesFromContext,
+} from './listPriceSearchProviderDiagnostics';
 
 /** Sentinel dates for durable-list search events (plan_id null). */
 export const LIST_PRICE_SEARCH_SENTINEL_DATE = '1970-01-01';
+
+let listPriceSearchTimeoutMsOverride: number | null = null;
+
+export function setListPriceSearchTimeoutMsOverride(ms: number | null): void {
+  listPriceSearchTimeoutMsOverride = ms;
+}
+
+function resolveListPriceSearchTimeoutMs(): number {
+  return listPriceSearchTimeoutMsOverride ?? PANTRY_PRODUCT_SEARCH_TIMEOUT_MS;
+}
+
+function mapListLocationResolutionError(error: unknown): never {
+  if (isPantryRetailSearchLocationError(error)) {
+    throw new GroceryListPriceValidationError(error.message);
+  }
+  if (error instanceof GroceryPriceValidationError) {
+    throw new GroceryListPriceValidationError(error.message);
+  }
+  throw error;
+}
 
 async function loadDurableItemAndChoice(
   personId: string,
@@ -129,6 +158,7 @@ async function buildListSearchContext(options: {
   choice: GroceryListPurchasingChoice | null;
   retailer: string;
   postalCode: string;
+  providerLocation: string;
 }): Promise<{ context: GroceryPriceSearchContext; matchKey: string; foodObjectId: string | null }> {
   const matchKey = activePurchasingMatchKeyForItem(options.item, options.choice);
   const foodObjectId =
@@ -163,6 +193,7 @@ async function buildListSearchContext(options: {
       purchase_unit: options.choice?.purchase_unit ?? null,
       retailer: options.retailer,
       postal_code: options.postalCode,
+      provider_location: options.providerLocation,
     },
   };
 }
@@ -205,17 +236,36 @@ export async function searchListGroceryItemPrices(options: {
   maxProviderQueries?: number;
 }): Promise<GroceryPriceSearchResult> {
   const retailer = normalizeRetailer(options.retailer);
-  const postalCode = normalizePostalCode(options.postalCode);
+  let postalCode: string;
+  try {
+    postalCode = normalizePostalCode(options.postalCode);
+  } catch (error) {
+    if (error instanceof GroceryPriceValidationError) {
+      throw new GroceryListPriceValidationError(error.message);
+    }
+    throw error;
+  }
+
   const { item, choice } = await loadDurableItemAndChoice(
     options.personId,
     options.listId,
     options.itemId,
   );
+
+  let locationResolution;
+  try {
+    locationResolution = await resolvePantryRetailSearchLocation(postalCode);
+  } catch (error) {
+    mapListLocationResolutionError(error);
+  }
+  recordListPriceSearchLocationResolution(locationResolution);
+
   const { context, matchKey, foodObjectId } = await buildListSearchContext({
     item,
     choice,
     retailer,
-    postalCode,
+    postalCode: locationResolution.postal_code,
+    providerLocation: locationResolution.provider_location,
   });
   const cacheKey = buildGroceryPriceCacheKey(context);
   const now = new Date();
@@ -267,8 +317,15 @@ export async function searchListGroceryItemPrices(options: {
       ? createLimitedQueryAdapter(serpApiGroceryPriceProvider, options.maxProviderQueries)
       : serpApiGroceryPriceProvider;
 
+  const timeoutMs = resolveListPriceSearchTimeoutMs();
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+  recordListPriceSearchQueryStrategiesFromContext(context);
+
   try {
-    const fallback = await searchWithQueryFallback(context, providerAdapter);
+    const fallback = await searchWithQueryFallback(context, providerAdapter, {
+      signal: controller.signal,
+    });
     if (fallback.kind === 'zero_results') {
       const event = await insertGroceryPriceSearchEvent({
         person_id: options.personId,
@@ -383,7 +440,7 @@ export async function searchListGroceryItemPrices(options: {
       status: 'released',
     }).catch(() => undefined);
 
-    if (error instanceof GroceryPriceProviderError) {
+    if (isGroceryPriceProviderError(error)) {
       const event = await insertGroceryPriceSearchEvent({
         person_id: options.personId,
         grocery_item_id: item.id,
@@ -423,6 +480,8 @@ export async function searchListGroceryItemPrices(options: {
       };
     }
     throw error;
+  } finally {
+    clearTimeout(timeoutHandle);
   }
 }
 

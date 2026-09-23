@@ -40,7 +40,17 @@ export class GroceryListPriceValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'GroceryListPriceValidationError';
+    Object.setPrototypeOf(this, new.target.prototype);
   }
+}
+
+export function isGroceryListPriceValidationError(
+  error: unknown,
+): error is GroceryListPriceValidationError {
+  return (
+    error instanceof GroceryListPriceValidationError
+    || (error instanceof Error && error.name === 'GroceryListPriceValidationError')
+  );
 }
 
 function normalizeUnitPrice(value: unknown): number {
