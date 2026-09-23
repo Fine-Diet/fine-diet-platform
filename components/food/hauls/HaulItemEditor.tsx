@@ -197,17 +197,12 @@ export function HaulItemEditor({
   }
 
   function selectListQuote(observation: GroceryListPriceObservation) {
-    const retailerChanged =
-      (observation.retailer ?? '').trim() !== (editableItem.retailer ?? '').trim();
-    const postalChanged =
-      (observation.postal_code ?? '').trim() !== (editableItem.postal_code ?? '').trim();
     setDraft((current) =>
       current
         ? {
             ...current,
             pendingSourcePriceObservationId: observation.id,
             priceAmount: '',
-            ...(retailerChanged || postalChanged ? { storeLocation: '' } : {}),
           }
         : current,
     );

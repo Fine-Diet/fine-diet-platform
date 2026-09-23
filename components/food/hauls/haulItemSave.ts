@@ -92,7 +92,9 @@ export function buildHaulItemPreparationPatch(
 
   const wouldClearSourced = haulSourcedPriceWouldClearOnSave(item, draft);
 
-  if (options.manualPriceIntent && priceFieldChanged) {
+  if (options.manualPriceIntent && contextChanged) {
+    patch.price_amount = nextPrice;
+  } else if (options.manualPriceIntent && priceFieldChanged) {
     patch.price_amount = nextPrice;
   } else if (wouldClearSourced && !options.manualPriceIntent) {
     // Context-only save: server clears sourced price authority.

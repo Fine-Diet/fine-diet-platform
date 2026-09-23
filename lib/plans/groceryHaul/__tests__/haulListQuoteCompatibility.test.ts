@@ -39,14 +39,21 @@ describe('haulListQuoteCompatibility', () => {
     ).toBe(false);
   });
 
-  it('falls back to title overlap when neither side has a food id', () => {
+  it('falls back to conservative title-only match when neither side has a food id', () => {
     expect(
       haulListQuoteCompatibleWithPreparedProduct(
         observation({ food_object_id: null, product_title: 'Baby Spinach 5oz' }),
-        item({ selected_food_object_id: null }),
+        item({ selected_food_object_id: null, product_title: 'Baby Spinach' }),
         'USD',
       ),
     ).toBe(true);
+    expect(
+      haulListQuoteCompatibleWithPreparedProduct(
+        observation({ food_object_id: null, product_title: 'Pineapple' }),
+        item({ selected_food_object_id: null, product_title: 'Apple' }),
+        'USD',
+      ),
+    ).toBe(false);
   });
 
   it('throws when a quote is incompatible with prepared product context', () => {
