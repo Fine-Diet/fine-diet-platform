@@ -109,7 +109,7 @@ beforeEach(() => {
 });
 
 describe('Packet 6 Haul preparation service', () => {
-  it('builds the Packet 8 Library model with complete memberships and persisted estimates in four batched reads', async () => {
+  it('builds the Packet 8 Library model with complete memberships and persisted estimates in five batched reads', async () => {
     installFake();
     const rows = await listGroceryHaulsForPerson(PERSON);
     expect(rows).toHaveLength(1);
@@ -120,10 +120,23 @@ describe('Packet 6 Haul preparation service', () => {
       execution_item_count: 1,
       unpriced_item_count: 0,
       estimated_total: 6,
+      acquired_subtotal: null,
       currency: 'USD',
       store_names: ['Downtown'],
     });
-    expect(mockFrom).toHaveBeenCalledTimes(4);
+    expect(mockFrom).toHaveBeenCalledTimes(5);
+  });
+
+  it('derives acquired_subtotal from persisted execution price×quantity when present', async () => {
+    const fake = installFake('active');
+    fake.getTable('grocery_haul_execution_items').push({
+      haul_id: 'haul-1',
+      person_id: PERSON,
+      acquired_price_amount: 4,
+      acquired_quantity: 2,
+    });
+    const rows = await listGroceryHaulsForPerson(PERSON);
+    expect(rows[0].acquired_subtotal).toBe(8);
   });
 
   it('returns complete memberships, persisted resolutions, and one estimate in fixed queries', async () => {

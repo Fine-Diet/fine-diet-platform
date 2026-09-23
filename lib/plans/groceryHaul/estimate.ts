@@ -110,3 +110,22 @@ export function computeGroceryHaulPreparationEstimate(
     by_store: byStore,
   };
 }
+
+type AcquiredSpendLine = {
+  acquired_price_amount: number | null;
+  acquired_quantity: number | null;
+};
+
+/** Persisted acquired price × quantity only; null when no priced acquisitions exist. */
+export function computeFactualAcquiredSubtotal(
+  items: readonly AcquiredSpendLine[],
+): number | null {
+  const priced = items.filter(
+    (item) => item.acquired_price_amount != null && item.acquired_quantity != null,
+  );
+  if (priced.length === 0) return null;
+  return money(priced.reduce(
+    (sum, item) => sum + (item.acquired_price_amount as number) * (item.acquired_quantity as number),
+    0,
+  ));
+}

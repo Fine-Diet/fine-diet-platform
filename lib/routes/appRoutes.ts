@@ -65,6 +65,9 @@ export const APP_ROUTE_BUILDERS = {
   foodHaul: (haulId: string) => `${APP_ROUTES.foodHauls}/${haulId}`,
   /** Canonical execution route for the same Haul identity. */
   foodHaulShop: (haulId: string) => `${APP_ROUTES.foodHauls}/${haulId}/shop`,
+  /** Read-only preparation surface for an active Haul without rolling back execution. */
+  foodHaulPrepare: (haulId: string) =>
+    `${APP_ROUTES.foodHauls}/${haulId}?prepare=1`,
   planImport: (id: string) => `${APP_ROUTES.plans}/imports/${id}`,
   planSocialImport: (id: string) => `${APP_ROUTES.plans}/imports/social/${id}`,
   planEatOut: (id: string) => `${APP_ROUTES.plans}/eat-out/${id}`,

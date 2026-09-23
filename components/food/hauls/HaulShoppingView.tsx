@@ -24,6 +24,7 @@ import {
   formatHaulDate,
   preparedExecutionSubtotal,
   preparedInstructionLabel,
+  haulPrepareHref,
   preparedStoreLabel,
 } from './presentation';
 
@@ -287,13 +288,23 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
               ← Hauls
             </Link>
             <header className="mt-5">
-              <p className="text-lg font-semibold text-white">Shopping View</p>
-              <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
-                {execution.haul.title || `Haul · ${formatHaulDate(execution.haul.shopping_date)}`}
-              </h1>
-              <p className="mt-2 text-sm text-white/50">
-                {formatHaulDate(execution.haul.shopping_date)} · Active shopping
-              </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-lg font-semibold text-white">Shopping View</p>
+                  <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
+                    {execution.haul.title || `Haul · ${formatHaulDate(execution.haul.shopping_date)}`}
+                  </h1>
+                  <p className="mt-2 text-sm text-white/50">
+                    {formatHaulDate(execution.haul.shopping_date)} · Active shopping
+                  </p>
+                </div>
+                <Link
+                  href={haulPrepareHref(haulId)}
+                  className="rounded-full border border-white/20 px-5 py-2.5 text-sm font-semibold text-brand-50 hover:bg-white/[0.04]"
+                >
+                  Edit
+                </Link>
+              </div>
             </header>
 
             <section className="mt-8 rounded-[24px] border border-white/25 p-6 sm:p-8">

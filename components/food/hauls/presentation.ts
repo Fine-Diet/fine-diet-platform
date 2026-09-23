@@ -1,5 +1,7 @@
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
+import { computeFactualAcquiredSubtotal } from '@/lib/plans/groceryHaul/estimate';
 import type {
+  GroceryHaulCollectionItem,
   GeneratedGroceryList,
   GroceryHaulAcquisitionPatch,
   GroceryHaulExecutionFinding,
@@ -70,6 +72,25 @@ export function haulHrefForStatus(haulId: string, status: GroceryHaulStatus): st
     : APP_ROUTE_BUILDERS.foodHaul(haulId);
 }
 
+export function haulPrepareHref(haulId: string): string {
+  return APP_ROUTE_BUILDERS.foodHaulPrepare(haulId);
+}
+
+export function formatHaulCollectionSpend(
+  haul: Pick<GroceryHaulCollectionItem, 'estimated_total' | 'acquired_subtotal' | 'currency'>,
+): { amount: string; qualifier: string } {
+  if (haul.acquired_subtotal != null) {
+    return {
+      amount: formatHaulCurrency(haul.acquired_subtotal, haul.currency),
+      qualifier: 'Acquired',
+    };
+  }
+  return {
+    amount: formatHaulCurrency(haul.estimated_total, haul.currency),
+    qualifier: 'Prep estimate',
+  };
+}
+
 export function executionSourceDemandLabel(
   item: Pick<GroceryHaulExecutionItem, 'source_quantity_snapshot' | 'source_unit_snapshot'>,
 ): string {
@@ -125,14 +146,7 @@ export function acquisitionOutcomeDiverged(item: GroceryHaulExecutionItem): bool
 }
 
 export function factualAcquiredSubtotal(items: GroceryHaulExecutionItem[]): number | null {
-  const priced = items.filter((item) =>
-    item.acquired_price_amount != null && item.acquired_quantity != null,
-  );
-  if (priced.length === 0) return null;
-  return priced.reduce(
-    (sum, item) => sum + (item.acquired_price_amount as number) * (item.acquired_quantity as number),
-    0,
-  );
+  return computeFactualAcquiredSubtotal(items);
 }
 
 export function preparedExecutionSubtotal(items: GroceryHaulExecutionItem[]): number {

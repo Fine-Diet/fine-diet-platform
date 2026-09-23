@@ -864,6 +864,8 @@ export interface GroceryHaulCollectionItem {
   execution_item_count: number;
   unpriced_item_count: number;
   estimated_total: number;
+  /** Sum of persisted acquired price×quantity when at least one priced acquisition exists. */
+  acquired_subtotal: number | null;
   currency: string;
   budget_amount: number | null;
   store_names: string[];

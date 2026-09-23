@@ -228,18 +228,29 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(shop).not.toContain('addGroceryListsToHaul');
   });
 
-  it('routes active Hauls to Shopping View and keeps closed/cancelled Hauls in history', () => {
+  it('routes active Hauls to Shopping View and converges the collection into one Recent table', () => {
     expect(haulHrefForStatus('haul-1', 'planned')).toBe('/app/food/hauls/haul-1');
     expect(haulHrefForStatus('haul-1', 'active')).toBe('/app/food/hauls/haul-1/shop');
     expect(haulHrefForStatus('haul-1', 'closed')).toBe('/app/food/hauls/haul-1');
     expect(haulHrefForStatus('haul-1', 'cancelled')).toBe('/app/food/hauls/haul-1');
     const library = read('components/food/hauls/HaulsLibrary.tsx');
     const builder = read('components/food/hauls/HaulBuilder.tsx');
-    expect(library).toContain('Shopping in progress');
-    expect(library).toContain("haul.status === 'active'");
-    expect(library).toContain("haul.status === 'closed' || haul.status === 'cancelled'");
+    const shop = read('components/food/hauls/HaulShoppingView.tsx');
+    expect(library).toContain('Recent');
+    expect(library).toContain('HaulCollectionTable');
+    expect(library).toContain('<span>Date</span>');
+    expect(library).toContain('<span>Store</span>');
+    expect(library).toContain('<span>Spend</span>');
+    expect(library).toContain('<span>Status</span>');
+    expect(library).toContain('formatHaulCollectionSpend');
     expect(library).toContain('haulHrefForStatus(haul.id, haul.status)');
-    expect(builder).toContain("detail.haul.status === 'active'");
+    expect(library).not.toContain('Draft preparation');
+    expect(library).not.toContain('Shopping in progress');
+    expect(library).not.toContain('History');
+    expect(shop).toContain('haulPrepareHref(haulId)');
+    expect(shop).toContain('Edit');
+    expect(builder).toContain("router.query.prepare === '1'");
+    expect(builder).toContain('preparationReadOnly');
     expect(builder).toContain('APP_ROUTE_BUILDERS.foodHaulShop(haulId)');
     expect(builder).toContain('Continue to Shopping View');
     expect(builder).toContain('<HistoricalHaul detail={detail} />');

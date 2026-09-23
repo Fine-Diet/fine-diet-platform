@@ -147,10 +147,15 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
     void load();
   }, [load]);
 
+  const prepareView = router.isReady && router.query.prepare === '1';
+  const preparationReadOnly = detail?.haul.status === 'active' && prepareView;
+
   useEffect(() => {
+    if (!router.isReady) return;
     if (detail?.haul.status !== 'active') return;
+    if (router.query.prepare === '1') return;
     void router.replace(APP_ROUTE_BUILDERS.foodHaulShop(haulId));
-  }, [detail, haulId, router]);
+  }, [detail, haulId, router, router.isReady, router.query.prepare]);
 
   useEffect(() => {
     if (!detail || detail.haul.status !== 'planned' || !metadata) return;
@@ -215,7 +220,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   }
 
   async function changeQuantity(item: GroceryHaulItem, delta: number) {
-    if (itemBusy) return;
+    if (preparationReadOnly || itemBusy) return;
     const nextQuantity = Math.max(0, item.final_quantity + delta);
     if (nextQuantity === item.final_quantity) return;
     setItemBusy(item.id);
@@ -325,18 +330,29 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               Try again
             </button>
           </div>
-        ) : detail.haul.status === 'active' ? (
+        ) : detail.haul.status === 'active' && !prepareView ? (
           <div className="mx-auto max-w-[1000px] space-y-4">
             <div className="h-12 w-2/3 animate-pulse rounded-xl bg-white/[0.05]" />
             <p className="text-sm text-white/50">Continue to Shopping View…</p>
           </div>
-        ) : detail.haul.status !== 'planned' ? (
+        ) : detail.haul.status !== 'planned' && !preparationReadOnly ? (
           <HistoricalHaul detail={detail} />
         ) : (
           <div className="mx-auto w-full max-w-[1000px]">
             <Link href={APP_ROUTES.foodHauls} className="text-xs font-semibold text-white/45 hover:text-white/75">
               ← Hauls
             </Link>
+            {preparationReadOnly && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
+                <p>Shopping is in progress. Preparation is read-only so execution state stays intact.</p>
+                <Link
+                  href={APP_ROUTE_BUILDERS.foodHaulShop(haulId)}
+                  className="font-semibold text-brand-50 hover:text-brand-50/80"
+                >
+                  Back to Shopping View
+                </Link>
+              </div>
+            )}
             <header className="mt-5">
               <p className="text-lg font-semibold text-white">Haul Builder</p>
               <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
@@ -349,6 +365,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                 Haul title
                 <input
                   value={metadata.title}
+                  readOnly={preparationReadOnly}
                   onChange={(event) => setMetadata({ ...metadata, title: event.target.value })}
                   className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-semibold normal-case tracking-normal text-brand-50 outline-none focus:border-white/45"
                 />
@@ -358,6 +375,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                 <input
                   type="date"
                   value={metadata.shoppingDate}
+                  readOnly={preparationReadOnly}
                   onChange={(event) => setMetadata({ ...metadata, shoppingDate: event.target.value })}
                   className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
                 />
@@ -370,6 +388,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     min="0"
                     step="0.01"
                     value={metadata.budgetAmount}
+                    readOnly={preparationReadOnly}
                     onChange={(event) => setMetadata({ ...metadata, budgetAmount: event.target.value })}
                     placeholder="Optional"
                     className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
@@ -380,6 +399,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                   <input
                     maxLength={3}
                     value={metadata.currency}
+                    readOnly={preparationReadOnly}
                     onChange={(event) => setMetadata({ ...metadata, currency: event.target.value.toUpperCase() })}
                     className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-2 text-center text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
                   />
@@ -410,18 +430,20 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     {detail.source_lists.length} {detail.source_lists.length === 1 ? 'List' : 'Lists'} · {detail.estimate.execution_item_count} live items
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedListIds([]);
-                    setAddListsError(null);
-                    setAddListsOpen(true);
-                  }}
-                  disabled={availableLists.length === 0}
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/20 px-4 text-xs font-semibold disabled:opacity-35"
-                >
-                  <Plus className="h-4 w-4" /> Add Lists
-                </button>
+                {!preparationReadOnly && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedListIds([]);
+                      setAddListsError(null);
+                      setAddListsOpen(true);
+                    }}
+                    disabled={availableLists.length === 0}
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/20 px-4 text-xs font-semibold disabled:opacity-35"
+                  >
+                    <Plus className="h-4 w-4" /> Add Lists
+                  </button>
+                )}
               </div>
 
               <div>
@@ -483,7 +505,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                           </p>
                                         )}
                                       </>
-                                    ) : (
+                                    ) : !preparationReadOnly ? (
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -494,49 +516,57 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                       >
                                         Choose Product
                                       </button>
+                                    ) : (
+                                      <p className="mt-2 text-sm text-white/45">Product not set</p>
                                     )}
                                   </div>
-                                  <details className="relative shrink-0">
-                                    <summary aria-label={`More actions for ${item.name_snapshot}`} className="cursor-pointer list-none rounded-full px-2 py-1 text-lg tracking-widest text-white/65">
-                                      •••
-                                    </summary>
-                                    <div className="absolute right-0 z-20 mt-1 w-28 rounded-xl border border-white/15 bg-[#2a2119] p-1 shadow-xl">
-                                      <button
-                                        type="button"
-                                        onClick={(event) => {
-                                          (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open');
-                                          setChooseProductFirst(false);
-                                          setEditingItem(item);
-                                        }}
-                                        className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-white/[0.06]"
-                                      >
-                                        Edit
-                                      </button>
-                                    </div>
-                                  </details>
+                                  {!preparationReadOnly && (
+                                    <details className="relative shrink-0">
+                                      <summary aria-label={`More actions for ${item.name_snapshot}`} className="cursor-pointer list-none rounded-full px-2 py-1 text-lg tracking-widest text-white/65">
+                                        •••
+                                      </summary>
+                                      <div className="absolute right-0 z-20 mt-1 w-28 rounded-xl border border-white/15 bg-[#2a2119] p-1 shadow-xl">
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open');
+                                            setChooseProductFirst(false);
+                                            setEditingItem(item);
+                                          }}
+                                          className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-white/[0.06]"
+                                        >
+                                          Edit
+                                        </button>
+                                      </div>
+                                    </details>
+                                  )}
                                 </div>
                                 <div className="mt-4 inline-flex items-center rounded-full border border-white/20">
-                                  <button
-                                    type="button"
-                                    aria-label={`Decrease ${item.name_snapshot} final Haul quantity`}
-                                    onClick={() => void changeQuantity(item, -1)}
-                                    disabled={itemBusy === item.id}
-                                    className="h-8 w-9 text-sm text-white/60 disabled:opacity-35"
-                                  >
-                                    −
-                                  </button>
+                                  {!preparationReadOnly && (
+                                    <button
+                                      type="button"
+                                      aria-label={`Decrease ${item.name_snapshot} final Haul quantity`}
+                                      onClick={() => void changeQuantity(item, -1)}
+                                      disabled={itemBusy === item.id}
+                                      className="h-8 w-9 text-sm text-white/60 disabled:opacity-35"
+                                    >
+                                      −
+                                    </button>
+                                  )}
                                   <span className="min-w-9 text-center text-xs font-semibold" aria-label={`Final Haul quantity ${item.final_quantity}`}>
                                     {item.final_quantity}
                                   </span>
-                                  <button
-                                    type="button"
-                                    aria-label={`Increase ${item.name_snapshot} final Haul quantity`}
-                                    onClick={() => void changeQuantity(item, 1)}
-                                    disabled={itemBusy === item.id}
-                                    className="h-8 w-9 text-sm text-white/60 disabled:opacity-35"
-                                  >
-                                    +
-                                  </button>
+                                  {!preparationReadOnly && (
+                                    <button
+                                      type="button"
+                                      aria-label={`Increase ${item.name_snapshot} final Haul quantity`}
+                                      onClick={() => void changeQuantity(item, 1)}
+                                      disabled={itemBusy === item.id}
+                                      className="h-8 w-9 text-sm text-white/60 disabled:opacity-35"
+                                    >
+                                      +
+                                    </button>
+                                  )}
                                 </div>
                                 {excluded && <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">Excluded from estimate and shopping execution</p>}
                               </article>
@@ -585,14 +615,23 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               <p className="mt-5 text-xs text-white/35">
                 Based on persisted Haul prices. Tax is not included.
               </p>
-              <button
-                type="button"
-                onClick={() => void requestShoppingView()}
-                disabled={activationBusy}
-                className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] disabled:opacity-50 sm:w-auto"
-              >
-                {activationBusy ? 'Checking readiness…' : 'Open Shopping View'}
-              </button>
+              {preparationReadOnly ? (
+                <Link
+                  href={APP_ROUTE_BUILDERS.foodHaulShop(haulId)}
+                  className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] sm:w-auto"
+                >
+                  Continue to Shopping View
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void requestShoppingView()}
+                  disabled={activationBusy}
+                  className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] disabled:opacity-50 sm:w-auto"
+                >
+                  {activationBusy ? 'Checking readiness…' : 'Open Shopping View'}
+                </button>
+              )}
             </section>
           </div>
         )}

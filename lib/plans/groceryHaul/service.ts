@@ -44,7 +44,7 @@ import {
   isGroceryHaulShoppingDate,
   isGroceryHaulStatus,
 } from './schema';
-import { computeGroceryHaulPreparationEstimate } from './estimate';
+import { computeFactualAcquiredSubtotal, computeGroceryHaulPreparationEstimate } from './estimate';
 
 export class GroceryHaulValidationError extends Error {
   constructor(message: string) {
@@ -876,6 +876,27 @@ export async function listGroceryHaulsForPerson(
     itemsByHaul.set(item.haul_id, current);
   }
 
+  const { data: executionRows, error: executionErr } = await supabaseAdmin
+    .from('grocery_haul_execution_items')
+    .select('haul_id, acquired_price_amount, acquired_quantity')
+    .in('haul_id', haulIds)
+    .eq('person_id', personId);
+
+  if (executionErr) {
+    throw new Error(`Failed to load grocery haul execution spend: ${executionErr.message}`);
+  }
+
+  const executionByHaul = new Map<string, Array<{ acquired_price_amount: number | null; acquired_quantity: number | null }>>();
+  for (const row of executionRows ?? []) {
+    const haulId = String(row.haul_id);
+    const current = executionByHaul.get(haulId) ?? [];
+    current.push({
+      acquired_price_amount: row.acquired_price_amount == null ? null : Number(row.acquired_price_amount),
+      acquired_quantity: row.acquired_quantity == null ? null : Number(row.acquired_quantity),
+    });
+    executionByHaul.set(haulId, current);
+  }
+
   return hauls.map((h) => {
     const haulId = String(h.id);
     const listId = String(h.source_grocery_list_id);
@@ -905,6 +926,7 @@ export async function listGroceryHaulsForPerson(
       execution_item_count: estimate.execution_item_count,
       unpriced_item_count: estimate.unpriced_item_count,
       estimated_total: estimate.estimated_total,
+      acquired_subtotal: computeFactualAcquiredSubtotal(executionByHaul.get(haulId) ?? []),
       currency,
       budget_amount: h.budget_amount == null ? null : Number(h.budget_amount),
       store_names: storeNames,

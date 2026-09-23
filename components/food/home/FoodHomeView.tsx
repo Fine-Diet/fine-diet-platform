@@ -40,6 +40,7 @@ function previewHaul(shoppingDate: string): GroceryHaulCollectionItem {
     execution_item_count: 4,
     unpriced_item_count: 0,
     estimated_total: 0,
+    acquired_subtotal: null,
     currency: 'USD',
     budget_amount: null,
     store_names: [],
