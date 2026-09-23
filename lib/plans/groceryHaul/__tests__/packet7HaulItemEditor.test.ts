@@ -15,7 +15,7 @@ describe('Packet 7 Haul item-management convergence', () => {
   });
 
   it('keeps source need read-only and final quantity off the modal', () => {
-    expect(editor).toContain('sourceDemandLabel(item)');
+    expect(editor).toContain('sourceDemandLabel(editableItem)');
     expect(editor).not.toContain('final_quantity');
     expect(editor).not.toContain('Final Haul quantity');
   });

@@ -94,8 +94,8 @@ export function haulPurchasingContextChanged(
   );
 }
 
-/** Sourced List price is stale once trip-prep context diverges from the saved row. */
-export function haulSourcedPriceInvalidated(
+/** Sourced List price clears on save once trip-prep context diverges from the saved row. */
+export function haulSourcedPriceWouldClearOnSave(
   item: GroceryHaulItem,
   draft: HaulPurchasingDraft,
 ): boolean {
@@ -103,12 +103,18 @@ export function haulSourcedPriceInvalidated(
   return haulPurchasingContextChanged(item, draft);
 }
 
+/** @deprecated use haulSourcedPriceWouldClearOnSave */
+export const haulSourcedPriceInvalidated = haulSourcedPriceWouldClearOnSave;
+
 export function haulPurchasingSummaryInput(
   item: GroceryHaulItem,
   draft: HaulPurchasingDraft,
+  haulCurrency: string,
+  manualPriceIntent: boolean,
 ): PurchaseDetailsSummaryInput {
-  const invalidated = haulSourcedPriceInvalidated(item, draft);
-  const priceAmount = invalidated ? '' : draft.priceAmount;
+  const wouldClear = haulSourcedPriceWouldClearOnSave(item, draft);
+  const hideStaleSourcedPrice = wouldClear && !manualPriceIntent;
+  const priceAmount = hideStaleSourcedPrice ? '' : draft.priceAmount;
   return {
     productTitle: draft.productTitle,
     brandName: draft.brandName,
@@ -117,7 +123,7 @@ export function haulPurchasingSummaryInput(
     packageCount: draft.packageCount,
     retailer: draft.retailer,
     priceAmount,
-    currency: item.price_currency ?? 'USD',
+    currency: haulCurrency,
   };
 }
 

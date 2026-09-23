@@ -705,6 +705,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
 
       <HaulItemEditor
         haulId={haulId}
+        haulCurrency={detail?.haul.currency ?? 'USD'}
         item={editingItem}
         openInProductSearch={chooseProductFirst}
         onClose={() => {

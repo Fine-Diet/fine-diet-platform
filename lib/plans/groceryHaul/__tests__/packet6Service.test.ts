@@ -230,6 +230,8 @@ describe('Packet 6 Haul preparation service', () => {
     Object.assign(fake.getTable('grocery_list_price_observations')[0], {
       person_id: PERSON,
       grocery_list_id: 'list-1',
+      grocery_item_id: 'list-item-1',
+      food_object_id: 'product-oats',
       source: 'serpapi',
       product_title: 'Selected source product',
       brand_name: 'Source Brand',
@@ -258,6 +260,54 @@ describe('Packet 6 Haul preparation service', () => {
       price_source: 'sourced',
       source_price_observation_id: 'price-1',
       resolution_source: 'haul_edit',
+    });
+  });
+
+  it('rejects List quotes that do not match the Haul prepared product', async () => {
+    const fake = installFake();
+    Object.assign(fake.getTable('grocery_list_price_observations')[0], {
+      person_id: PERSON,
+      grocery_list_id: 'list-1',
+      grocery_item_id: 'list-item-1',
+      food_object_id: 'other-product',
+      currency: 'USD',
+      unit_price: 4.5,
+    });
+
+    await expect(
+      updateGroceryHaulItemPreparation({
+        personId: PERSON,
+        haulId: 'haul-1',
+        itemId: 'haul-item-1',
+        patch: { sourcePriceObservationId: 'price-1' },
+      }),
+    ).rejects.toBeInstanceOf(GroceryHaulValidationError);
+  });
+
+  it('clears store_location when a List quote changes retailer or postal code', async () => {
+    const fake = installFake();
+    Object.assign(fake.getTable('grocery_list_price_observations')[0], {
+      person_id: PERSON,
+      grocery_list_id: 'list-1',
+      grocery_item_id: 'list-item-1',
+      food_object_id: 'product-oats',
+      currency: 'USD',
+      retailer: 'Other Market',
+      postal_code: '94107',
+      unit_price: 4.5,
+      product_title: 'Rolled oats',
+    });
+
+    const updated = await updateGroceryHaulItemPreparation({
+      personId: PERSON,
+      haulId: 'haul-1',
+      itemId: 'haul-item-1',
+      patch: { sourcePriceObservationId: 'price-1' },
+    });
+
+    expect(updated).toMatchObject({
+      retailer: 'Other Market',
+      store_location: null,
     });
   });
 

@@ -3,7 +3,7 @@ import type { GroceryHaulItem } from '@/lib/plans/types';
 import {
   type HaulPurchasingDraft,
   haulPurchasingContextChanged,
-  haulSourcedPriceInvalidated,
+  haulSourcedPriceWouldClearOnSave,
 } from './haulPurchasingDetails';
 
 function optionalNumber(value: string): number | null {
@@ -15,21 +15,40 @@ function nullableText(value: string): string | null {
   return trimmed || null;
 }
 
+export type BuildHaulItemPatchOptions = {
+  manualPriceIntent: boolean;
+};
+
+export function validateHaulItemSave(
+  item: GroceryHaulItem,
+  draft: HaulPurchasingDraft,
+): string | null {
+  const contextChanged = haulPurchasingContextChanged(item, draft);
+  const pendingQuote = draft.pendingSourcePriceObservationId;
+  const quoteChanged =
+    pendingQuote != null && pendingQuote !== item.source_price_observation_id;
+  if (quoteChanged && contextChanged) {
+    return 'Save or revert your purchasing context changes before applying a List price.';
+  }
+  return null;
+}
+
 export function buildHaulItemPreparationPatch(
   item: GroceryHaulItem,
   draft: HaulPurchasingDraft,
+  options: BuildHaulItemPatchOptions = { manualPriceIntent: false },
 ): Record<string, unknown> | null {
   const contextChanged = haulPurchasingContextChanged(item, draft);
-  const sourcedInvalidated = haulSourcedPriceInvalidated(item, draft);
+  const pendingQuote = draft.pendingSourcePriceObservationId;
+  const quoteSelectionPending =
+    pendingQuote != null && pendingQuote !== item.source_price_observation_id;
 
-  const quoteOnly =
-    draft.pendingSourcePriceObservationId
-    && draft.pendingSourcePriceObservationId !== item.source_price_observation_id
-    && !contextChanged
-    && draft.priceAmount.trim() === (item.price_amount == null ? '' : String(item.price_amount));
+  if (quoteSelectionPending && !contextChanged) {
+    return { source_price_observation_id: pendingQuote };
+  }
 
-  if (quoteOnly) {
-    return { source_price_observation_id: draft.pendingSourcePriceObservationId };
+  if (validateHaulItemSave(item, draft)) {
+    return null;
   }
 
   const patch: Record<string, unknown> = {};
@@ -67,16 +86,18 @@ export function buildHaulItemPreparationPatch(
   if (nextPackageCount !== item.package_count) patch.package_count = nextPackageCount;
 
   const nextPrice = optionalNumber(draft.priceAmount);
-  const priceChanged =
+  const priceFieldChanged =
     nextPrice !== item.price_amount
-    && !sourcedInvalidated
     && (draft.priceAmount.trim() !== '' || item.price_amount != null);
 
-  if (priceChanged) {
+  const wouldClearSourced = haulSourcedPriceWouldClearOnSave(item, draft);
+
+  if (options.manualPriceIntent && priceFieldChanged) {
     patch.price_amount = nextPrice;
-    if (nextPrice != null) {
-      patch.price_currency = item.price_currency ?? 'USD';
-    }
+  } else if (wouldClearSourced && !options.manualPriceIntent) {
+    // Context-only save: server clears sourced price authority.
+  } else if (!wouldClearSourced && priceFieldChanged) {
+    patch.price_amount = nextPrice;
   }
 
   if (Object.keys(patch).length === 0) return null;
