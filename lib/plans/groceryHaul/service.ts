@@ -1162,6 +1162,11 @@ function throwExecutionRpcError(message: string): never {
   if (message.includes('HAUL_EXECUTION_INVALID_ARGS')) {
     throw new GroceryHaulValidationError('A person and grocery haul are required.');
   }
+  if (message.includes('HAUL_EXECUTION_NOT_ACTIVE')) {
+    throw new GroceryHaulConflictError(
+      'This grocery haul is no longer active, so this execution transition cannot be completed.',
+    );
+  }
   if (message.includes('HAUL_EXECUTION_INVALID_TRANSITION')) {
     throw new GroceryHaulConflictError('This execution transition is no longer valid.');
   }

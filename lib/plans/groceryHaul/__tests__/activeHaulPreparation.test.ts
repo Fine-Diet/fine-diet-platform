@@ -384,6 +384,26 @@ describe('Active Haul pending-line preparation contract', () => {
     expect(merged.acquired_price_currency).toBeNull();
   });
 
+  it('maps basket RPC HAUL_EXECUTION_NOT_ACTIVE to GroceryHaulConflictError', async () => {
+    installFake('pending');
+    const priorRpc = mockRpc.getMockImplementation();
+    mockRpc.mockImplementation(async (name: string, params: Record<string, unknown>) => {
+      if (name === GROCERY_HAUL_EXECUTION_BASKET_RPC_NAME) {
+        return { data: null, error: { message: 'HAUL_EXECUTION_NOT_ACTIVE' } };
+      }
+      return priorRpc!(name, params);
+    });
+    await expect(updateGroceryHaulExecutionItem({
+      personId: PERSON,
+      haulId: 'haul-1',
+      executionItemId: 'execution-1',
+      state: 'in_basket',
+    })).rejects.toMatchObject({
+      name: 'GroceryHaulConflictError',
+      message: 'This grocery haul is no longer active, so this execution transition cannot be completed.',
+    });
+  });
+
   it('routes every in_basket target through the basket RPC even when pre-read state is stale', async () => {
     installFake('skipped');
     await expect(updateGroceryHaulExecutionItem({
