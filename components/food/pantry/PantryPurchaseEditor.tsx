@@ -10,6 +10,7 @@ import type {
 } from '@/lib/plans/pantryProductSearchTypes';
 import type { PantryAcquisitionLot } from '@/lib/plans/types';
 
+import { expectedShelfLifeDetailsProps } from './pantryExpectedShelfLifeDetails';
 import { PantryProductLookupPanel } from './PantryProductLookupPanel';
 import type { PantryLotDraft } from './pantryLotSave';
 
@@ -53,6 +54,7 @@ export interface PantryPurchaseEditorProps {
   onOpenProductSearch: () => void;
   onRunProductSearch: () => void;
   onSelectProductOffer: (offer: PantryProductSearchOffer) => void;
+  onRemovePurchase?: () => void;
 }
 
 export function PantryPurchaseEditor({
@@ -87,9 +89,14 @@ export function PantryPurchaseEditor({
   onOpenProductSearch,
   onRunProductSearch,
   onSelectProductOffer,
+  onRemovePurchase,
 }: PantryPurchaseEditorProps) {
   const eyebrow = existingLot ? 'Edit purchase' : 'Add purchase';
   const hasExactExpiration = Boolean(lotForm.expiresOn.trim());
+  const shelfLifeDetailsProps = expectedShelfLifeDetailsProps(
+    lotForm.expiresOn,
+    lotForm.expectedShelfLifeDays,
+  );
 
   return (
     <ItemManagementDialog
@@ -103,9 +110,18 @@ export function PantryPurchaseEditor({
             <p className="mb-3 text-sm text-red-200" role="alert">{lotError}</p>
           )}
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-white/25" aria-hidden="true">
-              {/* Destructive lot delete deferred — no API in Phase 1 */}
-            </span>
+            {existingLot && onRemovePurchase ? (
+              <button
+                type="button"
+                onClick={onRemovePurchase}
+                disabled={lotBusy}
+                className="text-sm text-red-200/75 hover:text-red-200 disabled:opacity-40"
+              >
+                Remove purchase
+              </button>
+            ) : (
+              <span aria-hidden="true" />
+            )}
             <div className="ml-auto flex gap-2">
               <button
                 type="button"
@@ -183,7 +199,7 @@ export function PantryPurchaseEditor({
           </div>
           <details
             className="mt-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
-            open={!hasExactExpiration && Boolean(lotForm.expectedShelfLifeDays.trim())}
+            {...shelfLifeDetailsProps}
           >
             <summary
               className={`cursor-pointer text-xs select-none ${

@@ -1160,6 +1160,13 @@ export const planService = {
     return res.lot;
   },
 
+  async deletePantryAcquisitionLot(lotId: string): Promise<void> {
+    await request<{ ok: true }>(
+      `/api/journal/plans/pantry/lots?lot_id=${encodeURIComponent(lotId)}`,
+      { method: 'DELETE' },
+    );
+  },
+
   /**
    * Persistent Grocery Lists v1 — Food → Groceries index. Returns the
    * default "My Grocery List", named lists, archived lists, read-only

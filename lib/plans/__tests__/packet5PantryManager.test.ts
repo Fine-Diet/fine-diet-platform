@@ -64,6 +64,12 @@ describe('Packet 5 Pantry v2 manager', () => {
     const purchaseEditor = read('components/food/pantry/PantryPurchaseEditor.tsx');
     expect(manager).toContain('<PantryPurchaseEditor');
     expect(manager).toContain('validatePantryLotSave');
+    expect(manager).toContain('deletePantryAcquisitionLot');
+    expect(manager).toContain('deletePurchaseLot');
+    expect(purchaseEditor).toContain('expectedShelfLifeDetailsProps');
+    expect(purchaseEditor).not.toMatch(/open=\{!hasExactExpiration/);
+    expect(purchaseEditor).toContain('Remove purchase');
+    expect(purchaseEditor).toContain('onRemovePurchase');
     expect(purchaseEditor).toContain('Edit purchase');
     expect(purchaseEditor).toContain('Amount acquired');
     expect(purchaseEditor).toContain('Purchased on');
