@@ -434,6 +434,14 @@ export default function ListsManager() {
     };
   }
 
+  function clearLocalPriceForItem(itemId: string) {
+    setPrices((current) => {
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
+  }
+
   function clearLocalPurchasingForItem(itemId: string) {
     setChoices((current) => {
       const next = { ...current };
@@ -590,7 +598,7 @@ export default function ListsManager() {
         },
       );
       setChoices((current) => ({ ...current, [editItem.id]: result.choice }));
-      clearLocalPurchasingForItem(editItem.id);
+      clearLocalPriceForItem(editItem.id);
       await refreshListPrices();
       setManualPriceDraft(manualDraftFromPrice(editItem, result.choice, undefined));
       setEditorSubpanel('main');
@@ -627,12 +635,14 @@ export default function ListsManager() {
     setSavingEdit(true);
     setEditError(null);
     try {
+      const productTitle = manualPriceDraft.productTitle.trim();
       const details = await planService.updatePersistentGroceryListPurchasingDetails(
         selectedListId,
         editItem.id,
         {
           purchase_quantity: purchaseQuantity,
           purchase_unit: manualPriceDraft.purchaseUnit.trim() || null,
+          ...(productTitle ? { shopping_display_name: productTitle } : {}),
         },
       );
       setChoices((current) => ({ ...current, [editItem.id]: details.choice }));

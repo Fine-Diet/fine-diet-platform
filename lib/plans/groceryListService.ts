@@ -618,8 +618,14 @@ export async function changeGroceryListItemNeed(
     throw new GroceryListValidationError('Canonical food is missing a name.');
   }
 
+  const previousName = String(existing.name ?? '').trim();
   const previousFoodObjectId = (existing.food_object_id as string | null) ?? null;
-  const identityChanged = previousFoodObjectId !== food.id;
+  if (previousFoodObjectId === food.id && previousName === needName) {
+    return {
+      item: existing as unknown as GroceryItem,
+      cleared_purchasing: false,
+    };
+  }
 
   const { data, error } = await supabaseAdmin
     .from('grocery_items')
@@ -635,14 +641,16 @@ export async function changeGroceryListItemNeed(
     throw new Error(`Failed to change list need: ${error?.message ?? 'not found'}`);
   }
 
+  const item = data as unknown as GroceryItem;
   let clearedPurchasing = false;
-  if (identityChanged) {
+  const choice = await getPurchasingChoiceForItem(personId, listId, itemId);
+  if (choice && !isListPurchasingChoiceCompatibleWithItem(item, choice)) {
     await clearListItemPurchasingAndActiveQuote({ personId, listId, itemId });
     clearedPurchasing = true;
   }
 
   return {
-    item: data as unknown as GroceryItem,
+    item,
     cleared_purchasing: clearedPurchasing,
   };
 }

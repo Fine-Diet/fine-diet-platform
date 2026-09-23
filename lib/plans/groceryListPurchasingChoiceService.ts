@@ -68,6 +68,7 @@ export async function updateGroceryListPurchasingChoiceDetails(options: {
   itemId: string;
   purchase_quantity?: unknown;
   purchase_unit?: unknown;
+  shopping_display_name?: unknown;
 }): Promise<{ choice: GroceryListPurchasingChoice }> {
   await loadOwnedDurableListItem(options.personId, options.listId, options.itemId);
   const existing = await getPurchasingChoiceForItem(
@@ -77,13 +78,14 @@ export async function updateGroceryListPurchasingChoiceDetails(options: {
   );
   if (!existing || existing.status === 'unresolved') {
     throw new GroceryListPurchasingChoiceValidationError(
-      'Choose a purchasing product before editing purchase quantity or unit.',
+      'Choose a purchasing product before editing purchase details.',
     );
   }
 
   const patch: {
     purchase_quantity?: number | null;
     purchase_unit?: string | null;
+    shopping_display_name?: string | null;
   } = {};
 
   if (options.purchase_quantity !== undefined) {
@@ -105,6 +107,19 @@ export async function updateGroceryListPurchasingChoiceDetails(options: {
       typeof options.purchase_unit === 'string' && options.purchase_unit.trim()
         ? options.purchase_unit.trim()
         : null;
+  }
+
+  if (options.shopping_display_name !== undefined) {
+    const title =
+      typeof options.shopping_display_name === 'string'
+        ? options.shopping_display_name.trim()
+        : '';
+    if (!title) {
+      throw new GroceryListPurchasingChoiceValidationError(
+        'shopping_display_name cannot be empty.',
+      );
+    }
+    patch.shopping_display_name = title;
   }
 
   if (Object.keys(patch).length === 0) {
