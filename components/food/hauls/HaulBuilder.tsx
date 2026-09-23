@@ -603,7 +603,10 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
         haulId={haulId}
         item={editingItem}
         openInProductSearch={chooseProductFirst}
-        onClose={() => setEditingItem(null)}
+        onClose={() => {
+          setChooseProductFirst(false);
+          setEditingItem(null);
+        }}
         onSaved={reloadDetail}
       />
 
