@@ -2,6 +2,7 @@ import {
   fetchConfirmGroceryPrice,
   fetchGroceryHaulSummary,
   fetchGroceryPriceSearch,
+  fetchListGroceryPriceSearch,
   fetchManualGroceryPrice,
 } from '../groceryPricingClient';
 
@@ -18,6 +19,24 @@ function jsonResponse(status: number, body: unknown): Response {
 describe('groceryPricingClient', () => {
   beforeEach(() => {
     mockFetch.mockReset();
+  });
+
+  it('returns list search results for 200 and 502', async () => {
+    const payload = {
+      provider: 'serpapi',
+      search_event_id: 'event-list',
+      outcome: 'provider_error',
+      offers: [],
+      quota: { remaining: 1 },
+    };
+    mockFetch.mockResolvedValueOnce(jsonResponse(502, payload));
+
+    await expect(
+      fetchListGroceryPriceSearch('list-1', 'item-1', {
+        retailer: 'Target',
+        postal_code: '94110',
+      }),
+    ).resolves.toEqual(payload);
   });
 
   it('returns search results for 200 and 502', async () => {

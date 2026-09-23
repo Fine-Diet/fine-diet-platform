@@ -1432,10 +1432,8 @@ export const planService = {
     itemId: string,
     input: { retailer: string; postal_code: string },
   ): Promise<import('./groceryPricingTypes').GroceryPriceSearchResult> {
-    return await request(
-      `/api/journal/food/grocery-lists/${listId}/items/${itemId}/price-search`,
-      { method: 'POST', body: JSON.stringify(input) },
-    );
+    const { fetchListGroceryPriceSearch } = await import('./groceryPricingClient');
+    return fetchListGroceryPriceSearch(listId, itemId, input);
   },
 
   async confirmPersistentGroceryItemPrice(

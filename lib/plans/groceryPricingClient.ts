@@ -66,6 +66,36 @@ export async function fetchGroceryPriceSearch(
   throw new Error(errorMessage(body, `Price search failed (${res.status})`));
 }
 
+export async function fetchListGroceryPriceSearch(
+  listId: string,
+  itemId: string,
+  input: { retailer: string; postal_code: string },
+): Promise<GroceryPriceSearchResult> {
+  const res = await fetch(
+    `/api/journal/food/grocery-lists/${listId}/items/${itemId}/price-search`,
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  const body = await readJsonBody(res);
+  if (res.status === 200 || res.status === 502) {
+    return body as unknown as GroceryPriceSearchResult;
+  }
+  if (res.status === 429) {
+    const quota = body.quota;
+    if (quota != null && typeof quota === 'object') {
+      throw new GroceryPriceQuotaExceededClientError(
+        errorMessage(body, 'Grocery price search quota exceeded'),
+        quota as GroceryPriceSearchQuota,
+      );
+    }
+  }
+  throw new Error(errorMessage(body, `Price search failed (${res.status})`));
+}
+
 export async function fetchConfirmGroceryPrice(
   itemId: string,
   input: Omit<ConfirmSourcedGroceryPriceInput, 'grocery_item_id'>,

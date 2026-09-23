@@ -38,6 +38,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       retailer,
       postalCode,
     });
+    if (result.outcome === 'provider_error') {
+      return res.status(502).json(result);
+    }
     return res.status(200).json(result);
   } catch (err) {
     if (err instanceof GroceryPriceQuotaExceededError) {

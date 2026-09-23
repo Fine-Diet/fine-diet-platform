@@ -10,6 +10,9 @@ import type {
 } from '@/lib/plans/types';
 import type { FoodSearchResult } from '@/lib/food/types';
 
+import { isGroceryPrimaryProductChoiceCandidate } from '@/lib/plans/groceryListAddIntent';
+import { groceryListNeedUnitPlaceholder } from '@/lib/plans/groceryListNeedQuantity';
+
 import {
   listsPurchasingHasChoice,
   listsPurchasingSummaryInput,
@@ -71,7 +74,19 @@ export interface ListsItemEditorProps {
   onSaveManualPrice: () => void;
 }
 
-function FoodSearchResultsList({
+function needResolveLabel(candidate: ResolveCandidate): string {
+  return candidate.food.canonicalName;
+}
+
+function productChoiceLabel(candidate: ResolveCandidate): string {
+  const food = candidate.food;
+  if (food.brandName?.trim()) {
+    return `${food.brandName.trim()} — ${food.canonicalName}`;
+  }
+  return food.canonicalName;
+}
+
+function NeedResolveResultsList({
   busy,
   results,
   disabled,
@@ -83,10 +98,14 @@ function FoodSearchResultsList({
   onSelect: (candidate: ResolveCandidate) => void;
 }) {
   if (busy) {
-    return <p className="py-3 text-sm text-white/45">Searching…</p>;
+    return <p className="py-3 text-sm text-white/45">Searching foods…</p>;
   }
   if (results.length === 0) {
-    return <p className="py-3 text-sm text-white/40">Search for a verified food match.</p>;
+    return (
+      <p className="py-3 text-sm text-white/40">
+        Search for the food you need (common ingredients and your foods — not store products).
+      </p>
+    );
   }
   return results.map((candidate) => (
     <button
@@ -94,17 +113,71 @@ function FoodSearchResultsList({
       type="button"
       disabled={disabled}
       onClick={() => onSelect(candidate)}
-      className="block w-full border-b border-white/[0.06] px-2 py-3 text-left last:border-0 hover:bg-white/[0.04]"
+      className="block w-full border-b border-white/[0.06] px-3 py-3 text-left last:border-0 hover:bg-white/[0.04]"
     >
-      <span className="block text-sm text-white">
-        {candidate.food.brandName
-          ? `${candidate.food.brandName} — ${candidate.food.canonicalName}`
-          : candidate.food.canonicalName}
-      </span>
-      <span className="block text-xs text-white/35">
+      <span className="block text-sm font-medium text-white">{needResolveLabel(candidate)}</span>
+      <span className="mt-0.5 block text-[11px] text-white/40">Requested need</span>
+      <span className="block text-xs text-white/30">
         {candidate.source_label ?? candidate.source}
       </span>
     </button>
+  ));
+}
+
+function ProductChoiceResultsList({
+  busy,
+  results,
+  disabled,
+  onSelect,
+}: {
+  busy: boolean;
+  results: ResolveCandidate[];
+  disabled: boolean;
+  onSelect: (candidate: ResolveCandidate) => void;
+}) {
+  if (busy) {
+    return <p className="py-3 text-sm text-white/45">Searching products…</p>;
+  }
+  if (results.length === 0) {
+    return (
+      <p className="py-3 text-sm text-white/40">
+        Search by brand, UPC, or package label first. Generic options appear below when needed. This
+        does not change the need.
+      </p>
+    );
+  }
+
+  const fallbackStart = results.findIndex(
+    (candidate) =>
+      !isGroceryPrimaryProductChoiceCandidate(candidate as FoodSearchResult),
+  );
+
+  return results.map((candidate, index) => (
+    <div key={candidate.food.id}>
+      {fallbackStart === index && (
+        <p className="border-t border-white/[0.08] bg-white/[0.02] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/35">
+          Generic purchasing fallback
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onSelect(candidate)}
+        className="block w-full border-b border-white/[0.06] px-3 py-3 text-left last:border-0 hover:bg-white/[0.04]"
+      >
+        <span className="block text-sm font-medium text-white">{productChoiceLabel(candidate)}</span>
+        <span className="mt-0.5 block text-[11px] text-denim-200/80">
+          {isGroceryPrimaryProductChoiceCandidate(candidate as FoodSearchResult)
+            ? 'Purchasing product'
+            : 'Generic product option'}
+        </span>
+        <span className="block text-xs text-white/30">
+          {candidate.food.upc
+            ? `UPC ${candidate.food.upc}`
+            : candidate.source_label ?? candidate.source}
+        </span>
+      </button>
+    </div>
   ));
 }
 
@@ -246,18 +319,18 @@ export function ListsItemEditor({
       {subpanel === 'change_need' && (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-white/45">
-            Pick a verified food match. This updates the need and clears incompatible purchasing details.
+            Resolve what food is required. Common foods and your foods only — not store SKUs.
           </p>
           <input
             autoFocus
             type="search"
             value={needSearchQuery}
             onChange={(event) => onNeedSearchQueryChange(event.target.value)}
-            placeholder="Search foods"
+            placeholder="e.g. blueberries, chicken breast"
             className={INPUT_CLASS}
           />
           <div className="max-h-72 overflow-y-auto rounded-xl border border-white/10">
-            <FoodSearchResultsList
+            <NeedResolveResultsList
               busy={needSearchBusy}
               results={needSearchResults}
               disabled={busy}
@@ -270,18 +343,18 @@ export function ListsItemEditor({
       {subpanel === 'change_product' && (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-white/45">
-            The requested need stays “{needName}”. This only changes what you plan to buy.
+            Need stays “{needName}”. Pick the branded or packaged product you intend to buy.
           </p>
           <input
             autoFocus
             type="search"
             value={productSearchQuery}
             onChange={(event) => onProductSearchQueryChange(event.target.value)}
-            placeholder="Search products"
+            placeholder="e.g. brand name, UPC, package label"
             className={INPUT_CLASS}
           />
           <div className="max-h-72 overflow-y-auto rounded-xl border border-white/10">
-            <FoodSearchResultsList
+            <ProductChoiceResultsList
               busy={productSearchBusy}
               results={productSearchResults}
               disabled={busy}
@@ -409,10 +482,14 @@ export function ListsItemEditor({
                 <input
                   value={unit}
                   onChange={(event) => onUnitChange(event.target.value)}
+                  placeholder={groceryListNeedUnitPlaceholder()}
                   className={INPUT_CLASS}
                 />
               </label>
             </div>
+            <p className="mt-1 text-[11px] text-white/35">
+              Leave unit blank to count the need in items; set cup, lb, etc. when you need a measure.
+            </p>
             <details className="mt-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
               <summary className="cursor-pointer text-xs text-white/55 select-none">
                 More details
