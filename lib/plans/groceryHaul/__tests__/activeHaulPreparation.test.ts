@@ -107,16 +107,23 @@ function installFake(executionState: 'pending' | 'in_basket' | 'skipped' = 'pend
       };
     }
     if (name === GROCERY_HAUL_EXECUTION_BASKET_RPC_NAME) {
-      return {
-        data: simulateMarkGroceryHaulExecutionInBasket(
-          fake.tables,
-          params as {
-            p_execution_item_id: string;
-            p_acquisition_overlay?: Record<string, string | number | null>;
-          },
-        ),
-        error: null,
-      };
+      try {
+        return {
+          data: simulateMarkGroceryHaulExecutionInBasket(
+            fake.tables,
+            params as {
+              p_execution_item_id: string;
+              p_acquisition_overlay?: Record<string, string | number | null>;
+            },
+          ),
+          error: null,
+        };
+      } catch (err) {
+        return {
+          data: null,
+          error: { message: err instanceof Error ? err.message : String(err) },
+        };
+      }
     }
     return { data: null, error: null };
   });
@@ -375,6 +382,20 @@ describe('Active Haul pending-line preparation contract', () => {
     );
     expect(merged.acquired_price_amount).toBeNull();
     expect(merged.acquired_price_currency).toBeNull();
+  });
+
+  it('routes every in_basket target through the basket RPC even when pre-read state is stale', async () => {
+    installFake('skipped');
+    await expect(updateGroceryHaulExecutionItem({
+      personId: PERSON,
+      haulId: 'haul-1',
+      executionItemId: 'execution-1',
+      state: 'in_basket',
+    })).rejects.toBeInstanceOf(GroceryHaulConflictError);
+    expect(mockRpc).toHaveBeenCalledWith(
+      GROCERY_HAUL_EXECUTION_BASKET_RPC_NAME,
+      expect.objectContaining({ p_execution_item_id: 'execution-1' }),
+    );
   });
 
   it('reports executable-only progress counts and excluded audit rows', async () => {

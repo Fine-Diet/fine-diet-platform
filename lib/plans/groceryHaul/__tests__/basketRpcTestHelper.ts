@@ -60,7 +60,9 @@ export function simulateMarkGroceryHaulExecutionInBasket(
   const executionRows = tables.grocery_haul_execution_items ?? [];
   const execution = executionRows.find((row) => row.id === params.p_execution_item_id);
   if (!execution) throw new Error('HAUL_EXECUTION_NOT_FOUND');
-  if (execution.state !== 'pending') throw new Error('HAUL_EXECUTION_INVALID_TRANSITION');
+  if (execution.state !== 'pending') {
+    throw new Error('HAUL_EXECUTION_INVALID_TRANSITION');
+  }
   const item = (tables.grocery_haul_items ?? []).find((row) => row.id === execution.haul_item_id);
   if (!item) throw new Error('HAUL_EXECUTION_NOT_FOUND');
   if (Number(item.final_quantity) <= 0) throw new Error('HAUL_EXECUTION_NOT_EXECUTABLE');

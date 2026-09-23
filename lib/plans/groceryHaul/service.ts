@@ -1162,6 +1162,9 @@ function throwExecutionRpcError(message: string): never {
   if (message.includes('HAUL_EXECUTION_INVALID_ARGS')) {
     throw new GroceryHaulValidationError('A person and grocery haul are required.');
   }
+  if (message.includes('HAUL_EXECUTION_INVALID_TRANSITION')) {
+    throw new GroceryHaulConflictError('This execution transition is no longer valid.');
+  }
   throw new Error(`Grocery haul execution operation failed: ${message}`);
 }
 
@@ -1347,7 +1350,6 @@ export async function updateGroceryHaulExecutionItem(args: {
     throw new Error(`Failed to load grocery haul execution item: ${currentExecutionError.message}`);
   }
   if (!currentExecution) throw new GroceryHaulNotFoundError('Grocery haul execution item not found.');
-  const currentState = String(currentExecution.state) as GroceryHaulExecutionItemState;
   if (
     args.state !== undefined
     && !(['pending', 'in_basket', 'skipped'] as const).includes(args.state)
@@ -1401,8 +1403,7 @@ export async function updateGroceryHaulExecutionItem(args: {
   ) {
     patch.acquired_price_currency = haul.currency;
   }
-  const hasAcquisitionPatch = Object.keys(acquisition).length > 0;
-  if (args.state === 'in_basket' && currentState === 'pending') {
+  if (args.state === 'in_basket') {
     const { data: basketRow, error: basketError } = await supabaseAdmin.rpc(
       GROCERY_HAUL_EXECUTION_BASKET_RPC_NAME,
       {
@@ -1432,6 +1433,10 @@ export async function updateGroceryHaulExecutionItem(args: {
       ? currentPreparationFromHaulItem(mapHaulItem(haulItemRow as Record<string, unknown>))
       : null;
     return mapExecutionItem(basketRow as Record<string, unknown>, null, currentPreparation);
+  }
+
+  if (patch.state === 'in_basket') {
+    throw new Error('Invariant: in_basket transitions must use mark_grocery_haul_execution_in_basket.');
   }
 
   if (Object.keys(patch).length === 0) {
