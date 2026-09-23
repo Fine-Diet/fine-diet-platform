@@ -8,6 +8,23 @@ import {
   unresolvedGroceryMatchKey,
 } from './groceryMatchKeys';
 
+function displayUnit(u: string | null | undefined): string | null {
+  if (u == null) return null;
+  const trimmed = String(u).trim();
+  return trimmed ? trimmed : null;
+}
+
+export function isListPurchasingChoiceCompatibleWithItem(
+  item: GroceryItem,
+  choice: GroceryListPurchasingChoice,
+): boolean {
+  const unit = displayUnit(item.unit);
+  return (
+    choice.required_name_snapshot === String(item.name ?? '')
+    && choice.required_unit_snapshot === unit
+  );
+}
+
 export function activePurchasingMatchKeyForItem(
   item: GroceryItem,
   choice: GroceryListPurchasingChoice | null | undefined,

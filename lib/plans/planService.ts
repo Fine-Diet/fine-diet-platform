@@ -1513,12 +1513,31 @@ export const planService = {
       notes: string | null;
       status: GroceryItemStatus;
     }>,
-  ): Promise<GroceryItem> {
-    const res = await request<{ item: GroceryItem }>(
+  ): Promise<{ item: GroceryItem; cleared_purchasing: boolean }> {
+    return await request<{ item: GroceryItem; cleared_purchasing?: boolean }>(
       `/api/journal/food/grocery-lists/${listId}/items/${itemId}`,
       { method: 'PATCH', body: JSON.stringify(input) },
+    ).then((res) => ({
+      item: res.item,
+      cleared_purchasing: res.cleared_purchasing === true,
+    }));
+  },
+
+  async updatePersistentGroceryListPurchasingDetails(
+    listId: string,
+    itemId: string,
+    input: {
+      purchase_quantity?: number | null;
+      purchase_unit?: string | null;
+    },
+  ): Promise<{ choice: import('./types').GroceryListPurchasingChoice }> {
+    return await request(
+      `/api/journal/food/grocery-lists/${listId}/items/${itemId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'update_purchasing_details', ...input }),
+      },
     );
-    return res.item;
   },
 
   async resolvePersistentGroceryItemForList(

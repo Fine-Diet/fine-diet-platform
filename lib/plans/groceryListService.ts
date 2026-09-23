@@ -31,8 +31,12 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { deletePurchasingChoice } from './groceryListPurchasingChoiceStore';
-import { deleteListPriceObservationsForItem } from './groceryListPriceObservationStore';
+import { clearActiveQuote } from './groceryListActiveQuoteStore';
+import {
+  deletePurchasingChoice,
+  getPurchasingChoiceForItem,
+} from './groceryListPurchasingChoiceStore';
+import { isListPurchasingChoiceCompatibleWithItem } from './groceryListPurchasingChoiceDisplay';
 import type {
   GeneratedGroceryList,
   GroceryItem,
@@ -496,12 +500,21 @@ export interface UpdateGroceryListItemInput {
 
 const ALLOWED_ITEM_STATUSES: GroceryItemStatus[] = ['pending', 'have', 'bought', 'skipped'];
 
+async function clearListItemPurchasingAndActiveQuote(options: {
+  personId: string;
+  listId: string;
+  itemId: string;
+}): Promise<void> {
+  await deletePurchasingChoice(options.personId, options.listId, options.itemId);
+  await clearActiveQuote(options);
+}
+
 export async function updateGroceryListItem(
   personId: string,
   listId: string,
   itemId: string,
   input: UpdateGroceryListItemInput,
-): Promise<GroceryItem> {
+): Promise<{ item: GroceryItem; cleared_purchasing: boolean }> {
   assertPersonId(personId);
   await loadListOwnedByPerson(personId, listId);
 
@@ -536,7 +549,11 @@ export async function updateGroceryListItem(
     patch.status = input.status;
   }
 
-  if (Object.keys(patch).length === 0) return existing as unknown as GroceryItem;
+  if (Object.keys(patch).length === 0) {
+    return { item: existing as unknown as GroceryItem, cleared_purchasing: false };
+  }
+
+  const touchesNeedKey = input.name !== undefined || input.unit !== undefined;
 
   const { data, error } = await supabaseAdmin
     .from('grocery_items')
@@ -546,7 +563,18 @@ export async function updateGroceryListItem(
     .select('*')
     .single();
   if (error || !data) throw new Error(`Failed to update grocery item: ${error?.message ?? 'not found'}`);
-  return data as unknown as GroceryItem;
+
+  const item = data as unknown as GroceryItem;
+  let clearedPurchasing = false;
+  if (touchesNeedKey) {
+    const choice = await getPurchasingChoiceForItem(personId, listId, itemId);
+    if (choice && !isListPurchasingChoiceCompatibleWithItem(item, choice)) {
+      await clearListItemPurchasingAndActiveQuote({ personId, listId, itemId });
+      clearedPurchasing = true;
+    }
+  }
+
+  return { item, cleared_purchasing: clearedPurchasing };
 }
 
 export async function changeGroceryListItemNeed(
@@ -609,8 +637,7 @@ export async function changeGroceryListItemNeed(
 
   let clearedPurchasing = false;
   if (identityChanged) {
-    await deletePurchasingChoice(personId, listId, itemId);
-    await deleteListPriceObservationsForItem(personId, listId, itemId);
+    await clearListItemPurchasingAndActiveQuote({ personId, listId, itemId });
     clearedPurchasing = true;
   }
 

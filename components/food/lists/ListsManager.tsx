@@ -395,7 +395,7 @@ export default function ListsManager() {
       current.map((candidate) => (candidate.id === item.id ? { ...candidate, quantity } : candidate)),
     );
     try {
-      const updated = await planService.updatePersistentGroceryItem(selectedListId, item.id, {
+      const { item: updated } = await planService.updatePersistentGroceryItem(selectedListId, item.id, {
         quantity,
       });
       setItems((current) =>
@@ -421,14 +421,30 @@ export default function ListsManager() {
         || choice?.preferred_product?.trim()
         || price?.product_title?.trim()
         || item.name,
-      purchaseQuantity: item.quantity != null ? String(item.quantity) : '1',
-      purchaseUnit: item.unit ?? '',
+      purchaseQuantity:
+        choice?.purchase_quantity != null
+          ? String(choice.purchase_quantity)
+          : '',
+      purchaseUnit: choice?.purchase_unit?.trim() || '',
       retailer: price?.retailer?.trim() || '',
       packageSize: price?.package_size != null ? String(price.package_size) : '',
       packageUnit: price?.package_unit?.trim() || '',
       packageCount: price?.package_count != null ? String(price.package_count) : '1',
-      unitPrice: price?.line_total != null ? String(price.line_total) : '',
+      unitPrice: price?.unit_price != null ? String(price.unit_price) : '',
     };
+  }
+
+  function clearLocalPurchasingForItem(itemId: string) {
+    setChoices((current) => {
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
+    setPrices((current) => {
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
   }
 
   function openEdit(item: GroceryItem, subpanel: ListsEditorSubpanel = 'main') {
@@ -485,7 +501,8 @@ export default function ListsManager() {
       if (!editItem.food_object_id) {
         patch.name = editUnresolvedName.trim();
       }
-      const updated = await planService.updatePersistentGroceryItem(
+      const { item: updated, cleared_purchasing: clearedPurchasing } =
+        await planService.updatePersistentGroceryItem(
         selectedListId,
         editItem.id,
         patch,
@@ -493,6 +510,10 @@ export default function ListsManager() {
       setItems((current) =>
         current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
       );
+      setEditItem(updated);
+      if (clearedPurchasing) {
+        clearLocalPurchasingForItem(updated.id);
+      }
       closeEditor();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : 'Unable to save this item.');
@@ -543,16 +564,8 @@ export default function ListsManager() {
       setEditItem(result.item);
       setEditUnresolvedName(result.item.name);
       if (result.cleared_purchasing) {
-        setChoices((current) => {
-          const next = { ...current };
-          delete next[editItem.id];
-          return next;
-        });
-        setPrices((current) => {
-          const next = { ...current };
-          delete next[editItem.id];
-          return next;
-        });
+        clearLocalPurchasingForItem(editItem.id);
+        await refreshListPrices();
       }
       setEditorSubpanel('main');
     } catch (err) {
@@ -577,6 +590,9 @@ export default function ListsManager() {
         },
       );
       setChoices((current) => ({ ...current, [editItem.id]: result.choice }));
+      clearLocalPurchasingForItem(editItem.id);
+      await refreshListPrices();
+      setManualPriceDraft(manualDraftFromPrice(editItem, result.choice, undefined));
       setEditorSubpanel('main');
     } catch (err) {
       setEditError(err instanceof Error ? err.message : 'Unable to choose this product.');
@@ -587,18 +603,39 @@ export default function ListsManager() {
 
   async function saveManualPriceFromEditor() {
     if (!selectedListId || !editItem || savingEdit) return;
+    const choice = choices[editItem.id];
+    if (!choice) {
+      setEditError('Choose a product before editing purchase quantity or unit.');
+      return;
+    }
     const unitPrice = Number(manualPriceDraft.unitPrice);
     if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-      setEditError('Enter a valid price.');
+      setEditError('Enter a valid unit price.');
       return;
     }
     const packageCount = Number(manualPriceDraft.packageCount.trim() || '1');
     const packageSize = manualPriceDraft.packageSize.trim()
       ? Number(manualPriceDraft.packageSize)
       : null;
+    const purchaseQuantityRaw = manualPriceDraft.purchaseQuantity.trim();
+    const purchaseQuantity =
+      purchaseQuantityRaw === '' ? null : Number(purchaseQuantityRaw);
+    if (purchaseQuantity != null && (!Number.isFinite(purchaseQuantity) || purchaseQuantity < 0)) {
+      setEditError('Enter a valid purchase quantity.');
+      return;
+    }
     setSavingEdit(true);
     setEditError(null);
     try {
+      const details = await planService.updatePersistentGroceryListPurchasingDetails(
+        selectedListId,
+        editItem.id,
+        {
+          purchase_quantity: purchaseQuantity,
+          purchase_unit: manualPriceDraft.purchaseUnit.trim() || null,
+        },
+      );
+      setChoices((current) => ({ ...current, [editItem.id]: details.choice }));
       const observation = await planService.savePersistentGroceryItemManualPrice(
         selectedListId,
         editItem.id,
@@ -613,6 +650,7 @@ export default function ListsManager() {
         },
       );
       setPrices((current) => ({ ...current, [editItem.id]: observation }));
+      await refreshListPrices();
       setEditorSubpanel('main');
     } catch (err) {
       setEditError(err instanceof Error ? err.message : 'Unable to save this price.');
@@ -931,7 +969,7 @@ export default function ListsManager() {
 
       {editItem && (
         <ListsItemEditor
-          open={Boolean(editItem)}
+          open={Boolean(editItem) && !pricePanelItem}
           needName={editItem.name}
           needResolved={Boolean(editItem.food_object_id)}
           unresolvedNeedName={editUnresolvedName}
@@ -944,6 +982,7 @@ export default function ListsManager() {
           onNotesChange={setEditNotes}
           choice={choices[editItem.id]}
           price={prices[editItem.id]}
+          hasPurchasingChoice={Boolean(choices[editItem.id])}
           subpanel={editorSubpanel}
           onSubpanelChange={setEditorSubpanel}
           needSearchQuery={needSearchQuery}

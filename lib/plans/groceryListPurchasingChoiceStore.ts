@@ -177,6 +177,34 @@ export async function deletePurchasingChoice(
   }
 }
 
+export async function patchPurchasingChoiceDetails(
+  personId: string,
+  listId: string,
+  itemId: string,
+  patch: {
+    purchase_quantity?: number | null;
+    purchase_unit?: string | null;
+  },
+): Promise<GroceryListPurchasingChoice> {
+  const { data, error } = await supabaseAdmin
+    .from('grocery_list_purchasing_choices')
+    .update({
+      ...patch,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('person_id', personId)
+    .eq('grocery_list_id', listId)
+    .eq('grocery_item_id', itemId)
+    .select('*')
+    .single();
+  if (error || !data) {
+    throw new Error(
+      `Failed to update purchasing choice details: ${error?.message ?? 'not found'}`,
+    );
+  }
+  return rowToChoice(data as ChoiceRow);
+}
+
 export async function patchPurchasingChoiceOptInReceipts(
   personId: string,
   choiceId: string,

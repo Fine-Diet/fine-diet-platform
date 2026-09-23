@@ -32,6 +32,7 @@ describe('Packet 6 Lists item-management convergence', () => {
 
   it('routes list price discovery through item management', () => {
     expect(manager).toContain('openPriceSearchFromEditor');
+    expect(manager).toContain('open={Boolean(editItem) && !pricePanelItem}');
     expect(manager).not.toContain('Find Price');
   });
 });

@@ -23,10 +23,12 @@ import {
 } from './groceryMatchKeys';
 import { formatCanonicalFoodShoppingLabel } from './groceryShoppingDisplay';
 import { itemProvenanceScope } from './persistentGroceryHaulScopes';
+import { clearActiveQuote } from './groceryListActiveQuoteStore';
 import {
   deletePurchasingChoice,
   getPurchasingChoiceForItem,
   listPurchasingChoicesForList,
+  patchPurchasingChoiceDetails,
   patchPurchasingChoiceOptInReceipts,
   upsertPurchasingChoice,
 } from './groceryListPurchasingChoiceStore';
@@ -34,6 +36,7 @@ import { saveShoppingOverride } from './groceryShoppingOverrideStore';
 
 export {
   activePurchasingMatchKeyForItem,
+  isListPurchasingChoiceCompatibleWithItem,
   resolveListShoppingDisplayName,
 } from './groceryListPurchasingChoiceDisplay';
 
@@ -48,6 +51,73 @@ function displayUnit(u: string | null | undefined): string | null {
   if (u == null) return null;
   const trimmed = String(u).trim();
   return trimmed ? trimmed : null;
+}
+
+export async function clearListItemPurchasingAndActiveQuote(options: {
+  personId: string;
+  listId: string;
+  itemId: string;
+}): Promise<void> {
+  await deletePurchasingChoice(options.personId, options.listId, options.itemId);
+  await clearActiveQuote(options);
+}
+
+export async function updateGroceryListPurchasingChoiceDetails(options: {
+  personId: string;
+  listId: string;
+  itemId: string;
+  purchase_quantity?: unknown;
+  purchase_unit?: unknown;
+}): Promise<{ choice: GroceryListPurchasingChoice }> {
+  await loadOwnedDurableListItem(options.personId, options.listId, options.itemId);
+  const existing = await getPurchasingChoiceForItem(
+    options.personId,
+    options.listId,
+    options.itemId,
+  );
+  if (!existing || existing.status === 'unresolved') {
+    throw new GroceryListPurchasingChoiceValidationError(
+      'Choose a purchasing product before editing purchase quantity or unit.',
+    );
+  }
+
+  const patch: {
+    purchase_quantity?: number | null;
+    purchase_unit?: string | null;
+  } = {};
+
+  if (options.purchase_quantity !== undefined) {
+    if (options.purchase_quantity == null || options.purchase_quantity === '') {
+      patch.purchase_quantity = null;
+    } else {
+      const quantity = Number(options.purchase_quantity);
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        throw new GroceryListPurchasingChoiceValidationError(
+          'purchase_quantity must be a non-negative number.',
+        );
+      }
+      patch.purchase_quantity = quantity;
+    }
+  }
+
+  if (options.purchase_unit !== undefined) {
+    patch.purchase_unit =
+      typeof options.purchase_unit === 'string' && options.purchase_unit.trim()
+        ? options.purchase_unit.trim()
+        : null;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { choice: existing };
+  }
+
+  const choice = await patchPurchasingChoiceDetails(
+    options.personId,
+    options.listId,
+    options.itemId,
+    patch,
+  );
+  return { choice };
 }
 
 function resolutionKey(name: string, unit: string | null): string {
@@ -261,6 +331,8 @@ export async function resolveGroceryItemForList(
     throw new Error('List resolve must not mutate required grocery item truth.');
   }
 
+  await clearActiveQuote({ personId, listId, itemId });
+
   return {
     item,
     choice,
@@ -280,7 +352,11 @@ export async function clearGroceryItemListChoice(options: {
     options.listId,
     options.itemId,
   );
-  await deletePurchasingChoice(options.personId, options.listId, options.itemId);
+  await clearListItemPurchasingAndActiveQuote({
+    personId: options.personId,
+    listId: options.listId,
+    itemId: options.itemId,
+  });
   return { item };
 }
 
