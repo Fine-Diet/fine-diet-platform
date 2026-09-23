@@ -66,8 +66,7 @@ describe('Packet 3 Food IA and Lists manager', () => {
     const product = manager.indexOf('{product}</p>', need);
     const store = manager.indexOf('{price.retailer}</p>', product);
     const price = manager.indexOf('formatGroceryCurrency(price.line_total', store);
-    const chooseProduct = manager.indexOf('Choose Product', price);
-    const quantity = manager.indexOf('Decrease ${item.name} quantity', chooseProduct);
+    const quantity = manager.indexOf('Decrease ${item.name} quantity', price);
     expect(need).toBeGreaterThan(-1);
     expect(product).toBeGreaterThan(need);
     expect(store).toBeGreaterThan(product);
@@ -91,14 +90,19 @@ describe('Packet 3 Food IA and Lists manager', () => {
     expect(manager).toContain('polygon points="12,18 2,6 22,6"');
     expect(manager).not.toContain('min-h-14 flex-1 rounded-full');
     expect(manager).not.toContain('Delete');
-    expect(manager).toContain('Remove from List');
+    expect(read('components/food/lists/ListsItemEditor.tsx')).toContain('Remove from List');
   });
 
   it('keeps List editing persistent and omits transfer checkboxes', () => {
     const manager = read('components/food/lists/ListsManager.tsx');
-    expect(manager).toContain('Edit List item');
+    const editor = read('components/food/lists/ListsItemEditor.tsx');
+    expect(manager).toContain('<ListsItemEditor');
     expect(manager).toContain('planService.updatePersistentGroceryItem');
+    expect(manager).toContain('planService.changePersistentGroceryListItemNeed');
     expect(manager).toContain('planService.deletePersistentGroceryItem');
+    expect(editor).toContain('Change need');
+    expect(editor).toContain('Remove from List');
+    expect(manager).not.toContain('Find Price');
     expect(manager).not.toContain('type="checkbox"');
   });
 

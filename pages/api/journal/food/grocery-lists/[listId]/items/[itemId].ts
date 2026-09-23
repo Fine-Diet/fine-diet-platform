@@ -10,6 +10,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireJournalAccess } from '@/lib/access/requireJournalAccess';
 import {
+  changeGroceryListItemNeed,
   deleteGroceryListItem,
   GroceryListNotFoundError,
   GroceryListValidationError,
@@ -64,6 +65,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (action === 'clear_list_choice') {
         const result = await clearGroceryItemListChoice({ personId, listId, itemId });
+        return res.status(200).json(result);
+      }
+
+      if (action === 'change_need') {
+        const result = await changeGroceryListItemNeed(personId, listId, itemId, {
+          food_object_id: body.food_object_id,
+        });
         return res.status(200).json(result);
       }
 

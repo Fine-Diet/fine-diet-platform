@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 
 import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
+import {
+  ListsItemEditor,
+  type ListsEditorSubpanel,
+  type ListsManualPriceDraft,
+} from '@/components/food/lists/ListsItemEditor';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
@@ -84,20 +89,34 @@ export default function ListsManager() {
   const [addError, setAddError] = useState<string | null>(null);
 
   const [editItem, setEditItem] = useState<GroceryItem | null>(null);
-  const [editName, setEditName] = useState('');
+  const [editorSubpanel, setEditorSubpanel] = useState<ListsEditorSubpanel>('main');
+  const [editUnresolvedName, setEditUnresolvedName] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
   const [editUnit, setEditUnit] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  const [resolveItem, setResolveItem] = useState<GroceryItem | null>(null);
-  const [resolveQuery, setResolveQuery] = useState('');
-  const [resolveResults, setResolveResults] = useState<ResolveCandidate[]>([]);
-  const [searchingResolve, setSearchingResolve] = useState(false);
-  const [resolving, setResolving] = useState(false);
-  const [resolveError, setResolveError] = useState<string | null>(null);
-  const [priceItem, setPriceItem] = useState<GroceryItem | null>(null);
+  const [needSearchQuery, setNeedSearchQuery] = useState('');
+  const [needSearchResults, setNeedSearchResults] = useState<ResolveCandidate[]>([]);
+  const [searchingNeed, setSearchingNeed] = useState(false);
+
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productSearchResults, setProductSearchResults] = useState<ResolveCandidate[]>([]);
+  const [searchingProduct, setSearchingProduct] = useState(false);
+
+  const [manualPriceDraft, setManualPriceDraft] = useState<ListsManualPriceDraft>({
+    productTitle: '',
+    purchaseQuantity: '',
+    purchaseUnit: '',
+    retailer: '',
+    packageSize: '',
+    packageUnit: '',
+    packageCount: '1',
+    unitPrice: '',
+  });
+
+  const [pricePanelItem, setPricePanelItem] = useState<GroceryItem | null>(null);
   const [priceBusy, setPriceBusy] = useState(false);
 
   const [haulOpen, setHaulOpen] = useState(false);
@@ -228,16 +247,16 @@ export default function ListsManager() {
   }, [addIntent.correction_hint, addIntent.name, addQuery]);
 
   useEffect(() => {
-    if (!resolveItem) return;
-    const query = resolveQuery.trim();
+    if (!editItem || editorSubpanel !== 'change_need') return;
+    const query = needSearchQuery.trim();
     if (query.length < 2) {
-      setResolveResults([]);
+      setNeedSearchResults([]);
       return;
     }
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
-      setSearchingResolve(true);
-      setResolveError(null);
+      setSearchingNeed(true);
+      setEditError(null);
       try {
         const params = new URLSearchParams({ q: query, limit: '10' });
         const response = await fetch(`/api/foods/search?${params.toString()}`, {
@@ -245,18 +264,49 @@ export default function ListsManager() {
           signal: controller.signal,
         });
         const body = (await response.json()) as { results?: ResolveCandidate[] };
-        setResolveResults(body.results ?? []);
+        setNeedSearchResults(body.results ?? []);
       } catch {
-        if (!controller.signal.aborted) setResolveResults([]);
+        if (!controller.signal.aborted) setNeedSearchResults([]);
       } finally {
-        if (!controller.signal.aborted) setSearchingResolve(false);
+        if (!controller.signal.aborted) setSearchingNeed(false);
       }
     }, 250);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [resolveItem, resolveQuery]);
+  }, [editItem, editorSubpanel, needSearchQuery]);
+
+  useEffect(() => {
+    if (!editItem || editorSubpanel !== 'change_product') return;
+    const query = productSearchQuery.trim();
+    if (query.length < 2) {
+      setProductSearchResults([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSearchingProduct(true);
+      setEditError(null);
+      try {
+        const params = new URLSearchParams({ q: query, limit: '10' });
+        const response = await fetch(`/api/foods/search?${params.toString()}`, {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        const body = (await response.json()) as { results?: ResolveCandidate[] };
+        setProductSearchResults(body.results ?? []);
+      } catch {
+        if (!controller.signal.aborted) setProductSearchResults([]);
+      } finally {
+        if (!controller.signal.aborted) setSearchingProduct(false);
+      }
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [editItem, editorSubpanel, productSearchQuery]);
 
   function selectList(nextListId: string) {
     setSelectedListId(nextListId);
@@ -360,19 +410,58 @@ export default function ListsManager() {
     }
   }
 
-  function openEdit(item: GroceryItem) {
+  function manualDraftFromPrice(
+    item: GroceryItem,
+    choice: GroceryListPurchasingChoice | undefined,
+    price: GroceryListPriceObservation | undefined,
+  ): ListsManualPriceDraft {
+    return {
+      productTitle:
+        choice?.shopping_display_name?.trim()
+        || choice?.preferred_product?.trim()
+        || price?.product_title?.trim()
+        || item.name,
+      purchaseQuantity: item.quantity != null ? String(item.quantity) : '1',
+      purchaseUnit: item.unit ?? '',
+      retailer: price?.retailer?.trim() || '',
+      packageSize: price?.package_size != null ? String(price.package_size) : '',
+      packageUnit: price?.package_unit?.trim() || '',
+      packageCount: price?.package_count != null ? String(price.package_count) : '1',
+      unitPrice: price?.line_total != null ? String(price.line_total) : '',
+    };
+  }
+
+  function openEdit(item: GroceryItem, subpanel: ListsEditorSubpanel = 'main') {
+    const choice = choices[item.id];
+    const price = prices[item.id];
     setEditItem(item);
-    setEditName(item.name);
+    setEditorSubpanel(subpanel);
+    setEditUnresolvedName(item.name);
     setEditQuantity(item.quantity == null ? '1' : String(item.quantity));
     setEditUnit(item.unit ?? '');
     setEditNotes(item.notes ?? '');
+    setNeedSearchQuery(item.name);
+    setNeedSearchResults([]);
+    setProductSearchQuery(item.name);
+    setProductSearchResults([]);
+    setManualPriceDraft(manualDraftFromPrice(item, choice, price));
+    setEditError(null);
+  }
+
+  function closeEditor() {
+    if (savingEdit) return;
+    setEditItem(null);
+    setEditorSubpanel('main');
     setEditError(null);
   }
 
   async function saveEdit() {
     if (!selectedListId || !editItem || savingEdit) return;
     const quantity = editQuantity.trim() === '' ? 1 : Number(editQuantity);
-    if (!editName.trim()) {
+    if (
+      !editItem.food_object_id
+      && !editUnresolvedName.trim()
+    ) {
       setEditError('Need is required.');
       return;
     }
@@ -383,16 +472,28 @@ export default function ListsManager() {
     setSavingEdit(true);
     setEditError(null);
     try {
-      const updated = await planService.updatePersistentGroceryItem(selectedListId, editItem.id, {
-        name: editName.trim(),
+      const patch: {
+        name?: string;
+        quantity: number;
+        unit: string | null;
+        notes: string | null;
+      } = {
         quantity,
         unit: editUnit.trim() || null,
         notes: editNotes.trim() || null,
-      });
+      };
+      if (!editItem.food_object_id) {
+        patch.name = editUnresolvedName.trim();
+      }
+      const updated = await planService.updatePersistentGroceryItem(
+        selectedListId,
+        editItem.id,
+        patch,
+      );
       setItems((current) =>
         current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
       );
-      setEditItem(null);
+      closeEditor();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : 'Unable to save this item.');
     } finally {
@@ -418,7 +519,7 @@ export default function ListsManager() {
     try {
       await planService.deletePersistentGroceryItem(selectedListId, editItem.id);
       setItems((current) => current.filter((candidate) => candidate.id !== editItem.id));
-      setEditItem(null);
+      closeEditor();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : 'Unable to remove this item.');
     } finally {
@@ -426,34 +527,111 @@ export default function ListsManager() {
     }
   }
 
-  function openChooseProduct(item: GroceryItem) {
-    setResolveItem(item);
-    setResolveQuery(item.name);
-    setResolveResults([]);
-    setResolveError(null);
+  async function selectNeedCandidate(candidate: ResolveCandidate) {
+    if (!selectedListId || !editItem || savingEdit) return;
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const result = await planService.changePersistentGroceryListItemNeed(
+        selectedListId,
+        editItem.id,
+        { food_object_id: candidate.food.id },
+      );
+      setItems((current) =>
+        current.map((row) => (row.id === result.item.id ? result.item : row)),
+      );
+      setEditItem(result.item);
+      setEditUnresolvedName(result.item.name);
+      if (result.cleared_purchasing) {
+        setChoices((current) => {
+          const next = { ...current };
+          delete next[editItem.id];
+          return next;
+        });
+        setPrices((current) => {
+          const next = { ...current };
+          delete next[editItem.id];
+          return next;
+        });
+      }
+      setEditorSubpanel('main');
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Unable to change this need.');
+    } finally {
+      setSavingEdit(false);
+    }
   }
 
-  async function chooseProduct(candidate: ResolveCandidate) {
-    if (!selectedListId || !resolveItem || resolving) return;
-    setResolving(true);
-    setResolveError(null);
+  async function selectProductCandidate(candidate: ResolveCandidate) {
+    if (!selectedListId || !editItem || savingEdit) return;
+    setSavingEdit(true);
+    setEditError(null);
     try {
       const result = await planService.resolvePersistentGroceryItemForList(
         selectedListId,
-        resolveItem.id,
+        editItem.id,
         {
           food_object_id: candidate.food.id,
           remember_for_future: false,
           save_to_source_plan: false,
         },
       );
-      setChoices((current) => ({ ...current, [resolveItem.id]: result.choice }));
-      setResolveItem(null);
+      setChoices((current) => ({ ...current, [editItem.id]: result.choice }));
+      setEditorSubpanel('main');
     } catch (err) {
-      setResolveError(err instanceof Error ? err.message : 'Unable to choose this product.');
+      setEditError(err instanceof Error ? err.message : 'Unable to choose this product.');
     } finally {
-      setResolving(false);
+      setSavingEdit(false);
     }
+  }
+
+  async function saveManualPriceFromEditor() {
+    if (!selectedListId || !editItem || savingEdit) return;
+    const unitPrice = Number(manualPriceDraft.unitPrice);
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      setEditError('Enter a valid price.');
+      return;
+    }
+    const packageCount = Number(manualPriceDraft.packageCount.trim() || '1');
+    const packageSize = manualPriceDraft.packageSize.trim()
+      ? Number(manualPriceDraft.packageSize)
+      : null;
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const observation = await planService.savePersistentGroceryItemManualPrice(
+        selectedListId,
+        editItem.id,
+        {
+          unit_price: unitPrice,
+          package_count: Number.isFinite(packageCount) && packageCount > 0 ? packageCount : 1,
+          currency: 'USD',
+          product_title: manualPriceDraft.productTitle.trim() || null,
+          retailer: manualPriceDraft.retailer.trim() || null,
+          package_size: packageSize != null && Number.isFinite(packageSize) ? packageSize : null,
+          package_unit: manualPriceDraft.packageUnit.trim() || null,
+        },
+      );
+      setPrices((current) => ({ ...current, [editItem.id]: observation }));
+      setEditorSubpanel('main');
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Unable to save this price.');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  function openPriceSearchFromEditor() {
+    if (!editItem) return;
+    setPricePanelItem(editItem);
+  }
+
+  async function refreshListPrices() {
+    if (!selectedListId) return;
+    const summary = await planService
+      .getPersistentGroceryHaulSummary(selectedListId)
+      .catch(() => null);
+    setPrices(summary?.list_prices_by_item_id ?? {});
   }
 
   async function buildHaul() {
@@ -615,26 +793,14 @@ export default function ListsManager() {
                           <div className="my-1">
                             {product ? (
                               price ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setPriceItem(item)}
-                                  className="block text-xl font-semibold text-white/50 hover:text-white/50"
-                                >
+                                <span className="block text-xl font-semibold text-white/50">
                                   {formatGroceryCurrency(price.line_total, price.currency)}
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setPriceItem(item)}
-                                  className="block text-xs text-white/35 hover:text-white/65"
-                                >
-                                  Find Price
-                                </button>
-                              )
+                                </span>
+                              ) : null
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => openChooseProduct(item)}
+                                onClick={() => openEdit(item, 'change_product')}
                                 className="rounded-full bg-brand-50 px-5 py-1 my-1.5 text-sm font-semibold text-[#16110d] hover:bg-white"
                               >
                                 Choose Product
@@ -763,106 +929,46 @@ export default function ListsManager() {
         </div>
       </AppDialog>
 
-      <AppDialog
-        open={Boolean(editItem)}
-        onClose={() => !savingEdit && setEditItem(null)}
-        labelledBy="edit-list-item-title"
-        panelClassName="border border-white/10 bg-[#211a14] shadow-2xl"
-      >
-        <div className="p-5">
-          <h2 id="edit-list-item-title" className="text-xl font-semibold text-white">Edit List item</h2>
-          <div className="mt-5 space-y-3">
-            <label className="block">
-              <span className="text-xs text-white/55">Need</span>
-              <input value={editName} onChange={(event) => setEditName(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none" />
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label>
-                <span className="text-xs text-white/55">Quantity</span>
-                <input type="number" min="0" step="0.01" value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none" />
-              </label>
-              <label>
-                <span className="text-xs text-white/55">Unit</span>
-                <input value={editUnit} onChange={(event) => setEditUnit(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none" />
-              </label>
-            </div>
-            <label className="block">
-              <span className="text-xs text-white/55">Notes</span>
-              <textarea value={editNotes} onChange={(event) => setEditNotes(event.target.value)} rows={2} className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none" />
-            </label>
-          </div>
-          {editError && <p className="mt-2 text-sm text-red-200" role="alert">{editError}</p>}
-          <div className="mt-5 flex items-center justify-between gap-2">
-            <button type="button" onClick={() => void removeItem()} disabled={savingEdit} className="text-sm text-red-200/80">Remove from List</button>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={savingEdit}
-                onClick={() => {
-                  const item = editItem;
-                  setEditItem(null);
-                  if (item) openChooseProduct(item);
-                }}
-                className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/70"
-              >
-                {editItem && productName(choices[editItem.id], prices[editItem.id])
-                  ? 'Change Product'
-                  : 'Choose Product'}
-              </button>
-              <button type="button" onClick={() => void saveEdit()} disabled={savingEdit} className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40">
-                {savingEdit ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </AppDialog>
-
-      <AppDialog
-        open={Boolean(resolveItem)}
-        onClose={() => !resolving && setResolveItem(null)}
-        labelledBy="choose-product-title"
-        panelClassName="border border-white/10 bg-[#211a14] shadow-2xl"
-      >
-        <div className="p-5">
-          <h2 id="choose-product-title" className="text-xl font-semibold text-white">Choose Product</h2>
-          <p className="mt-1 text-sm text-white/45">
-            The requested need stays “{resolveItem?.name}”.
-          </p>
-          <input
-            autoFocus
-            type="search"
-            value={resolveQuery}
-            onChange={(event) => setResolveQuery(event.target.value)}
-            placeholder="Search products"
-            className="mt-4 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none"
-          />
-          <div className="mt-3 max-h-72 overflow-y-auto">
-            {searchingResolve ? (
-              <p className="py-3 text-sm text-white/45">Searching…</p>
-            ) : (
-              resolveResults.map((candidate) => (
-                <button
-                  key={candidate.food.id}
-                  type="button"
-                  disabled={resolving}
-                  onClick={() => void chooseProduct(candidate)}
-                  className="block w-full border-b border-white/[0.06] px-2 py-3 text-left last:border-0 hover:bg-white/[0.04]"
-                >
-                  <span className="block text-sm text-white">
-                    {candidate.food.brandName
-                      ? `${candidate.food.brandName} — ${candidate.food.canonicalName}`
-                      : candidate.food.canonicalName}
-                  </span>
-                  <span className="block text-xs text-white/35">
-                    {candidate.source_label ?? candidate.source}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-          {resolveError && <p className="mt-2 text-sm text-red-200" role="alert">{resolveError}</p>}
-        </div>
-      </AppDialog>
+      {editItem && (
+        <ListsItemEditor
+          open={Boolean(editItem)}
+          needName={editItem.name}
+          needResolved={Boolean(editItem.food_object_id)}
+          unresolvedNeedName={editUnresolvedName}
+          onUnresolvedNeedNameChange={setEditUnresolvedName}
+          quantity={editQuantity}
+          onQuantityChange={setEditQuantity}
+          unit={editUnit}
+          onUnitChange={setEditUnit}
+          notes={editNotes}
+          onNotesChange={setEditNotes}
+          choice={choices[editItem.id]}
+          price={prices[editItem.id]}
+          subpanel={editorSubpanel}
+          onSubpanelChange={setEditorSubpanel}
+          needSearchQuery={needSearchQuery}
+          onNeedSearchQueryChange={setNeedSearchQuery}
+          needSearchResults={needSearchResults}
+          needSearchBusy={searchingNeed}
+          productSearchQuery={productSearchQuery}
+          onProductSearchQueryChange={setProductSearchQuery}
+          productSearchResults={productSearchResults}
+          productSearchBusy={searchingProduct}
+          manualDraft={manualPriceDraft}
+          onManualDraftChange={(patch) =>
+            setManualPriceDraft((current) => ({ ...current, ...patch }))
+          }
+          busy={savingEdit}
+          error={editError}
+          onClose={closeEditor}
+          onSave={() => void saveEdit()}
+          onRemoveFromList={() => void removeItem()}
+          onSelectNeedCandidate={(candidate) => void selectNeedCandidate(candidate)}
+          onSelectProductCandidate={(candidate) => void selectProductCandidate(candidate)}
+          onOpenPriceSearch={openPriceSearchFromEditor}
+          onSaveManualPrice={() => void saveManualPriceFromEditor()}
+        />
+      )}
 
       <AppDialog
         open={haulOpen}
@@ -886,26 +992,27 @@ export default function ListsManager() {
         </div>
       </AppDialog>
 
-      {priceItem && selectedListId && (
+      {pricePanelItem && selectedListId && (
         <GroceryPricePanel
           item={{
-            ...priceItem,
-            name: productName(choices[priceItem.id], prices[priceItem.id]) ?? priceItem.name,
+            ...pricePanelItem,
+            name: productName(choices[pricePanelItem.id], prices[pricePanelItem.id])
+              ?? pricePanelItem.name,
           }}
           currentObservation={
-            prices[priceItem.id]
-              ? listPriceToHaulObservation(prices[priceItem.id])
+            prices[pricePanelItem.id]
+              ? listPriceToHaulObservation(prices[pricePanelItem.id])
               : null
           }
           entryMode="search"
           busy={priceBusy}
-          onClose={() => !priceBusy && setPriceItem(null)}
+          onClose={() => !priceBusy && setPricePanelItem(null)}
           onSearch={async (input) => {
             setPriceBusy(true);
             try {
               return await planService.searchPersistentGroceryItemPrices(
                 selectedListId,
-                priceItem.id,
+                pricePanelItem.id,
                 input,
               );
             } finally {
@@ -917,7 +1024,7 @@ export default function ListsManager() {
             try {
               return await planService.confirmPersistentGroceryItemPrice(
                 selectedListId,
-                priceItem.id,
+                pricePanelItem.id,
                 input,
               );
             } finally {
@@ -929,7 +1036,7 @@ export default function ListsManager() {
             try {
               const observation = await planService.savePersistentGroceryItemManualPrice(
                 selectedListId,
-                priceItem.id,
+                pricePanelItem.id,
                 {
                   unit_price: input.unit_price,
                   package_count: input.package_count,
@@ -944,10 +1051,9 @@ export default function ListsManager() {
             }
           }}
           onObservationSaved={() => {
-            void planService
-              .getPersistentGroceryHaulSummary(selectedListId)
-              .then((summary) => setPrices(summary.list_prices_by_item_id ?? {}));
-            setPriceItem(null);
+            void refreshListPrices();
+            setPricePanelItem(null);
+            setEditorSubpanel('main');
           }}
         />
       )}
