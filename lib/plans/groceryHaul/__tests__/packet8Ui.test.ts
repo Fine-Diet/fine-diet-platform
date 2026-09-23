@@ -78,4 +78,14 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(builder).toContain('detail.estimate.by_store.map');
     expect(builder).toContain('Tax is not included');
   });
+
+  it('uses the settled builder control rail, Shopping Summary, and distinct store count', () => {
+    const builder = read('components/food/hauls/HaulBuilder.tsx');
+    expect(builder).toContain('Shopping Summary');
+    expect(builder).toContain('countDistinctAssignedStores');
+    expect(builder).toContain('distinctStoreCount');
+    expect(builder).toContain('Invite to Haul is planned for a later phase');
+    expect(builder).toContain('Adding stores from the builder is not available yet');
+    expect(builder).not.toContain('Haul Estimate');
+  });
 });

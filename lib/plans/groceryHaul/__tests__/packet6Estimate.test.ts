@@ -1,5 +1,5 @@
 import type { GroceryHaulItem } from '@/lib/plans/types';
-import { computeGroceryHaulPreparationEstimate } from '../estimate';
+import { computeGroceryHaulPreparationEstimate, countDistinctAssignedStores } from '../estimate';
 
 function item(overrides: Partial<GroceryHaulItem> = {}): GroceryHaulItem {
   return {
@@ -97,5 +97,24 @@ describe('Packet 6 persisted Haul estimate', () => {
     expect(estimate.estimated_total).toBe(0);
     expect(estimate.priced_item_count).toBe(0);
     expect(estimate.unpriced_item_count).toBe(2);
+  });
+
+  it('counts distinct assigned stores among included items even when unpriced', () => {
+    expect(countDistinctAssignedStores([
+      item(),
+      item({
+        id: 'item-2',
+        grocery_item_id: 'source-item-2',
+        retailer: 'Market',
+        store_location: 'Uptown',
+        postal_code: '60602',
+        price_amount: null,
+        price_source: null,
+      }),
+      item({ id: 'item-3', grocery_item_id: 'source-item-3', final_quantity: 0, retailer: 'Elsewhere' }),
+    ])).toBe(2);
+    expect(countDistinctAssignedStores([
+      item({ retailer: null, store_location: null, postal_code: null }),
+    ])).toBe(0);
   });
 });

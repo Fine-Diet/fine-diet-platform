@@ -24,6 +24,18 @@ function storeKey(item: GroceryHaulItem): string | null {
   ]);
 }
 
+/** Distinct store assignments among execution-included Haul items (final_quantity > 0). */
+export function countDistinctAssignedStores(items: readonly GroceryHaulItem[]): number {
+  const keys = new Set<string>();
+  for (const item of items) {
+    const quantity = numeric(item.final_quantity) ?? 0;
+    if (quantity <= 0) continue;
+    const key = storeKey(item);
+    if (key) keys.add(key);
+  }
+  return keys.size;
+}
+
 /**
  * Canonical Haul preparation estimate.
  *
