@@ -34,6 +34,8 @@ export const SHOPPING_VIEW_EXECUTION_SQL_PATH =
   'scripts/sql/addShoppingViewExecution.sql';
 export const SHOPPING_VIEW_EXECUTION_VERIFY_SQL_PATH =
   'scripts/sql/verifyShoppingViewExecution.sql';
+export const ACTIVE_HAUL_PENDING_PREPARATION_SQL_PATH =
+  'scripts/sql/allowActiveHaulPendingPreparationEdits.sql';
 export const SHOPPING_EXECUTION_OWNER_POLICY_SQL_PATH =
   'scripts/sql/optimizeShoppingExecutionOwnerPolicy.sql';
 export const SHOPPING_EXECUTION_OWNER_POLICY_VERIFY_SQL_PATH =

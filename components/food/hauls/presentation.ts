@@ -119,6 +119,35 @@ export function acquiredStoreLabel(
     .join(' · ') || null;
 }
 
+export function isExecutableShoppingRow(item: GroceryHaulExecutionItem): boolean {
+  if (item.current_preparation) return item.current_preparation.is_executable;
+  return item.prepared_quantity > 0;
+}
+
+export function currentPlanInstructionLabel(item: GroceryHaulExecutionItem): string {
+  const plan = item.state === 'pending' ? item.current_preparation : null;
+  if (!plan) return preparedInstructionLabel(item);
+  const product = [plan.brand_name, plan.product_title]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' · ');
+  const quantity = `Buy ${plan.quantity}`;
+  const store = [plan.retailer, plan.store_location, plan.postal_code]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' · ') || null;
+  return [product || 'Prepared product not set', quantity, store].filter(Boolean).join(' · ');
+}
+
+export function currentPlanStoreLabel(item: GroceryHaulExecutionItem): string | null {
+  const plan = item.state === 'pending' ? item.current_preparation : null;
+  if (!plan) return preparedStoreLabel(item);
+  return [plan.retailer, plan.store_location, plan.postal_code]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' · ') || null;
+}
+
 export function preparedInstructionLabel(item: GroceryHaulExecutionItem): string {
   const product = [item.prepared_brand_name, item.prepared_product_title]
     .map((part) => part?.trim())

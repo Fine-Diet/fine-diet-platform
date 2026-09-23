@@ -30,6 +30,7 @@ function executionItem(overrides: Partial<GroceryHaulExecutionItem> = {}): Groce
     haul_item_id: 'haul-item-1',
     sort_ordinal: 1,
     state: 'pending',
+    current_preparation: null,
     source_grocery_list_id: 'list-1',
     source_list_title: 'Essentials',
     source_name_snapshot: 'Oats',
@@ -138,12 +139,12 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
 
   it('renders execution rows, provenance, prepared instruction, and progress counts', () => {
     const shop = read('components/food/hauls/HaulShoppingView.tsx');
-    expect(shop).toContain('execution.items.map');
+    expect(shop).toContain('execution.items.filter(isExecutableShoppingRow).map');
     expect(shop).toContain('execution.summary.pending_count');
     expect(shop).toContain('execution.summary.in_basket_count');
     expect(shop).toContain('execution.summary.skipped_count');
     expect(shop).toContain('executionSourceDemandLabel(item)');
-    expect(shop).toContain('preparedInstructionLabel(item)');
+    expect(shop).toContain('currentPlanInstructionLabel(item)');
     expect(shop).toContain('acquisitionOutcomeDiverged(item)');
     expect(shop).toContain('Active shopping');
     expect(executionSourceDemandLabel(executionItem())).toBe('Need · 4 cup');
@@ -248,9 +249,11 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(library).not.toContain('Shopping in progress');
     expect(library).not.toContain('History');
     expect(shop).toContain('haulPrepareHref(haulId)');
-    expect(shop).toContain('View preparation');
+    expect(shop).toContain('Edit');
+    expect(shop).toContain('currentPlanInstructionLabel');
+    expect(shop).toContain('isExecutableShoppingRow');
     expect(builder).toContain("router.query.prepare === '1'");
-    expect(builder).toContain('preparationReadOnly');
+    expect(builder).toContain('itemPreparationLocked');
     expect(builder).toContain('APP_ROUTE_BUILDERS.foodHaulShop(haulId)');
     expect(builder).toContain('Continue to Shopping View');
     expect(builder).toContain('<HistoricalHaul detail={detail} />');

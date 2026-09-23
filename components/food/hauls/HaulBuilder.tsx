@@ -20,6 +20,7 @@ import type {
   GeneratedGroceryList,
   GroceryHaulDetail,
   GroceryHaulExecutionReadiness,
+  GroceryHaulExecutionItemState,
   GroceryHaulItem,
 } from '@/lib/plans/types';
 import { HaulExecutionReadinessDialog } from './HaulExecutionReadinessDialog';
@@ -109,6 +110,9 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [addingLists, setAddingLists] = useState(false);
   const [addListsError, setAddListsError] = useState<string | null>(null);
+  const [executionStateByItemId, setExecutionStateByItemId] = useState(
+    () => new Map<string, GroceryHaulExecutionItemState>(),
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -130,6 +134,14 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
           ? current
           : nextDetail.source_lists[0]?.grocery_list_id ?? null,
       );
+      if (nextDetail.haul.status === 'active') {
+        const execution = await planService.getGroceryHaulExecution(haulId);
+        setExecutionStateByItemId(new Map(
+          execution.items.map((item) => [item.haul_item_id, item.state]),
+        ));
+      } else {
+        setExecutionStateByItemId(new Map());
+      }
       setLoadState('ready');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load this Haul.');
@@ -148,7 +160,16 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   }, [load]);
 
   const prepareView = router.isReady && router.query.prepare === '1';
-  const preparationReadOnly = detail?.haul.status === 'active' && prepareView;
+  const metadataReadOnly = detail?.haul.status !== 'planned';
+  const activePrepareView = detail?.haul.status === 'active' && prepareView;
+
+  function itemPreparationLocked(itemId: string): boolean {
+    if (detail?.haul.status === 'planned') return false;
+    if (activePrepareView) {
+      return executionStateByItemId.get(itemId) !== 'pending';
+    }
+    return true;
+  }
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -220,7 +241,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   }
 
   async function changeQuantity(item: GroceryHaulItem, delta: number) {
-    if (preparationReadOnly || itemBusy) return;
+    if (itemPreparationLocked(item.id) || itemBusy) return;
     const nextQuantity = Math.max(0, item.final_quantity + delta);
     if (nextQuantity === item.final_quantity) return;
     setItemBusy(item.id);
@@ -335,16 +356,16 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
             <div className="h-12 w-2/3 animate-pulse rounded-xl bg-white/[0.05]" />
             <p className="text-sm text-white/50">Continue to Shopping View…</p>
           </div>
-        ) : detail.haul.status !== 'planned' && !preparationReadOnly ? (
+        ) : detail.haul.status !== 'planned' && !activePrepareView ? (
           <HistoricalHaul detail={detail} />
         ) : (
           <div className="mx-auto w-full max-w-[1000px]">
             <Link href={APP_ROUTES.foodHauls} className="text-xs font-semibold text-white/45 hover:text-white/75">
               ← Hauls
             </Link>
-            {preparationReadOnly && (
+            {activePrepareView && (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
-                <p>Shopping is in progress. Preparation is read-only so execution state stays intact.</p>
+                <p>Pending items can be edited here. Return in-basket or skipped items to pending in Shopping View first.</p>
                 <Link
                   href={APP_ROUTE_BUILDERS.foodHaulShop(haulId)}
                   className="font-semibold text-brand-50 hover:text-brand-50/80"
@@ -365,7 +386,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                 Haul title
                 <input
                   value={metadata.title}
-                  readOnly={preparationReadOnly}
+                  readOnly={metadataReadOnly}
                   onChange={(event) => setMetadata({ ...metadata, title: event.target.value })}
                   className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-semibold normal-case tracking-normal text-brand-50 outline-none focus:border-white/45"
                 />
@@ -375,7 +396,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                 <input
                   type="date"
                   value={metadata.shoppingDate}
-                  readOnly={preparationReadOnly}
+                  readOnly={metadataReadOnly}
                   onChange={(event) => setMetadata({ ...metadata, shoppingDate: event.target.value })}
                   className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
                 />
@@ -388,7 +409,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     min="0"
                     step="0.01"
                     value={metadata.budgetAmount}
-                    readOnly={preparationReadOnly}
+                    readOnly={metadataReadOnly}
                     onChange={(event) => setMetadata({ ...metadata, budgetAmount: event.target.value })}
                     placeholder="Optional"
                     className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
@@ -399,7 +420,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                   <input
                     maxLength={3}
                     value={metadata.currency}
-                    readOnly={preparationReadOnly}
+                    readOnly={metadataReadOnly}
                     onChange={(event) => setMetadata({ ...metadata, currency: event.target.value.toUpperCase() })}
                     className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-2 text-center text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
                   />
@@ -430,7 +451,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     {detail.source_lists.length} {detail.source_lists.length === 1 ? 'List' : 'Lists'} · {detail.estimate.execution_item_count} live items
                   </p>
                 </div>
-                {!preparationReadOnly && (
+                {!activePrepareView && (
                   <button
                     type="button"
                     onClick={() => {
@@ -505,7 +526,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                           </p>
                                         )}
                                       </>
-                                    ) : !preparationReadOnly ? (
+                                    ) : !itemPreparationLocked(item.id) ? (
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -520,7 +541,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                       <p className="mt-2 text-sm text-white/45">Product not set</p>
                                     )}
                                   </div>
-                                  {!preparationReadOnly && (
+                                  {!itemPreparationLocked(item.id) && (
                                     <details className="relative shrink-0">
                                       <summary aria-label={`More actions for ${item.name_snapshot}`} className="cursor-pointer list-none rounded-full px-2 py-1 text-lg tracking-widest text-white/65">
                                         •••
@@ -542,7 +563,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                   )}
                                 </div>
                                 <div className="mt-4 inline-flex items-center rounded-full border border-white/20">
-                                  {!preparationReadOnly && (
+                                  {!itemPreparationLocked(item.id) && (
                                     <button
                                       type="button"
                                       aria-label={`Decrease ${item.name_snapshot} final Haul quantity`}
@@ -556,7 +577,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                   <span className="min-w-9 text-center text-xs font-semibold" aria-label={`Final Haul quantity ${item.final_quantity}`}>
                                     {item.final_quantity}
                                   </span>
-                                  {!preparationReadOnly && (
+                                  {!itemPreparationLocked(item.id) && (
                                     <button
                                       type="button"
                                       aria-label={`Increase ${item.name_snapshot} final Haul quantity`}
@@ -615,7 +636,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               <p className="mt-5 text-xs text-white/35">
                 Based on persisted Haul prices. Tax is not included.
               </p>
-              {preparationReadOnly ? (
+              {activePrepareView ? (
                 <Link
                   href={APP_ROUTE_BUILDERS.foodHaulShop(haulId)}
                   className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] sm:w-auto"

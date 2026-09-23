@@ -295,7 +295,7 @@ describe('Packet 9 Shopping View execution contract', () => {
       in_basket_count: 0,
       skipped_count: 0,
     });
-    expect(mockFrom).toHaveBeenCalledTimes(3);
+    expect(mockFrom).toHaveBeenCalledTimes(4);
     expect(mockRpc).toHaveBeenCalledTimes(1);
   });
 

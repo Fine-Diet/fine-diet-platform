@@ -747,6 +747,25 @@ export interface GroceryHaulExecutionReadiness {
   deferred_findings: GroceryHaulExecutionDeferredFinding[];
 }
 
+/** Current mutable Haul preparation joined from grocery_haul_items for active execution. */
+export interface GroceryHaulExecutionCurrentPreparation {
+  quantity: number;
+  selected_food_object_id: string | null;
+  product_title: string | null;
+  brand_name: string | null;
+  purchase_unit: string | null;
+  package_size: number | null;
+  package_unit: string | null;
+  package_count: number | null;
+  retailer: string | null;
+  store_location: string | null;
+  postal_code: string | null;
+  price_amount: number | null;
+  price_currency: string | null;
+  price_source: GroceryHaulPriceSource | null;
+  is_executable: boolean;
+}
+
 export interface GroceryHaulExecutionItem {
   id: string;
   person_id: string;
@@ -754,6 +773,8 @@ export interface GroceryHaulExecutionItem {
   haul_item_id: string;
   sort_ordinal: number;
   state: GroceryHaulExecutionItemState;
+  /** Live Haul preparation for pending rows; null when not joined. */
+  current_preparation: GroceryHaulExecutionCurrentPreparation | null;
   source_grocery_list_id: string;
   source_list_title: string | null;
   source_name_snapshot: string;
