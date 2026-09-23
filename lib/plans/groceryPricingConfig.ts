@@ -46,6 +46,28 @@ export function isGroceryPriceProviderEnabled(): boolean {
   return normalized !== '0' && normalized !== 'false' && normalized !== 'off';
 }
 
+/** Treat whitespace-only values as unset (e.g. SERPAPI_API_KEY="" in .env.production.local). */
+export function resolveGroceryPriceSerpApiApiKey(): string | null {
+  const raw = process.env.SERPAPI_API_KEY;
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+let loggedMissingSerpApiKey = false;
+
+export function warnIfGroceryPriceSerpApiKeyMissingInDev(): void {
+  if (process.env.NODE_ENV !== 'development' || loggedMissingSerpApiKey) return;
+  loggedMissingSerpApiKey = true;
+  if (!resolveGroceryPriceSerpApiApiKey()) {
+    console.warn(
+      '[grocery-price] SERPAPI_API_KEY is missing or empty in this Node process. '
+      + 'Restart next dev after fixing env files; an empty override in .env.production.local '
+      + 'can mask a valid .env.local value until restart.',
+    );
+  }
+}
+
 function readPositiveInt(raw: string | undefined, fallback: number): number {
   if (raw == null || raw.trim() === '') return fallback;
   const parsed = Number.parseInt(raw, 10);

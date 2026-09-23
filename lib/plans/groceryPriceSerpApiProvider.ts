@@ -13,6 +13,8 @@ import { GroceryPriceProviderError, isGroceryPriceProviderError } from './grocer
 import {
   GROCERY_PRICE_PROVIDER_TIMEOUT_MS,
   isGroceryPriceProviderEnabled,
+  resolveGroceryPriceSerpApiApiKey,
+  warnIfGroceryPriceSerpApiKeyMissingInDev,
 } from './groceryPricingConfig';
 import { assertSafeOutboundUrl } from './groceryPricingValidation';
 import {
@@ -454,8 +456,9 @@ export function buildSerpApiSearchParams(
 }
 
 function buildSerpApiUrl(query: GroceryPriceProviderQuery, context: GroceryPriceSearchContext): string {
-  const apiKey = process.env.SERPAPI_API_KEY;
+  const apiKey = resolveGroceryPriceSerpApiApiKey();
   if (!apiKey) {
+    warnIfGroceryPriceSerpApiKeyMissingInDev();
     throw new GroceryPriceProviderError('disabled', 'SerpAPI is not configured');
   }
   const params = buildSerpApiSearchParams(query, context, apiKey);
