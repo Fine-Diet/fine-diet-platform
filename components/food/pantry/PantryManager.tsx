@@ -268,7 +268,7 @@ export default function PantryManager() {
   const [lotBusy, setLotBusy] = useState(false);
   const [lotError, setLotError] = useState<string | null>(null);
   const [purchaseDetailsMode, setPurchaseDetailsMode] =
-    useState<PurchaseDetailsMode>('summary');
+    useState<PurchaseDetailsMode>('manual');
   const [productSearchQuery, setProductSearchQuery] = useState('');
   const [productSearchPostal, setProductSearchPostal] = useState('');
   const [productSearchRetailer, setProductSearchRetailer] = useState('');
@@ -555,7 +555,7 @@ export default function PantryManager() {
   }
 
   function resetProductSearch() {
-    setPurchaseDetailsMode('summary');
+    setPurchaseDetailsMode('manual');
     setProductSearchQuery('');
     setProductSearchPostal('');
     setProductSearchRetailer('');
@@ -570,7 +570,7 @@ export default function PantryManager() {
     setLotContext({ pantryKey: item.key, itemName: item.name, lot });
     setLotForm(lot ? lotDraft(lot) : emptyLotDraft(item.unit));
     setLotError(null);
-    setPurchaseDetailsMode('summary');
+    setPurchaseDetailsMode('manual');
     resetProductSearch();
   }
 
@@ -662,7 +662,7 @@ export default function PantryManager() {
 
   function selectProductOffer(offer: PantryProductSearchOffer) {
     setLotForm((current) => applyPantryProductOfferToLotDraft(current, offer));
-    setPurchaseDetailsMode('summary');
+    setPurchaseDetailsMode('manual');
     setProductSearchState('idle');
     setProductSearchOffers([]);
     setProductSearchError(null);

@@ -1,9 +1,9 @@
 'use client';
 
 import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
-import { ItemManagementSection } from '@/components/food/itemManagement/ItemManagementSection';
 import { PackageFields } from '@/components/food/itemManagement/PackageFields';
 import { PurchaseDetailsSummary } from '@/components/food/itemManagement/PurchaseDetailsSummary';
+import { PANTRY_EMBEDDED_SUMMARY_FORMAT } from '@/components/food/itemManagement/purchaseDetailsSummaryFormat';
 import type {
   PantryProductSearchOffer,
   PantryProductSearchProvenance,
@@ -14,9 +14,13 @@ import { pantryPurchaseEditorIsDirty } from './pantryLotSave';
 import { isPantryLotTerminal } from './pantryPolicy';
 import { expectedShelfLifeDetailsProps } from './pantryExpectedShelfLifeDetails';
 import { PantryProductLookupPanel } from './PantryProductLookupPanel';
+import { PANTRY_PURCHASE_FIELD_PLACEHOLDERS } from './pantryPurchaseFieldPlaceholders';
 import type { PantryLotDraft } from './pantryLotSave';
 
-export type PurchaseDetailsMode = 'summary' | 'manual' | 'search';
+export type PurchaseDetailsMode = 'manual' | 'search';
+
+export const PANTRY_PURCHASE_PILL_INPUT_CLASS =
+  'mt-1.5 w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/60 focus:ring-2 focus:ring-white/10 focus:ring-offset-0';
 
 export interface PantryPurchaseEditorProps {
   open: boolean;
@@ -61,6 +65,16 @@ export interface PantryPurchaseEditorProps {
   resolvingPurchase?: boolean;
 }
 
+const labelClass = 'text-[13px] text-white/50';
+
+export const PANTRY_PURCHASE_DATE_GRID_CLASS = 'grid min-w-0 grid-cols-2 gap-3';
+export const PANTRY_PURCHASE_AMOUNT_GRID_CLASS =
+  'grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3';
+export const PANTRY_PURCHASE_PRODUCT_TITLE_GRID_CLASS =
+  'grid min-w-0 grid-cols-3 gap-3 max-[360px]:grid-cols-1';
+export const PANTRY_PURCHASE_RETAILER_PRICE_GRID_CLASS = 'grid min-w-0 grid-cols-3 gap-3';
+export const PANTRY_PRODUCT_DETAIL_TAB_CLASS = 'flex-1 rounded-t-xl py-3 text-center text-base';
+
 export function PantryPurchaseEditor({
   open,
   itemName,
@@ -69,7 +83,6 @@ export function PantryPurchaseEditor({
   lotBusy,
   lotError,
   purchaseDetailsMode,
-  inputClassName,
   productSearchQuery,
   onProductSearchQueryChange,
   productSearchPostal,
@@ -97,6 +110,7 @@ export function PantryPurchaseEditor({
   onResolvePurchase,
   resolvingPurchase = false,
 }: PantryPurchaseEditorProps) {
+  const pillInput = PANTRY_PURCHASE_PILL_INPUT_CLASS;
   const eyebrow = existingLot ? 'Edit purchase' : 'Add purchase';
   const readOnly = existingLot != null && isPantryLotTerminal(existingLot);
   const remainingQuantity = Number(lotForm.quantityRemaining);
@@ -109,12 +123,29 @@ export function PantryPurchaseEditor({
     lotForm.expectedShelfLifeDays,
   );
 
+  const summaryDetails = {
+    productTitle: lotForm.productTitle,
+    brandName: lotForm.brandName,
+    packageSize: lotForm.packageSize,
+    packageUnit: lotForm.packageUnit,
+    packageCount: lotForm.packageCount,
+    retailer: lotForm.retailer,
+    priceAmount: lotForm.priceAmount,
+    currency: lotForm.currency,
+  };
+
+  function switchToSearch() {
+    onOpenProductSearch();
+    onSetPurchaseDetailsMode('search');
+  }
+
   return (
     <ItemManagementDialog
       open={open}
       onClose={onClose}
       labelledBy="purchase-editor-title"
       busy={lotBusy}
+      shell="workspace"
       footer={(
         <>
           {lotError && (
@@ -155,42 +186,41 @@ export function PantryPurchaseEditor({
         </>
       )}
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">
-        {eyebrow}
-      </p>
-      <h2 id="purchase-editor-title" className="mt-1 text-2xl font-semibold text-white">
+      <p className="text-base text-white/45">{eyebrow}</p>
+      <h2
+        id="purchase-editor-title"
+        className="mt-2 text-[2.35rem] font-medium leading-tight text-white sm:text-[2.5rem]"
+      >
         {itemName}
       </h2>
-      <p className="mt-2 text-sm text-white/45">
-        Purchase details do not change your total on-hand amount.
-      </p>
 
-      <div className="mt-6 space-y-6">
-        <ItemManagementSection title="Purchase">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="mt-10 space-y-10">
+        <section className="space-y-5">
+          <div className={PANTRY_PURCHASE_DATE_GRID_CLASS}>
             <label>
-              <span className="text-xs text-white/55">Purchased on</span>
+              <span className={labelClass}>Purchased on</span>
               <input
                 type="date"
                 value={lotForm.acquiredOn}
                 onChange={(event) => onUpdateLotForm({ acquiredOn: event.target.value })}
                 disabled={readOnly}
-                className={inputClassName}
+                className={pillInput}
               />
             </label>
             <label>
-              <span className="text-xs text-white/55">Expiration date</span>
+              <span className={labelClass}>Expiration date</span>
               <input
                 type="date"
                 value={lotForm.expiresOn}
                 onChange={(event) => onUpdateLotForm({ expiresOn: event.target.value })}
-                className={inputClassName}
+                disabled={readOnly}
+                className={pillInput}
               />
             </label>
           </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className={PANTRY_PURCHASE_AMOUNT_GRID_CLASS}>
             <label>
-              <span className="text-xs text-white/55">Amount acquired</span>
+              <span className={labelClass}>Amount acquired</span>
               <input
                 type="number"
                 min="0.01"
@@ -198,11 +228,12 @@ export function PantryPurchaseEditor({
                 value={lotForm.quantityAcquired}
                 onChange={(event) => onUpdateAcquiredQuantity(event.target.value)}
                 disabled={readOnly}
-                className={inputClassName}
+                placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.amountAcquired}
+                className={pillInput}
               />
             </label>
             <label>
-              <span className="text-xs text-white/55">Remaining from this purchase</span>
+              <span className={labelClass}>Remaining</span>
               <input
                 type="number"
                 min="0"
@@ -210,32 +241,33 @@ export function PantryPurchaseEditor({
                 value={lotForm.quantityRemaining}
                 onChange={(event) => onUpdateLotForm({ quantityRemaining: event.target.value })}
                 disabled={readOnly}
-                className={inputClassName}
+                placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.remaining}
+                className={pillInput}
               />
             </label>
-            <label>
-              <span className="text-xs text-white/55">Unit</span>
+            <label className="col-span-2 sm:col-span-1">
+              <span className={labelClass}>Unit</span>
               <input
                 value={lotForm.unit}
                 onChange={(event) => onUpdateLotForm({ unit: event.target.value })}
                 disabled={readOnly}
-                className={inputClassName}
+                placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.unit}
+                className={pillInput}
               />
             </label>
           </div>
           <details
-            className="mt-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
-            {...shelfLifeDetailsProps}
+            className="group"
+            {...(readOnly ? { open: false } : shelfLifeDetailsProps)}
           >
             <summary
-              className={`cursor-pointer text-xs select-none ${
-                hasExactExpiration ? 'text-white/35' : 'text-white/55'
-              }`}
+              className={`text-sm select-none ${
+                readOnly ? 'cursor-default text-white/35' : 'cursor-pointer'
+              } ${hasExactExpiration ? 'text-white/35' : 'text-white/50'}`}
             >
-              Expected shelf life
-              {hasExactExpiration ? ' (fallback when no expiration date)' : ''}
+              * Don&apos;t know the exact date? Use expected shelf life
             </summary>
-            <label className="mt-2 block">
+            <label className="mt-3 block max-w-xs">
               <span className="sr-only">Expected shelf life in days</span>
               <input
                 type="number"
@@ -245,118 +277,154 @@ export function PantryPurchaseEditor({
                 onChange={(event) => onUpdateLotForm({
                   expectedShelfLifeDays: event.target.value,
                 })}
-                className={inputClassName}
+                disabled={readOnly}
+                placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.expectedShelfLifeDays}
+                className={pillInput}
               />
             </label>
           </details>
-        </ItemManagementSection>
+        </section>
 
-        <ItemManagementSection title="Product & purchase details">
-          {purchaseDetailsMode === 'summary' && (
+        <section>
+          <h3 className="text-2xl font-medium text-white">
+            Product &amp; purchase details
+          </h3>
+          <div className="mt-5 overflow-hidden rounded-2xl border border-white/15">
             <PurchaseDetailsSummary
-              details={{
-                productTitle: lotForm.productTitle,
-                brandName: lotForm.brandName,
-                packageSize: lotForm.packageSize,
-                packageUnit: lotForm.packageUnit,
-                packageCount: lotForm.packageCount,
-                retailer: lotForm.retailer,
-                priceAmount: lotForm.priceAmount,
-                currency: lotForm.currency,
-              }}
-              onEditManually={() => onSetPurchaseDetailsMode('manual')}
-              onFindUpdate={() => {
-                onOpenProductSearch();
-                onSetPurchaseDetailsMode('search');
-              }}
+              variant="embedded"
+              details={summaryDetails}
+              formatOptions={PANTRY_EMBEDDED_SUMMARY_FORMAT}
             />
-          )}
-          {purchaseDetailsMode === 'manual' && (
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => onSetPurchaseDetailsMode('summary')}
-                  className="text-xs font-medium text-white/45 hover:text-white"
-                >
-                  Back to summary
-                </button>
-              </div>
-              <label className="block">
-                <span className="text-xs text-white/55">Product title</span>
-                <input
-                  value={lotForm.productTitle}
-                  onChange={(event) => onUpdateLotForm({ productTitle: event.target.value })}
-                  className={inputClassName}
-                />
-              </label>
-              <label className="block">
-                <span className="text-xs text-white/55">Brand</span>
-                <input
-                  value={lotForm.brandName}
-                  onChange={(event) => onUpdateLotForm({ brandName: event.target.value })}
-                  className={inputClassName}
-                />
-              </label>
-              <PackageFields
-                packageSize={lotForm.packageSize}
-                packageUnit={lotForm.packageUnit}
-                packageCount={lotForm.packageCount}
-                onPackageSizeChange={(value) => onUpdateLotForm({ packageSize: value })}
-                onPackageUnitChange={(value) => onUpdateLotForm({ packageUnit: value })}
-                onPackageCountChange={(value) => onUpdateLotForm({ packageCount: value })}
-                inputClassName={inputClassName}
-              />
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label>
-                  <span className="text-xs text-white/55">Purchased at</span>
-                  <input
-                    value={lotForm.retailer}
-                    onChange={(event) => onUpdateLotForm({ retailer: event.target.value })}
-                    className={inputClassName}
-                  />
-                </label>
-                <label>
-                  <span className="text-xs text-white/55">Price</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={lotForm.priceAmount}
-                    onChange={(event) => onUpdateLotForm({ priceAmount: event.target.value })}
-                    className={inputClassName}
-                  />
-                </label>
-              </div>
+            <div
+              className="flex gap-1 border-t border-white/10 px-2 pt-2"
+              role="tablist"
+              aria-label="Product details entry mode"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={purchaseDetailsMode === 'manual'}
+                onClick={() => onSetPurchaseDetailsMode('manual')}
+                className={
+                  purchaseDetailsMode === 'manual'
+                    ? `${PANTRY_PRODUCT_DETAIL_TAB_CLASS} bg-white/15 font-medium text-white`
+                    : `${PANTRY_PRODUCT_DETAIL_TAB_CLASS} bg-transparent text-white/45 hover:text-white/70`
+                }
+              >
+                Edit manually
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={purchaseDetailsMode === 'search'}
+                onClick={switchToSearch}
+                disabled={readOnly}
+                className={
+                  purchaseDetailsMode === 'search'
+                    ? `${PANTRY_PRODUCT_DETAIL_TAB_CLASS} bg-white/15 font-medium text-white`
+                    : `${PANTRY_PRODUCT_DETAIL_TAB_CLASS} bg-transparent text-white/45 hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-40`
+                }
+              >
+                Find / update details
+              </button>
             </div>
-          )}
-          {purchaseDetailsMode === 'search' && (
-            <PantryProductLookupPanel
-              inputClassName={inputClassName}
-              productSearchQuery={productSearchQuery}
-              onProductSearchQueryChange={onProductSearchQueryChange}
-              productSearchPostal={productSearchPostal}
-              onProductSearchPostalChange={onProductSearchPostalChange}
-              onProductSearchPostalBlur={onProductSearchPostalBlur}
-              productSearchRetailer={productSearchRetailer}
-              onProductSearchRetailerChange={onProductSearchRetailerChange}
-              productSearchPostalTouched={productSearchPostalTouched}
-              productSearchPostalValidation={productSearchPostalValidation}
-              productSearchCanSubmit={productSearchCanSubmit}
-              productSearchState={productSearchState}
-              productSearchScopeLabel={productSearchScopeLabel}
-              productSearchOffers={productSearchOffers}
-              productSearchError={productSearchError}
-              productSearchProvenance={productSearchProvenance}
-              onSearch={onRunProductSearch}
-              onSelectOffer={onSelectProductOffer}
-              onBackToSummary={() => onSetPurchaseDetailsMode('summary')}
-            />
-          )}
-        </ItemManagementSection>
+            <div className="bg-white/[0.03] px-4 py-5 sm:px-5">
+              {purchaseDetailsMode === 'manual' || readOnly ? (
+                <div className="space-y-5">
+                  <div className={PANTRY_PURCHASE_PRODUCT_TITLE_GRID_CLASS}>
+                    <label className="col-span-2 max-[360px]:col-span-1">
+                      <span className={labelClass}>Product title</span>
+                      <input
+                        value={lotForm.productTitle}
+                        onChange={(event) => onUpdateLotForm({ productTitle: event.target.value })}
+                        disabled={readOnly}
+                        placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.productTitle}
+                        className={pillInput}
+                      />
+                    </label>
+                    <label className="col-span-1">
+                      <span className={labelClass}>Brand (optional)</span>
+                      <input
+                        value={lotForm.brandName}
+                        onChange={(event) => onUpdateLotForm({ brandName: event.target.value })}
+                        disabled={readOnly}
+                        placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.brandName}
+                        className={pillInput}
+                      />
+                    </label>
+                  </div>
+                  <PackageFields
+                    packageSize={lotForm.packageSize}
+                    packageUnit={lotForm.packageUnit}
+                    packageCount={lotForm.packageCount}
+                    onPackageSizeChange={(value) => onUpdateLotForm({ packageSize: value })}
+                    onPackageUnitChange={(value) => onUpdateLotForm({ packageUnit: value })}
+                    onPackageCountChange={(value) => onUpdateLotForm({ packageCount: value })}
+                    inputClassName={pillInput}
+                    disabled={readOnly}
+                    densePhoneLayout
+                    packageSizePlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.packageSize}
+                    packageUnitPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.packageUnit}
+                    packageCountPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.packageCount}
+                  />
+                  <div className={PANTRY_PURCHASE_RETAILER_PRICE_GRID_CLASS}>
+                    <label className="col-span-2">
+                      <span className={labelClass}>Purchased at</span>
+                      <input
+                        value={lotForm.retailer}
+                        onChange={(event) => onUpdateLotForm({ retailer: event.target.value })}
+                        disabled={readOnly}
+                        placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.retailer}
+                        className={pillInput}
+                      />
+                    </label>
+                    <label>
+                      <span className={labelClass}>Price</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={lotForm.priceAmount}
+                        onChange={(event) => onUpdateLotForm({ priceAmount: event.target.value })}
+                        disabled={readOnly}
+                        placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.priceAmount}
+                        className={pillInput}
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <PantryProductLookupPanel
+                  variant="embedded"
+                  inputClassName={pillInput}
+                  productSearchPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.productSearchQuery}
+                  productSearchPostalPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.productSearchPostal}
+                  productSearchRetailerPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.productSearchRetailer}
+                  productSearchQuery={productSearchQuery}
+                  onProductSearchQueryChange={onProductSearchQueryChange}
+                  productSearchPostal={productSearchPostal}
+                  onProductSearchPostalChange={onProductSearchPostalChange}
+                  onProductSearchPostalBlur={onProductSearchPostalBlur}
+                  productSearchRetailer={productSearchRetailer}
+                  onProductSearchRetailerChange={onProductSearchRetailerChange}
+                  productSearchPostalTouched={productSearchPostalTouched}
+                  productSearchPostalValidation={productSearchPostalValidation}
+                  productSearchCanSubmit={productSearchCanSubmit}
+                  productSearchState={productSearchState}
+                  productSearchScopeLabel={productSearchScopeLabel}
+                  productSearchOffers={productSearchOffers}
+                  productSearchError={productSearchError}
+                  productSearchProvenance={productSearchProvenance}
+                  onSearch={onRunProductSearch}
+                  onSelectOffer={onSelectProductOffer}
+                />
+              )}
+            </div>
+          </div>
+        </section>
 
         {existingLot && !readOnly && onResolvePurchase && (
-          <div className="border-t border-white/10 pt-4">
+          <div className="border-t border-white/10 pt-5">
             <p className="text-xs text-white/40">End this purchase record</p>
             {purchaseDraftDirty && (
               <p className="mt-1 text-xs text-white/45">
