@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
+import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -31,6 +32,9 @@ import {
 } from './presentation';
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+const FOOD_PAGE_BACKGROUND_CLASS =
+  'bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 bg-[length:100%_100vh] bg-no-repeat bg-top bg-neutral-700';
 
 function executionStateLabel(state: GroceryHaulExecutionItemState): string {
   if (state === 'in_basket') return 'In basket';
@@ -249,9 +253,9 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
 
   if (loadState === 'loading') {
     return (
-      <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+      <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
         <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
-          <div className="mx-auto max-w-[1000px] space-y-4">
+          <div className="mx-auto max-w-[950px] space-y-4">
             <div className="h-12 w-2/3 animate-pulse rounded-xl bg-white/[0.05]" />
             <div className="h-64 animate-pulse rounded-2xl bg-white/[0.04]" />
           </div>
@@ -265,7 +269,7 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
   const preparedSubtotal = execution ? preparedExecutionSubtotal(execution.items) : 0;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+    <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
       <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
         {loadState === 'error' || !execution ? (
           <div className="mx-auto max-w-[800px]">
@@ -307,15 +311,17 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
             )}
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-[1000px]">
-            <Link href={APP_ROUTES.foodHauls} className="text-xs font-semibold text-white/45 hover:text-white/75">
-              ← Hauls
-            </Link>
-            <header className="mt-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="mx-auto w-full max-w-[950px]">
+            <header>
+              <FoodSectionViewSwitcher
+                currentView="hauls"
+                align="left"
+                anchorBackgroundClass="bg-[#17130f]"
+              />
+              <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <p className="text-lg font-semibold text-white">Shopping View</p>
-                  <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
+                  <p className="text-sm font-semibold text-white/55">Shopping View</p>
+                  <h1 className="mt-1 text-[2.5rem] font-regular tracking-tight text-brand-50 sm:text-[2.75rem]">
                     {execution.haul.title || `Haul · ${formatHaulDate(execution.haul.shopping_date)}`}
                   </h1>
                   <p className="mt-2 text-sm text-white/50">
@@ -326,12 +332,12 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
                   href={haulPrepareHref(haulId)}
                   className="rounded-full border border-white/20 px-5 py-2.5 text-sm font-semibold text-brand-50 hover:bg-white/[0.04]"
                 >
-                  Edit
+                  Edit preparation
                 </Link>
               </div>
             </header>
 
-            <section className="mt-8 rounded-[24px] border border-white/25 p-6 sm:p-8">
+            <section className="mt-8 rounded-t-[24px] border border-b-0 border-white/25 bg-transparent p-6 sm:p-8">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Progress</p>
               <p className="mt-3 text-sm text-white/70">
                 {execution.summary.pending_count} pending · {execution.summary.in_basket_count} in basket · {execution.summary.skipped_count} skipped
@@ -350,7 +356,7 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
             </section>
 
             <section className="mt-10" aria-labelledby="shopping-items-title">
-              <h2 id="shopping-items-title" className="border-b border-white/20 pb-3 text-sm font-semibold text-brand-50">
+              <h2 id="shopping-items-title" className="border-b border-white/25 pb-3 text-xl font-semibold text-brand-50">
                 Shopping items
               </h2>
               {execution.items.filter(isExecutableShoppingRow).map((item) => (
