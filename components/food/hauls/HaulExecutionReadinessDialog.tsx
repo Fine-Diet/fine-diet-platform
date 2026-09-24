@@ -1,6 +1,6 @@
 'use client';
 
-import { AppDialog } from '@/components/ui/AppDialog';
+import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
 import type {
   GroceryHaulExecutionDeferredFinding,
   GroceryHaulExecutionFinding,
@@ -70,13 +70,37 @@ export function HaulExecutionReadinessDialog({
   if (!readiness) return null;
   const blocked = readiness.blockers.length > 0 || !readiness.can_start;
   return (
-    <AppDialog
+    <ItemManagementDialog
       open={open}
       onClose={onClose}
       labelledBy="haul-readiness-title"
-      panelClassName="border border-white/15 bg-[#211a14] p-6 text-white shadow-2xl"
+      busy={starting}
+      footer={(
+        <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-white/55"
+          >
+            Return to preparation
+          </button>
+          {readiness.can_start && (
+            <button
+              type="button"
+              onClick={onContinue}
+              disabled={starting}
+              className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-50"
+            >
+              {starting ? 'Opening…' : 'Continue to Shopping View'}
+            </button>
+          )}
+        </div>
+      )}
     >
-      <h2 id="haul-readiness-title" className="text-2xl font-light text-brand-50">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">
+        Shopping View
+      </p>
+      <h2 id="haul-readiness-title" className="mt-1 text-2xl font-semibold text-white">
         {blocked ? 'Shopping View is not ready' : 'Review before Shopping View'}
       </h2>
       <p className="mt-2 text-sm text-white/50">
@@ -93,25 +117,6 @@ export function HaulExecutionReadinessDialog({
         items={items}
       />
 
-      <div className="mt-6 flex flex-col-reverse justify-end gap-2 sm:flex-row">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold"
-        >
-          Return to preparation
-        </button>
-        {readiness.can_start && (
-          <button
-            type="button"
-            onClick={onContinue}
-            disabled={starting}
-            className="rounded-full bg-brand-50 px-6 py-2.5 text-sm font-semibold text-[#16110d] disabled:opacity-50"
-          >
-            {starting ? 'Opening…' : 'Continue to Shopping View'}
-          </button>
-        )}
-      </div>
-    </AppDialog>
+    </ItemManagementDialog>
   );
 }

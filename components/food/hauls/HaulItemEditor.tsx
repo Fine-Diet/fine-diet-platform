@@ -38,7 +38,7 @@ interface HaulItemEditorProps {
 type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
 
 const INPUT_CLASS =
-  'mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none focus:border-white/40';
+  'mt-1.5 w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/60 focus:ring-2 focus:ring-white/10 focus:ring-offset-0';
 
 function FoodSearchResultsList({
   busy,
@@ -268,6 +268,7 @@ export function HaulItemEditor({
       onClose={onClose}
       labelledBy="haul-item-editor-title"
       busy={saving}
+      shell="workspace"
       footer={(
         <>
           {error && (
@@ -329,10 +330,11 @@ export function HaulItemEditor({
         </>
       )}
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">
-        Haul item
-      </p>
-      <h2 id="haul-item-editor-title" className="mt-1 text-2xl font-semibold text-white">
+      <p className="text-base text-white/45 lg:font-semibold">Haul item</p>
+      <h2
+        id="haul-item-editor-title"
+        className="mt-2 text-[2.35rem] font-medium leading-tight text-white sm:text-[2.5rem] lg:mt-4 lg:text-[44px] lg:font-normal lg:leading-[44px]"
+      >
         {panelTitle}
       </h2>
 

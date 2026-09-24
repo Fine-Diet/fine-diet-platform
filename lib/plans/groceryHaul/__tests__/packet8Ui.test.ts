@@ -93,5 +93,10 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(builder).not.toContain('Haul Estimate');
     expect(builder).toContain('computeGroceryHaulPreparationEstimate(');
     expect(builder).not.toContain('item.final_quantity * item.price_amount');
+    expect(builder).toContain('FoodSectionViewSwitcher');
+    expect(builder).toContain('max-w-[950px]');
+    expect(builder).toContain('bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700');
+    expect(builder).toContain('<ItemManagementDialog');
+    expect(read('components/food/hauls/HaulItemEditor.tsx')).toContain('shell="workspace"');
   });
 });

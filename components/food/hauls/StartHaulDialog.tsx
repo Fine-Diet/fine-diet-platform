@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { AppDialog } from '@/components/ui/AppDialog';
+import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
 import { planService } from '@/lib/plans';
 import { todayLocalDateKey } from '@/lib/plans/planDateRange';
 import type { GeneratedGroceryList, GroceryHaulCreateResult } from '@/lib/plans/types';
@@ -65,26 +65,49 @@ export function StartHaulDialog({
   }
 
   return (
-    <AppDialog
+    <ItemManagementDialog
       open={open}
       onClose={onClose}
       labelledBy="start-haul-title"
-      panelClassName="border border-white/15 bg-[#211a14] p-6 text-white shadow-2xl"
+      busy={busy}
+      footer={(
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="px-4 py-2 text-sm text-white/55"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void createHaul()}
+            disabled={busy || selectedIds.length === 0 || !shoppingDate}
+            className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy ? 'Creating…' : 'Create Haul'}
+          </button>
+        </div>
+      )}
     >
-      <h2 id="start-haul-title" className="text-2xl font-light text-brand-50">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">
+        Hauls
+      </p>
+      <h2 id="start-haul-title" className="mt-1 text-2xl font-semibold text-white">
         Create a new Haul
       </h2>
-      <p className="mt-2 text-sm leading-relaxed text-white/55">
-        Choose at least one active List. Fine Diet will preserve its current demand as
-        a source snapshot and create an editable Draft.
+      <p className="mt-2 text-sm leading-relaxed text-white/50">
+        Choose one or more active Lists. Their current demand is preserved as the starting
+        snapshot for this Haul.
       </p>
 
       <fieldset className="mt-6 space-y-2">
-        <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+        <legend className="mb-2 text-xs font-semibold text-white/50">
           Source Lists
         </legend>
         {lists.length === 0 ? (
-          <p className="rounded-xl border border-white/10 px-4 py-3 text-sm text-white/55">
+          <p className="rounded-xl border border-white/10 px-4 py-4 text-sm text-white/50">
             Create an active List with pending demand before starting a Haul.
           </p>
         ) : (
@@ -105,8 +128,8 @@ export function StartHaulDialog({
         )}
       </fieldset>
 
-      <label className="mt-5 block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-        Shopping date
+      <label className="mt-6 block">
+        <span className="text-xs text-white/50">Shopping date</span>
         <input
           type="date"
           value={shoppingDate}
@@ -114,7 +137,7 @@ export function StartHaulDialog({
             setShoppingDate(event.target.value);
             setCreationToken(null);
           }}
-          className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#16110d] px-4 text-xl text-white outline-none focus:border-white/45"
+          className="mt-1.5 min-h-11 w-full rounded-full border border-white/20 bg-transparent px-4 text-base text-white outline-none focus:border-white/60 sm:text-xl"
         />
       </label>
 
@@ -123,25 +146,6 @@ export function StartHaulDialog({
           {error}
         </p>
       )}
-
-      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={busy}
-          className="min-h-11 rounded-full border border-white/15 px-5 text-sm font-semibold hover:bg-white/[0.04]"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() => void createHaul()}
-          disabled={busy || selectedIds.length === 0 || !shoppingDate}
-          className="min-h-11 rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {busy ? 'Creating…' : 'Create Haul'}
-        </button>
-      </div>
-    </AppDialog>
+    </ItemManagementDialog>
   );
 }

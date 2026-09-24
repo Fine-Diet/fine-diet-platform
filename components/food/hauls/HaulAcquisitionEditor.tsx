@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { AppDialog } from '@/components/ui/AppDialog';
+import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
 import { planService } from '@/lib/plans';
 import type { GroceryHaulExecutionItem } from '@/lib/plans/types';
 import {
@@ -86,13 +86,38 @@ export function HaulAcquisitionEditor({
   }
 
   return (
-    <AppDialog
+    <ItemManagementDialog
       open={Boolean(item)}
       onClose={onClose}
       labelledBy="haul-acquisition-editor-title"
-      panelClassName="border border-white/15 bg-[#211a14] p-6 text-white shadow-2xl"
+      busy={saving}
+      shell="workspace"
+      footer={(
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-sm text-white/55"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+            className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save acquired outcome'}
+          </button>
+        </div>
+      )}
     >
-      <h2 id="haul-acquisition-editor-title" className="text-2xl font-light text-brand-50">
+      <p className="text-base text-white/45 lg:font-semibold">Shopping item</p>
+      <h2
+        id="haul-acquisition-editor-title"
+        className="mt-2 text-[2.35rem] font-medium leading-tight text-white sm:text-[2.5rem] lg:mt-4 lg:text-[44px] lg:font-normal lg:leading-[44px]"
+      >
         Substitute {editorItem.source_name_snapshot}
       </h2>
       <p className="mt-2 text-sm text-white/50">
@@ -117,7 +142,7 @@ export function HaulAcquisitionEditor({
             <input
               value={editorDraft[key]}
               onChange={(event) => update(key, event.target.value)}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-xl font-normal text-white outline-none focus:border-white/45"
+              className="mt-1.5 min-h-11 w-full rounded-full border border-white/20 bg-transparent px-4 text-base font-normal text-white outline-none focus:border-white/60 sm:text-xl"
             />
           </label>
         ))}
@@ -135,7 +160,7 @@ export function HaulAcquisitionEditor({
               step="any"
               value={editorDraft[key]}
               onChange={(event) => update(key, event.target.value)}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-xl font-normal text-white outline-none focus:border-white/45"
+              className="mt-1.5 min-h-11 w-full rounded-full border border-white/20 bg-transparent px-4 text-base font-normal text-white outline-none focus:border-white/60 sm:text-xl"
             />
           </label>
         ))}
@@ -146,24 +171,6 @@ export function HaulAcquisitionEditor({
           {error}
         </p>
       )}
-      <div className="mt-6 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={saving}
-          className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving}
-          className="rounded-full bg-brand-50 px-6 py-2.5 text-sm font-semibold text-[#16110d] disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save acquired outcome'}
-        </button>
-      </div>
-    </AppDialog>
+    </ItemManagementDialog>
   );
 }
