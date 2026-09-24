@@ -282,6 +282,11 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(shop).not.toMatch(/\$\d+\s*[–-]\s*\$?\d+/);
     expect(shop).toContain('Nothing to shop right now');
     expect(shop).toContain('Edit preparation');
+    expect(shop).toContain('FoodSectionViewSwitcher');
+    expect(shop).toContain('max-w-[950px]');
+    expect(shop).toContain('bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700');
+    expect(read('components/food/hauls/HaulAcquisitionEditor.tsx')).toContain('shell="workspace"');
+    expect(read('components/food/hauls/HaulExecutionReadinessDialog.tsx')).toContain('<ItemManagementDialog');
   });
 
   it('does not add completion, Pantry side effects, or DDL', () => {
