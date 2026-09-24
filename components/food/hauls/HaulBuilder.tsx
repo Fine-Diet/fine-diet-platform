@@ -11,9 +11,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ChevronDown, ChevronUp, Plus, Search } from 'lucide-react';
 
+import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
-import { AppDialog } from '@/components/ui/AppDialog';
+import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 import type {
@@ -39,6 +40,9 @@ import {
 } from './presentation';
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+const FOOD_PAGE_BACKGROUND_CLASS =
+  'bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 bg-[length:100%_100vh] bg-no-repeat bg-top bg-neutral-700';
 
 interface MetadataDraft {
   title: string;
@@ -336,9 +340,9 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
 
   if (loadState === 'loading') {
     return (
-      <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+      <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
         <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
-          <div className="mx-auto max-w-[1000px] space-y-4">
+          <div className="mx-auto max-w-[950px] space-y-4">
             <div className="h-12 w-2/3 animate-pulse rounded-xl bg-white/[0.05]" />
             <div className="h-64 animate-pulse rounded-2xl bg-white/[0.04]" />
           </div>
@@ -349,7 +353,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+    <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
       <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
         {loadState === 'error' || !detail || !metadata ? (
           <div className="mx-auto max-w-[800px]">
@@ -361,17 +365,19 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
             </button>
           </div>
         ) : detail.haul.status === 'active' && !prepareView ? (
-          <div className="mx-auto max-w-[1000px] space-y-4">
+          <div className="mx-auto max-w-[950px] space-y-4">
             <div className="h-12 w-2/3 animate-pulse rounded-xl bg-white/[0.05]" />
             <p className="text-sm text-white/50">Continue to Shopping View…</p>
           </div>
         ) : detail.haul.status !== 'planned' && !activePrepareView ? (
           <HistoricalHaul detail={detail} />
         ) : (
-          <div className="mx-auto w-full max-w-[1000px]">
-            <Link href={APP_ROUTES.foodHauls} className="text-xs font-semibold text-white/45 hover:text-white/75">
-              ← Hauls
-            </Link>
+          <div className="mx-auto w-full max-w-[950px]">
+            <FoodSectionViewSwitcher
+              currentView="hauls"
+              align="left"
+              anchorBackgroundClass="bg-[#17130f]"
+            />
             {activePrepareView && (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
                 <p>Pending items can be edited here. Return in-basket or skipped items to pending in Shopping View first.</p>
@@ -383,9 +389,9 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                 </Link>
               </div>
             )}
-            <header className="mt-5">
-              <p className="text-lg font-semibold text-white">Haul Builder</p>
-              <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
+            <header className="mt-1">
+              <p className="text-sm font-semibold text-white/55">Haul Builder</p>
+              <h1 className="mt-1 text-[2.5rem] font-regular tracking-tight text-brand-50 sm:text-[2.75rem]">
                 Prepare your next shopping trip
               </h1>
             </header>
@@ -612,7 +618,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               </div>
             </section>
 
-            <section className="mt-12 rounded-[24px] border border-white/25 p-6 sm:p-8" aria-labelledby="shopping-summary-title">
+            <section className="mt-12 rounded-t-[24px] border border-b-0 border-white/25 bg-transparent p-6 sm:p-8" aria-labelledby="shopping-summary-title">
               <h2 id="shopping-summary-title" className="text-xl font-semibold text-brand-50">Shopping Summary</h2>
               <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
                 Haul name
@@ -724,14 +730,23 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
         onContinue={continueFromReadiness}
       />
 
-      <AppDialog
+      <ItemManagementDialog
         open={addListsOpen}
         onClose={() => setAddListsOpen(false)}
         labelledBy="add-lists-title"
-        panelClassName="border border-white/15 bg-[#211a14] p-6 text-white shadow-2xl"
+        busy={addingLists}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setAddListsOpen(false)} className="px-4 py-2 text-sm text-white/55">Cancel</button>
+            <button type="button" onClick={() => void addSelectedLists()} disabled={selectedListIds.length === 0 || addingLists} className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40">
+              {addingLists ? 'Adding…' : 'Add Lists'}
+            </button>
+          </div>
+        )}
       >
-        <h2 id="add-lists-title" className="text-2xl font-light text-brand-50">Add source Lists</h2>
-        <p className="mt-2 text-sm text-white/50">New memberships and their current demand snapshots are added atomically.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Haul Builder</p>
+        <h2 id="add-lists-title" className="mt-1 text-2xl font-semibold text-white">Add source Lists</h2>
+        <p className="mt-2 text-sm text-white/50">Add active Lists and preserve their current demand snapshots in this Haul.</p>
         <div className="relative mt-5">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
           <input
@@ -739,7 +754,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
             value={addListQuery}
             onChange={(event) => setAddListQuery(event.target.value)}
             placeholder="Search active Lists"
-            className="min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] pl-10 pr-3 text-xl outline-none"
+            className="min-h-11 w-full rounded-full border border-white/20 bg-transparent pl-10 pr-4 text-base outline-none focus:border-white/60 sm:text-xl"
           />
         </div>
         <div className="mt-3 space-y-2">
@@ -762,13 +777,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
           ))}
         </div>
         {addListsError && <p role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{addListsError}</p>}
-        <div className="mt-6 flex justify-end gap-2">
-          <button type="button" onClick={() => setAddListsOpen(false)} className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold">Cancel</button>
-          <button type="button" onClick={() => void addSelectedLists()} disabled={selectedListIds.length === 0 || addingLists} className="rounded-full bg-brand-50 px-6 py-2.5 text-sm font-semibold text-[#16110d] disabled:opacity-40">
-            {addingLists ? 'Adding…' : 'Add Lists'}
-          </button>
-        </div>
-      </AppDialog>
+      </ItemManagementDialog>
     </div>
   );
 }
