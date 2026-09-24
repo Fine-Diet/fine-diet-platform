@@ -99,6 +99,12 @@ describe('Packet 5 Pantry purchase modal convergence', () => {
     expect(purchaseEditor).toContain('PANTRY_EMBEDDED_SUMMARY_FORMAT');
   });
 
+  it('uses helpful example placeholders on empty Pantry fields', () => {
+    expect(purchaseEditor).toContain('pantryPurchaseFieldPlaceholders');
+    expect(purchaseEditor).toContain('PANTRY_PURCHASE_FIELD_PLACEHOLDERS.productTitle');
+    expect(lookup).toContain('productSearchPlaceholder');
+  });
+
   it('removes header explanatory sentence and uppercase purchase section', () => {
     expect(purchaseEditor).toContain('Edit purchase');
     expect(purchaseEditor).not.toContain('uppercase tracking');

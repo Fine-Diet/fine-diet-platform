@@ -11,6 +11,9 @@ export interface PackageFieldsProps {
   disabled?: boolean;
   /** Pantry purchase modal: keep three compact columns from phone layout upward. */
   densePhoneLayout?: boolean;
+  packageSizePlaceholder?: string;
+  packageUnitPlaceholder?: string;
+  packageCountPlaceholder?: string;
 }
 
 export function PackageFields({
@@ -23,6 +26,9 @@ export function PackageFields({
   inputClassName,
   disabled = false,
   densePhoneLayout = false,
+  packageSizePlaceholder,
+  packageUnitPlaceholder,
+  packageCountPlaceholder,
 }: PackageFieldsProps) {
   return (
     <div
@@ -41,6 +47,7 @@ export function PackageFields({
           value={packageSize}
           onChange={(event) => onPackageSizeChange(event.target.value)}
           disabled={disabled}
+          placeholder={packageSizePlaceholder}
           className={inputClassName}
         />
       </label>
@@ -50,6 +57,7 @@ export function PackageFields({
           value={packageUnit}
           onChange={(event) => onPackageUnitChange(event.target.value)}
           disabled={disabled}
+          placeholder={packageUnitPlaceholder}
           className={inputClassName}
         />
       </label>
@@ -62,6 +70,7 @@ export function PackageFields({
           value={packageCount}
           onChange={(event) => onPackageCountChange(event.target.value)}
           disabled={disabled}
+          placeholder={packageCountPlaceholder}
           className={inputClassName}
         />
       </label>

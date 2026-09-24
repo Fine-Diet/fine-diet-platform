@@ -14,6 +14,7 @@ import { pantryPurchaseEditorIsDirty } from './pantryLotSave';
 import { isPantryLotTerminal } from './pantryPolicy';
 import { expectedShelfLifeDetailsProps } from './pantryExpectedShelfLifeDetails';
 import { PantryProductLookupPanel } from './PantryProductLookupPanel';
+import { PANTRY_PURCHASE_FIELD_PLACEHOLDERS } from './pantryPurchaseFieldPlaceholders';
 import type { PantryLotDraft } from './pantryLotSave';
 
 export type PurchaseDetailsMode = 'manual' | 'search';
@@ -227,6 +228,7 @@ export function PantryPurchaseEditor({
                 value={lotForm.quantityAcquired}
                 onChange={(event) => onUpdateAcquiredQuantity(event.target.value)}
                 disabled={readOnly}
+                placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.amountAcquired}
                 className={pillInput}
               />
             </label>
@@ -239,6 +241,7 @@ export function PantryPurchaseEditor({
                 value={lotForm.quantityRemaining}
                 onChange={(event) => onUpdateLotForm({ quantityRemaining: event.target.value })}
                 disabled={readOnly}
+                placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.remaining}
                 className={pillInput}
               />
             </label>
@@ -248,6 +251,7 @@ export function PantryPurchaseEditor({
                 value={lotForm.unit}
                 onChange={(event) => onUpdateLotForm({ unit: event.target.value })}
                 disabled={readOnly}
+                placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.unit}
                 className={pillInput}
               />
             </label>
@@ -274,6 +278,7 @@ export function PantryPurchaseEditor({
                   expectedShelfLifeDays: event.target.value,
                 })}
                 disabled={readOnly}
+                placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.expectedShelfLifeDays}
                 className={pillInput}
               />
             </label>
@@ -333,6 +338,7 @@ export function PantryPurchaseEditor({
                         value={lotForm.productTitle}
                         onChange={(event) => onUpdateLotForm({ productTitle: event.target.value })}
                         disabled={readOnly}
+                        placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.productTitle}
                         className={pillInput}
                       />
                     </label>
@@ -342,6 +348,7 @@ export function PantryPurchaseEditor({
                         value={lotForm.brandName}
                         onChange={(event) => onUpdateLotForm({ brandName: event.target.value })}
                         disabled={readOnly}
+                        placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.brandName}
                         className={pillInput}
                       />
                     </label>
@@ -356,6 +363,9 @@ export function PantryPurchaseEditor({
                     inputClassName={pillInput}
                     disabled={readOnly}
                     densePhoneLayout
+                    packageSizePlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.packageSize}
+                    packageUnitPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.packageUnit}
+                    packageCountPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.packageCount}
                   />
                   <div className={PANTRY_PURCHASE_RETAILER_PRICE_GRID_CLASS}>
                     <label className="col-span-2">
@@ -364,6 +374,7 @@ export function PantryPurchaseEditor({
                         value={lotForm.retailer}
                         onChange={(event) => onUpdateLotForm({ retailer: event.target.value })}
                         disabled={readOnly}
+                        placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.retailer}
                         className={pillInput}
                       />
                     </label>
@@ -376,6 +387,7 @@ export function PantryPurchaseEditor({
                         value={lotForm.priceAmount}
                         onChange={(event) => onUpdateLotForm({ priceAmount: event.target.value })}
                         disabled={readOnly}
+                        placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.priceAmount}
                         className={pillInput}
                       />
                     </label>
@@ -385,6 +397,9 @@ export function PantryPurchaseEditor({
                 <PantryProductLookupPanel
                   variant="embedded"
                   inputClassName={pillInput}
+                  productSearchPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.productSearchQuery}
+                  productSearchPostalPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.productSearchPostal}
+                  productSearchRetailerPlaceholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.productSearchRetailer}
                   productSearchQuery={productSearchQuery}
                   onProductSearchQueryChange={onProductSearchQueryChange}
                   productSearchPostal={productSearchPostal}

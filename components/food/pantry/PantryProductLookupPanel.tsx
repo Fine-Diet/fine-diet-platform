@@ -44,6 +44,9 @@ export interface PantryProductLookupPanelProps {
   onSelectOffer: (offer: PantryProductSearchOffer) => void;
   onBackToSummary?: () => void;
   variant?: 'card' | 'embedded';
+  productSearchPlaceholder?: string;
+  productSearchPostalPlaceholder?: string;
+  productSearchRetailerPlaceholder?: string;
 }
 
 export function PantryProductLookupPanel({
@@ -67,6 +70,9 @@ export function PantryProductLookupPanel({
   onSelectOffer,
   onBackToSummary,
   variant = 'card',
+  productSearchPlaceholder,
+  productSearchPostalPlaceholder,
+  productSearchRetailerPlaceholder,
 }: PantryProductLookupPanelProps) {
   const normalizedPostal = productSearchPostalValidation.ok
     ? productSearchPostalValidation.value ?? productSearchPostal
@@ -112,7 +118,7 @@ export function PantryProductLookupPanel({
           <input
             value={productSearchQuery}
             onChange={(event) => onProductSearchQueryChange(event.target.value)}
-            placeholder="Search retail products"
+            placeholder={productSearchPlaceholder ?? 'Search retail products'}
             className={inputClassName}
           />
         </label>
@@ -129,7 +135,7 @@ export function PantryProductLookupPanel({
               value={productSearchPostal}
               onChange={(event) => onProductSearchPostalChange(event.target.value)}
               onBlur={onProductSearchPostalBlur}
-              placeholder="ZIP or postal code"
+              placeholder={productSearchPostalPlaceholder ?? 'ZIP or postal code'}
               autoComplete="postal-code"
               className={inputClassName}
             />
@@ -139,7 +145,7 @@ export function PantryProductLookupPanel({
             <input
               value={productSearchRetailer}
               onChange={(event) => onProductSearchRetailerChange(event.target.value)}
-              placeholder="Any retailer"
+              placeholder={productSearchRetailerPlaceholder ?? 'Any retailer'}
               className={inputClassName}
             />
           </label>
