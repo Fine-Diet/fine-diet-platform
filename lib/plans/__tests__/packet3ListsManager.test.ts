@@ -92,6 +92,8 @@ describe('Packet 3 Food IA and Lists manager', () => {
     expect(manager).not.toContain('min-h-14 flex-1 rounded-full');
     expect(manager).not.toContain('Delete');
     expect(read('components/food/lists/ListsItemEditor.tsx')).toContain('Remove from List');
+    expect(read('components/food/lists/ListsItemEditor.tsx')).toContain('shell="workspace"');
+    expect(manager).toContain('workspace');
   });
 
   it('keeps List editing persistent and omits transfer checkboxes', () => {
@@ -130,7 +132,7 @@ describe('Packet 3 Food IA and Lists manager', () => {
   it('uses Packet 1 shell and dialog primitives with footer clearance', () => {
     const manager = read('components/food/lists/ListsManager.tsx');
     expect(manager).toContain('<SignedInPageScroll');
-    expect(manager).toContain('<AppDialog');
+    expect(manager).toContain('<ItemManagementDialog');
     expect(manager).toContain('<JournalFooterNav');
   });
 });
