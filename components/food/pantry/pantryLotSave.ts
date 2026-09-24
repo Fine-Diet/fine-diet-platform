@@ -1,0 +1,130 @@
+import type { PantryAcquisitionLotInput } from '@/lib/plans/planService';
+import type { PantryAcquisitionLot } from '@/lib/plans/types';
+
+export interface PantryLotDraft {
+  acquiredOn: string;
+  expiresOn: string;
+  expectedShelfLifeDays: string;
+  quantityAcquired: string;
+  quantityRemaining: string;
+  unit: string;
+  productTitle: string;
+  brandName: string;
+  packageSize: string;
+  packageUnit: string;
+  packageCount: string;
+  retailer: string;
+  priceAmount: string;
+  currency: string;
+}
+
+function optionalNumber(value: string): number | null {
+  return value.trim() ? Number(value) : null;
+}
+
+export function pantryLotDraftFromLot(lot: PantryAcquisitionLot): PantryLotDraft {
+  return {
+    acquiredOn: lot.acquired_on,
+    expiresOn: lot.expires_on ?? '',
+    expectedShelfLifeDays: lot.expected_shelf_life_days == null
+      ? ''
+      : String(lot.expected_shelf_life_days),
+    quantityAcquired: String(lot.quantity_acquired),
+    quantityRemaining: String(lot.quantity_remaining),
+    unit: lot.unit ?? '',
+    productTitle: lot.product_title ?? '',
+    brandName: lot.brand_name ?? '',
+    packageSize: lot.package_size == null ? '' : String(lot.package_size),
+    packageUnit: lot.package_unit ?? '',
+    packageCount: lot.package_count == null ? '' : String(lot.package_count),
+    retailer: lot.retailer ?? '',
+    priceAmount: lot.price_amount == null ? '' : String(lot.price_amount),
+    currency: lot.currency ?? 'USD',
+  };
+}
+
+function normalizePantryLotDraft(draft: PantryLotDraft): PantryLotDraft {
+  return {
+    acquiredOn: draft.acquiredOn.trim(),
+    expiresOn: draft.expiresOn.trim(),
+    expectedShelfLifeDays: draft.expectedShelfLifeDays.trim(),
+    quantityAcquired: draft.quantityAcquired.trim(),
+    quantityRemaining: draft.quantityRemaining.trim(),
+    unit: draft.unit.trim(),
+    productTitle: draft.productTitle.trim(),
+    brandName: draft.brandName.trim(),
+    packageSize: draft.packageSize.trim(),
+    packageUnit: draft.packageUnit.trim(),
+    packageCount: draft.packageCount.trim(),
+    retailer: draft.retailer.trim(),
+    priceAmount: draft.priceAmount.trim(),
+    currency: draft.currency.trim().toUpperCase() || 'USD',
+  };
+}
+
+export function pantryPurchaseEditorIsDirty(
+  existingLot: PantryAcquisitionLot,
+  draft: PantryLotDraft,
+): boolean {
+  const baseline = normalizePantryLotDraft(pantryLotDraftFromLot(existingLot));
+  const current = normalizePantryLotDraft(draft);
+  return (Object.keys(baseline) as Array<keyof PantryLotDraft>).some(
+    (key) => baseline[key] !== current[key],
+  );
+}
+
+export function lotInputFromPantryLotDraft(draft: PantryLotDraft): PantryAcquisitionLotInput {
+  return {
+    acquired_on: draft.acquiredOn,
+    expires_on: draft.expiresOn || null,
+    expected_shelf_life_days: optionalNumber(draft.expectedShelfLifeDays),
+    quantity_acquired: Number(draft.quantityAcquired),
+    quantity_remaining: Number(draft.quantityRemaining),
+    unit: draft.unit.trim() || null,
+    product_title: draft.productTitle.trim() || null,
+    brand_name: draft.brandName.trim() || null,
+    package_size: optionalNumber(draft.packageSize),
+    package_unit: draft.packageUnit.trim() || null,
+    package_count: optionalNumber(draft.packageCount),
+    retailer: draft.retailer.trim() || null,
+    price_amount: optionalNumber(draft.priceAmount),
+    currency: draft.priceAmount.trim()
+      ? draft.currency.trim().toUpperCase() || 'USD'
+      : null,
+  };
+}
+
+export function validatePantryLotSave(
+  draft: PantryLotDraft,
+  existingLot: PantryAcquisitionLot | null,
+): { ok: true; input: PantryAcquisitionLotInput } | { ok: false; error: string } {
+  const quantityAcquired = Number(draft.quantityAcquired);
+  if (!draft.acquiredOn.trim()) {
+    return { ok: false, error: 'Purchased on is required.' };
+  }
+  if (!Number.isFinite(quantityAcquired) || quantityAcquired <= 0) {
+    return { ok: false, error: 'Amount acquired must be greater than zero.' };
+  }
+
+  const quantityRemaining = existingLot
+    ? Number(draft.quantityRemaining)
+    : quantityAcquired;
+
+  if (
+    !Number.isFinite(quantityRemaining)
+    || quantityRemaining < 0
+    || quantityRemaining > quantityAcquired
+  ) {
+    return {
+      ok: false,
+      error: 'Remaining from this purchase must be between zero and the amount acquired.',
+    };
+  }
+
+  const input = lotInputFromPantryLotDraft({
+    ...draft,
+    quantityRemaining: String(quantityRemaining),
+  });
+
+  return { ok: true, input };
+}

@@ -1,5 +1,8 @@
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
+import { isExecutableShoppingExecutionRow } from '@/lib/plans/groceryHaul/activePreparation';
+import { computeFactualAcquiredSubtotal } from '@/lib/plans/groceryHaul/estimate';
 import type {
+  GroceryHaulCollectionItem,
   GeneratedGroceryList,
   GroceryHaulAcquisitionPatch,
   GroceryHaulExecutionFinding,
@@ -70,6 +73,25 @@ export function haulHrefForStatus(haulId: string, status: GroceryHaulStatus): st
     : APP_ROUTE_BUILDERS.foodHaul(haulId);
 }
 
+export function haulPrepareHref(haulId: string): string {
+  return APP_ROUTE_BUILDERS.foodHaulPrepare(haulId);
+}
+
+export function formatHaulCollectionSpend(
+  haul: Pick<GroceryHaulCollectionItem, 'estimated_total' | 'acquired_subtotal' | 'currency'>,
+): { amount: string; qualifier: string } {
+  if (haul.acquired_subtotal != null) {
+    return {
+      amount: formatHaulCurrency(haul.acquired_subtotal, haul.currency),
+      qualifier: 'Acquired',
+    };
+  }
+  return {
+    amount: formatHaulCurrency(haul.estimated_total, haul.currency),
+    qualifier: 'Prep estimate',
+  };
+}
+
 export function executionSourceDemandLabel(
   item: Pick<GroceryHaulExecutionItem, 'source_quantity_snapshot' | 'source_unit_snapshot'>,
 ): string {
@@ -93,6 +115,34 @@ export function acquiredStoreLabel(
   item: Pick<GroceryHaulExecutionItem, 'acquired_retailer' | 'acquired_store_location' | 'acquired_postal_code'>,
 ): string | null {
   return [item.acquired_retailer, item.acquired_store_location, item.acquired_postal_code]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' · ') || null;
+}
+
+export function isExecutableShoppingRow(item: GroceryHaulExecutionItem): boolean {
+  return isExecutableShoppingExecutionRow(item);
+}
+
+export function currentPlanInstructionLabel(item: GroceryHaulExecutionItem): string {
+  const plan = item.state === 'pending' ? item.current_preparation : null;
+  if (!plan) return preparedInstructionLabel(item);
+  const product = [plan.brand_name, plan.product_title]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' · ');
+  const quantity = `Buy ${plan.quantity}`;
+  const store = [plan.retailer, plan.store_location, plan.postal_code]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' · ') || null;
+  return [product || 'Prepared product not set', quantity, store].filter(Boolean).join(' · ');
+}
+
+export function currentPlanStoreLabel(item: GroceryHaulExecutionItem): string | null {
+  const plan = item.state === 'pending' ? item.current_preparation : null;
+  if (!plan) return preparedStoreLabel(item);
+  return [plan.retailer, plan.store_location, plan.postal_code]
     .map((part) => part?.trim())
     .filter(Boolean)
     .join(' · ') || null;
@@ -125,14 +175,7 @@ export function acquisitionOutcomeDiverged(item: GroceryHaulExecutionItem): bool
 }
 
 export function factualAcquiredSubtotal(items: GroceryHaulExecutionItem[]): number | null {
-  const priced = items.filter((item) =>
-    item.acquired_price_amount != null && item.acquired_quantity != null,
-  );
-  if (priced.length === 0) return null;
-  return priced.reduce(
-    (sum, item) => sum + (item.acquired_price_amount as number) * (item.acquired_quantity as number),
-    0,
-  );
+  return computeFactualAcquiredSubtotal(items);
 }
 
 export function preparedExecutionSubtotal(items: GroceryHaulExecutionItem[]): number {

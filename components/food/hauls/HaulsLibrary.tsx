@@ -13,7 +13,7 @@ import { planService } from '@/lib/plans';
 import type { GeneratedGroceryList, GroceryHaulCollectionItem } from '@/lib/plans/types';
 import { StartHaulDialog } from './StartHaulDialog';
 import {
-  formatHaulCurrency,
+  formatHaulCollectionSpend,
   formatHaulDate,
   haulHrefForStatus,
   haulStatusLabel,
@@ -24,57 +24,42 @@ type LoadState = 'loading' | 'ready' | 'error';
 const FOOD_PAGE_BACKGROUND_CLASS =
   'bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700 bg-[length:100%_100vh] bg-no-repeat bg-top bg-neutral-700';
 
-function displayTitle(haul: GroceryHaulCollectionItem): string {
-  return haul.title?.trim() || `Haul · ${formatHaulDate(haul.shopping_date)}`;
+function storeLabel(haul: GroceryHaulCollectionItem): string {
+  if (haul.store_names.length > 0) return haul.store_names.join(' + ');
+  return 'Store not set';
 }
 
-function HaulTable({
-  label,
-  hauls,
-}: {
-  label: string;
-  hauls: GroceryHaulCollectionItem[];
-}) {
-  if (hauls.length === 0) return null;
+function HaulCollectionTable({ hauls }: { hauls: GroceryHaulCollectionItem[] }) {
   return (
-    <section className="mt-9" aria-labelledby={`${label.replace(/\s/g, '-')}-heading`}>
-      <div className="flex items-center justify-between border-b border-white/20 pb-3">
-        <h2 id={`${label.replace(/\s/g, '-')}-heading`} className="text-sm font-semibold text-brand-50">
-          {label}
-        </h2>
-        <span className="text-xs text-white/35">
-          {hauls.length} {hauls.length === 1 ? 'Haul' : 'Hauls'}
-        </span>
-      </div>
-      <div className="hidden grid-cols-[1.25fr_1.7fr_0.8fr_0.7fr] gap-5 border-b border-white/10 px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40 sm:grid">
-        <span>Date</span><span>Sources / stores</span><span>Estimate</span><span>Status</span>
+    <section className="mt-6" aria-labelledby="recent-hauls-heading">
+      <h2 id="recent-hauls-heading" className="sr-only">Recent Hauls</h2>
+      <div className="hidden grid-cols-[1fr_1.4fr_0.9fr_0.8fr] gap-5 border-b border-white/10 px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40 sm:grid">
+        <span>Date</span>
+        <span>Store</span>
+        <span>Spend</span>
+        <span>Status</span>
       </div>
       <ul className="divide-y divide-white/10">
         {hauls.map((haul) => {
-          const sources = haul.source_list_names.length > 0
-            ? haul.source_list_names.join(' + ')
-            : haul.source_list_name || 'Source List';
-          const stores = haul.store_names.length > 0 ? haul.store_names.join(' + ') : 'Store not set';
+          const spend = formatHaulCollectionSpend(haul);
+          const title = haul.title?.trim();
           return (
             <li key={haul.id}>
               <Link
                 href={haulHrefForStatus(haul.id, haul.status)}
-                className="grid gap-3 px-2 py-5 transition-colors hover:bg-white/[0.035] sm:grid-cols-[1.25fr_1.7fr_0.8fr_0.7fr] sm:items-center sm:gap-5"
+                className="grid gap-3 px-2 py-5 transition-colors hover:bg-white/[0.035] sm:grid-cols-[1fr_1.4fr_0.9fr_0.8fr] sm:items-center sm:gap-5"
               >
                 <div>
-                  <p className="text-sm font-semibold text-brand-50">{displayTitle(haul)}</p>
-                  <p className="mt-1 text-xs text-white/45">{formatHaulDate(haul.shopping_date)}</p>
+                  <p className="text-sm font-semibold text-brand-50">{formatHaulDate(haul.shopping_date)}</p>
+                  {title && title !== `Haul · ${formatHaulDate(haul.shopping_date)}` && (
+                    <p className="mt-1 truncate text-xs text-white/45">{title}</p>
+                  )}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm text-white/70">{sources}</p>
-                  <p className="mt-1 truncate text-xs text-white/40">{stores}</p>
-                </div>
+                <p className="truncate text-sm text-white/70">{storeLabel(haul)}</p>
                 <div>
-                  <p className="text-sm text-white/75">
-                    {formatHaulCurrency(haul.estimated_total, haul.currency)}
-                  </p>
-                  <p className="mt-1 text-xs text-white/40">
-                    {haul.execution_item_count} live · {haul.unpriced_item_count} unpriced
+                  <p className="text-sm text-white/75">{spend.amount}</p>
+                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/35">
+                    {spend.qualifier}
                   </p>
                 </div>
                 <span className="w-fit rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55">
@@ -130,15 +115,12 @@ export default function HaulsLibrary() {
         haul.title,
         haul.shopping_date,
         formatHaulDate(haul.shopping_date),
+        haul.source_list_name,
         ...haul.source_list_names,
         ...haul.store_names,
       ].some((value) => value?.toLocaleLowerCase().includes(needle)),
     );
   }, [hauls, query]);
-
-  const drafts = filtered.filter((haul) => haul.status === 'planned');
-  const inProgress = filtered.filter((haul) => haul.status === 'active');
-  const history = filtered.filter((haul) => haul.status === 'closed' || haul.status === 'cancelled');
 
   return (
     <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
@@ -155,13 +137,20 @@ export default function HaulsLibrary() {
             </h1>
           </header>
 
-          <div className="mt-8 flex flex-col gap-3 border-b border-white/25 pb-3 sm:flex-row sm:items-center">
+          <div className="mt-8 flex flex-col gap-3 border-b border-white/25 pb-3 sm:flex-row sm:items-center sm:gap-4">
             <button
               type="button"
               onClick={() => setStartOpen(true)}
               className="min-h-11 rounded-t-xl border border-white/30 px-5 text-sm font-semibold text-brand-50 hover:bg-white/[0.04]"
             >
               + Create New
+            </button>
+            <button
+              type="button"
+              aria-current="page"
+              className="min-h-11 rounded-t-xl border border-brand-50/50 bg-white/[0.06] px-5 text-sm font-semibold text-brand-50"
+            >
+              Recent
             </button>
             <div className="relative min-w-0 flex-1 sm:ml-auto sm:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
@@ -215,11 +204,7 @@ export default function HaulsLibrary() {
           )}
 
           {loadState === 'ready' && filtered.length > 0 && (
-            <>
-              <HaulTable label="Draft preparation" hauls={drafts} />
-              <HaulTable label="Shopping in progress" hauls={inProgress} />
-              <HaulTable label="History" hauls={history} />
-            </>
+            <HaulCollectionTable hauls={filtered} />
           )}
         </div>
       </SignedInPageScroll>

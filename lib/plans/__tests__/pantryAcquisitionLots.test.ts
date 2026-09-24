@@ -150,6 +150,7 @@ describe('Pantry acquisition lots', () => {
         expected_shelf_life_days: null,
         quantity_acquired: 2,
         quantity_remaining: 2,
+        resolution_status: 'open',
         unit: 'lb',
         product_title: null,
         brand_name: null,

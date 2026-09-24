@@ -39,6 +39,7 @@ function haul(
     execution_item_count: 1,
     unpriced_item_count: 0,
     estimated_total: 5,
+    acquired_subtotal: null,
     currency: 'USD',
     budget_amount: null,
     store_names: [],

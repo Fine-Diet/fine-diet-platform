@@ -25,10 +25,12 @@ import {
   updateGroceryHaulExecutionItem,
 } from '../service';
 import {
+  GROCERY_HAUL_EXECUTION_BASKET_RPC_NAME,
   GROCERY_HAUL_EXECUTION_READINESS_RPC_NAME,
   GROCERY_HAUL_EXECUTION_START_RPC_NAME,
   SHOPPING_VIEW_EXECUTION_SQL_PATH,
 } from '../schema';
+import { simulateMarkGroceryHaulExecutionInBasket } from './basketRpcTestHelper';
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 
 const PERSON = 'person-1';
@@ -155,6 +157,24 @@ function installFake(status = 'active') {
   };
   const fake = createFakeSupabase(initial);
   mockFrom.mockImplementation((table: string) => fake.from(table));
+  mockRpc.mockImplementation(async (name: string, params: Record<string, unknown>) => {
+    if (name === GROCERY_HAUL_EXECUTION_READINESS_RPC_NAME) {
+      return { data: readiness(1), error: null };
+    }
+    if (name === GROCERY_HAUL_EXECUTION_BASKET_RPC_NAME) {
+      return {
+        data: simulateMarkGroceryHaulExecutionInBasket(
+          fake.tables,
+          params as {
+            p_execution_item_id: string;
+            p_acquisition_overlay?: Record<string, string | number | null>;
+          },
+        ),
+        error: null,
+      };
+    }
+    return { data: null, error: null };
+  });
   return fake;
 }
 
@@ -295,7 +315,7 @@ describe('Packet 9 Shopping View execution contract', () => {
       in_basket_count: 0,
       skipped_count: 0,
     });
-    expect(mockFrom).toHaveBeenCalledTimes(3);
+    expect(mockFrom).toHaveBeenCalledTimes(4);
     expect(mockRpc).toHaveBeenCalledTimes(1);
   });
 

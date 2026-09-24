@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 const mockRequireJournalAccess = jest.fn();
 const mockCreate = jest.fn();
 const mockList = jest.fn();
+const mockUpdate = jest.fn();
 
 jest.mock('@/lib/access/requireJournalAccess', () => ({
   requireJournalAccess: (...args: unknown[]) => mockRequireJournalAccess(...args),
@@ -11,7 +12,7 @@ jest.mock('@/lib/plans/pantryAcquisitionLotService', () => ({
   createPantryAcquisitionLot: (...args: unknown[]) => mockCreate(...args),
   deletePantryAcquisitionLot: jest.fn(),
   listPantryAcquisitionLots: (...args: unknown[]) => mockList(...args),
-  updatePantryAcquisitionLot: jest.fn(),
+  updatePantryAcquisitionLot: (...args: unknown[]) => mockUpdate(...args),
 }));
 
 import handler from '@/pages/api/journal/plans/pantry/lots';
@@ -82,6 +83,24 @@ describe('POST /api/journal/plans/pantry/lots', () => {
       }),
     });
     expect(res.statusCode).toBe(201);
+  });
+});
+
+describe('PATCH /api/journal/plans/pantry/lots', () => {
+  it('returns 409 when the lot is no longer open for edit', async () => {
+    mockUpdate.mockRejectedValue(
+      new Error('Pantry acquisition lot not found or no longer open for edit.'),
+    );
+    const req = {
+      method: 'PATCH',
+      query: { lot_id: 'lot-1' },
+      body: { quantity_remaining: 1 },
+    } as unknown as NextApiRequest;
+    const res = response();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(409);
   });
 });
 

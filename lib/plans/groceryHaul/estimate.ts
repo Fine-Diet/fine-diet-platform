@@ -1,4 +1,5 @@
 import type {
+  GroceryHaulExecutionItemState,
   GroceryHaulItem,
   GroceryHaulPreparationEstimate,
   GroceryHaulStoreEstimate,
@@ -21,6 +22,32 @@ function storeKey(item: GroceryHaulItem): string | null {
     item.store_location?.trim().toLocaleLowerCase() ?? '',
     item.postal_code?.trim().toLocaleUpperCase() ?? '',
   ]);
+}
+
+/**
+ * Control-rail store assignment identity (not canonical estimate.by_store grouping).
+ * Postal/search context alone is never a store. Retailer-level assignments dedupe across ZIP.
+ */
+function storeAssignmentKeyForCount(item: GroceryHaulItem): string | null {
+  const retailer = item.retailer?.trim().toLocaleLowerCase() ?? '';
+  const storeLocation = item.store_location?.trim().toLocaleLowerCase() ?? '';
+  if (!retailer && !storeLocation) return null;
+  if (storeLocation) {
+    return JSON.stringify([retailer, storeLocation]);
+  }
+  return JSON.stringify(['retailer', retailer]);
+}
+
+/** Distinct store assignments among execution-included Haul items (final_quantity > 0). */
+export function countDistinctAssignedStores(items: readonly GroceryHaulItem[]): number {
+  const keys = new Set<string>();
+  for (const item of items) {
+    const quantity = numeric(item.final_quantity) ?? 0;
+    if (quantity <= 0) continue;
+    const key = storeAssignmentKeyForCount(item);
+    if (key) keys.add(key);
+  }
+  return keys.size;
 }
 
 /**
@@ -109,4 +136,29 @@ export function computeGroceryHaulPreparationEstimate(
     sourced_subtotal: sourcedSubtotal,
     by_store: byStore,
   };
+}
+
+type AcquiredSpendLine = {
+  state: GroceryHaulExecutionItemState;
+  acquired_price_amount: number | null;
+  acquired_quantity: number | null;
+};
+
+/**
+ * Sum of persisted acquired price × quantity for in-basket rows only.
+ * Pending/skipped rows may still carry seeded prepared values at activation.
+ */
+export function computeFactualAcquiredSubtotal(
+  items: readonly AcquiredSpendLine[],
+): number | null {
+  const priced = items.filter(
+    (item) => item.state === 'in_basket'
+      && item.acquired_price_amount != null
+      && item.acquired_quantity != null,
+  );
+  if (priced.length === 0) return null;
+  return money(priced.reduce(
+    (sum, item) => sum + (item.acquired_price_amount as number) * (item.acquired_quantity as number),
+    0,
+  ));
 }

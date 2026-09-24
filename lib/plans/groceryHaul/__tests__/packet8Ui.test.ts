@@ -64,8 +64,12 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     const editor = read('components/food/hauls/HaulItemEditor.tsx');
     expect(builder).toContain('More actions for');
     expect(builder).toContain('Edit');
-    expect(editor).toContain('These purchasing details belong to this Haul only');
-    expect(editor).toContain('patch.price_amount = nextPrice');
+    expect(editor).toContain('ItemManagementDialog');
+    expect(editor).toContain('Source need snapshot is read-only');
+    expect(editor).toContain('buildHaulItemPreparationPatch');
+    expect(editor).toContain('pendingSourcePriceObservationId');
+    expect(editor).not.toContain('Final Haul quantity');
+    expect(editor).not.toContain('final_quantity');
     expect(editor).not.toContain('updatePersistentGroceryItem');
   });
 
@@ -77,5 +81,17 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(builder).toContain('detail.estimate.estimated_total');
     expect(builder).toContain('detail.estimate.by_store.map');
     expect(builder).toContain('Tax is not included');
+  });
+
+  it('uses the settled builder control rail, Shopping Summary, and distinct store count', () => {
+    const builder = read('components/food/hauls/HaulBuilder.tsx');
+    expect(builder).toContain('Shopping Summary');
+    expect(builder).toContain('countDistinctAssignedStores');
+    expect(builder).toContain('distinctStoreCount');
+    expect(builder).toContain('Invite to Haul is planned for a later phase');
+    expect(builder).toContain('Adding stores from the builder is not available yet');
+    expect(builder).not.toContain('Haul Estimate');
+    expect(builder).toContain('computeGroceryHaulPreparationEstimate(');
+    expect(builder).not.toContain('item.final_quantity * item.price_amount');
   });
 });

@@ -10,6 +10,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireJournalAccess } from '@/lib/access/requireJournalAccess';
 import {
+  changeGroceryListItemNeed,
   deleteGroceryListItem,
   GroceryListNotFoundError,
   GroceryListValidationError,
@@ -19,6 +20,7 @@ import {
   clearGroceryItemListChoice,
   GroceryListPurchasingChoiceValidationError,
   resolveGroceryItemForList,
+  updateGroceryListPurchasingChoiceDetails,
 } from '@/lib/plans/groceryListPurchasingChoiceService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -67,8 +69,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json(result);
       }
 
-      const item = await updateGroceryListItem(personId, listId, itemId, body);
-      return res.status(200).json({ item });
+      if (action === 'change_need') {
+        const result = await changeGroceryListItemNeed(personId, listId, itemId, {
+          food_object_id: body.food_object_id,
+        });
+        return res.status(200).json(result);
+      }
+
+      if (action === 'update_purchasing_details') {
+        const result = await updateGroceryListPurchasingChoiceDetails({
+          personId,
+          listId,
+          itemId,
+          purchase_quantity: body.purchase_quantity,
+          purchase_unit: body.purchase_unit,
+          shopping_display_name: body.shopping_display_name,
+        });
+        return res.status(200).json(result);
+      }
+
+      const result = await updateGroceryListItem(personId, listId, itemId, body);
+      return res.status(200).json(result);
     }
 
     await deleteGroceryListItem(personId, listId, itemId);

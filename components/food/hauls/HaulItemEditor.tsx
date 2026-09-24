@@ -2,154 +2,241 @@
 
 import { useEffect, useState } from 'react';
 
-import { AppDialog } from '@/components/ui/AppDialog';
+import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
+import { ItemManagementSection } from '@/components/food/itemManagement/ItemManagementSection';
+import { PackageFields } from '@/components/food/itemManagement/PackageFields';
+import { PurchaseDetailsSummary } from '@/components/food/itemManagement/PurchaseDetailsSummary';
 import { planService } from '@/lib/plans';
 import type { FoodSearchResult } from '@/lib/food/types';
-import type { GroceryHaulItem } from '@/lib/plans/types';
+import type {
+  GroceryHaulItem,
+  GroceryListPriceObservation,
+} from '@/lib/plans/types';
+
+import { sourceDemandLabel } from './presentation';
+import { buildHaulItemPreparationPatch, validateHaulItemSave } from './haulItemSave';
+import {
+  type HaulPurchasingDraft,
+  haulDraftFromItem,
+  haulPurchasingHasDetails,
+  haulPurchasingSummaryInput,
+  haulSourcedPriceWouldClearOnSave,
+} from './haulPurchasingDetails';
+import { haulListQuoteCompatibleWithPreparedProduct } from '@/lib/plans/groceryHaul/haulListQuoteCompatibility';
+
+export type HaulEditorSubpanel = 'main' | 'change_product' | 'manual_price' | 'source_quotes';
 
 interface HaulItemEditorProps {
   haulId: string;
+  haulCurrency: string;
   item: GroceryHaulItem | null;
   openInProductSearch?: boolean;
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 }
 
-function optionalNumber(value: string): number | null {
-  return value.trim() === '' ? null : Number(value);
+type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
+
+const INPUT_CLASS =
+  'mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none focus:border-white/40';
+
+function FoodSearchResultsList({
+  busy,
+  results,
+  disabled,
+  onSelect,
+}: {
+  busy: boolean;
+  results: ResolveCandidate[];
+  disabled: boolean;
+  onSelect: (candidate: ResolveCandidate) => void;
+}) {
+  if (busy) {
+    return <p className="py-3 text-sm text-white/45">Searching…</p>;
+  }
+  if (results.length === 0) {
+    return <p className="py-3 text-sm text-white/40">Search for a product.</p>;
+  }
+  return results.map((candidate) => (
+    <button
+      key={candidate.food.id}
+      type="button"
+      disabled={disabled}
+      onClick={() => onSelect(candidate)}
+      className="block w-full border-b border-white/[0.06] px-2 py-3 text-left last:border-0 hover:bg-white/[0.04]"
+    >
+      <span className="block text-sm text-white">
+        {candidate.food.brandName
+          ? `${candidate.food.brandName} — ${candidate.food.canonicalName}`
+          : candidate.food.canonicalName}
+      </span>
+    </button>
+  ));
+}
+
+function applyDraftPatch(
+  draft: HaulPurchasingDraft,
+  patch: Partial<HaulPurchasingDraft>,
+): HaulPurchasingDraft {
+  return { ...draft, ...patch };
 }
 
 export function HaulItemEditor({
   haulId,
+  haulCurrency,
   item,
   openInProductSearch = false,
   onClose,
   onSaved,
 }: HaulItemEditorProps) {
-  const [productTitle, setProductTitle] = useState('');
-  const [brandName, setBrandName] = useState('');
-  const [selectedFoodObjectId, setSelectedFoodObjectId] = useState<string | null>(null);
-  const [purchaseUnit, setPurchaseUnit] = useState('');
-  const [packageSize, setPackageSize] = useState('');
-  const [packageUnit, setPackageUnit] = useState('');
-  const [packageCount, setPackageCount] = useState('');
-  const [retailer, setRetailer] = useState('');
-  const [storeLocation, setStoreLocation] = useState('');
-  const [postalCode, setPostalCode] = useState('');
-  const [priceAmount, setPriceAmount] = useState('');
-  const [finalQuantity, setFinalQuantity] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<FoodSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [draft, setDraft] = useState<HaulPurchasingDraft | null>(null);
+  const [subpanel, setSubpanel] = useState<HaulEditorSubpanel>('main');
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productSearchResults, setProductSearchResults] = useState<ResolveCandidate[]>([]);
+  const [searchingProduct, setSearchingProduct] = useState(false);
+  const [listQuotes, setListQuotes] = useState<GroceryListPriceObservation[]>([]);
+  const [quotesLoading, setQuotesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [manualPriceIntent, setManualPriceIntent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!item) return;
-    setProductTitle(item.product_title ?? '');
-    setBrandName(item.brand_name ?? '');
-    setSelectedFoodObjectId(item.selected_food_object_id);
-    setPurchaseUnit(item.purchase_unit ?? '');
-    setPackageSize(item.package_size == null ? '' : String(item.package_size));
-    setPackageUnit(item.package_unit ?? '');
-    setPackageCount(item.package_count == null ? '' : String(item.package_count));
-    setRetailer(item.retailer ?? '');
-    setStoreLocation(item.store_location ?? '');
-    setPostalCode(item.postal_code ?? '');
-    setPriceAmount(item.price_amount == null ? '' : String(item.price_amount));
-    setFinalQuantity(String(item.final_quantity));
-    setSearchOpen(openInProductSearch);
-    setSearchQuery(item.name_snapshot);
-    setSearchResults([]);
+    setDraft(haulDraftFromItem(item));
+    setManualPriceIntent(false);
+    setSubpanel(openInProductSearch ? 'change_product' : 'main');
+    setProductSearchQuery(item.product_title ?? item.name_snapshot);
+    setProductSearchResults([]);
+    setListQuotes([]);
     setError(null);
   }, [item, openInProductSearch]);
 
   useEffect(() => {
-    if (!item || !searchOpen || searchQuery.trim().length < 2) {
-      setSearchResults([]);
+    if (!item || subpanel !== 'change_product') return;
+    const query = productSearchQuery.trim();
+    if (query.length < 2) {
+      setProductSearchResults([]);
       return;
     }
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
-      setSearching(true);
+      setSearchingProduct(true);
       try {
-        const params = new URLSearchParams({ q: searchQuery.trim(), limit: '8' });
+        const params = new URLSearchParams({ q: query, limit: '8' });
         const response = await fetch(`/api/foods/search?${params.toString()}`, {
           credentials: 'include',
           signal: controller.signal,
         });
         if (!response.ok) throw new Error('Product search failed.');
-        const body = (await response.json()) as { results?: FoodSearchResult[] };
-        setSearchResults(body.results ?? []);
+        const body = (await response.json()) as { results?: ResolveCandidate[] };
+        setProductSearchResults(body.results ?? []);
       } catch {
-        if (!controller.signal.aborted) setSearchResults([]);
+        if (!controller.signal.aborted) setProductSearchResults([]);
       } finally {
-        if (!controller.signal.aborted) setSearching(false);
+        if (!controller.signal.aborted) setSearchingProduct(false);
       }
     }, 250);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [item, searchOpen, searchQuery]);
+  }, [item, subpanel, productSearchQuery]);
 
-  if (!item) return null;
-  const editableItem: GroceryHaulItem = item;
+  useEffect(() => {
+    if (!item || subpanel !== 'source_quotes' || !item.grocery_item_id) return;
+    let cancelled = false;
+    setQuotesLoading(true);
+    void planService
+      .getPersistentGroceryPriceQuotes(item.source_grocery_list_id)
+      .then((bundle) => {
+        if (cancelled) return;
+        const pool = bundle.pool_by_item_id[item.grocery_item_id!] ?? [];
+        setListQuotes(
+          pool.filter((observation) =>
+            haulListQuoteCompatibleWithPreparedProduct(observation, item, haulCurrency),
+          ),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setListQuotes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setQuotesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item, subpanel, haulCurrency]);
 
-  function chooseProduct(result: FoodSearchResult) {
-    setSelectedFoodObjectId(result.food.id);
-    setProductTitle(result.food.canonicalName);
-    setBrandName(result.food.brandName ?? '');
-    setPurchaseUnit(result.food.servingUnit ?? '');
-    setSearchOpen(false);
+  if (!item || !draft) return null;
+
+  const editableItem = item;
+
+  const sourcedWouldClear = haulSourcedPriceWouldClearOnSave(editableItem, draft);
+  const summaryInput = haulPurchasingSummaryInput(
+    editableItem,
+    draft,
+    haulCurrency,
+    manualPriceIntent,
+  );
+  const hasDetails = haulPurchasingHasDetails(draft);
+
+  function updateDraft(patch: Partial<HaulPurchasingDraft>) {
+    setDraft((current) => (current ? applyDraftPatch(current, patch) : current));
+  }
+
+  function selectProduct(candidate: ResolveCandidate) {
+    updateDraft({
+      selectedFoodObjectId: candidate.food.id,
+      productTitle: candidate.food.canonicalName,
+      brandName: candidate.food.brandName ?? '',
+      purchaseUnit: candidate.food.servingUnit ?? '',
+    });
+    setSubpanel('main');
     setError(null);
   }
 
-  async function save() {
-    if (saving) return;
-    const quantity = Number(finalQuantity);
-    const nextPackageSize = optionalNumber(packageSize);
-    const nextPackageCount = optionalNumber(packageCount);
-    const nextPrice = optionalNumber(priceAmount);
-    if (!Number.isFinite(quantity) || quantity < 0) {
-      setError('Final quantity must be zero or greater.');
-      return;
-    }
-    if (
-      [nextPackageSize, nextPackageCount].some((value) => value != null && (!Number.isFinite(value) || value <= 0))
-      || (nextPrice != null && (!Number.isFinite(nextPrice) || nextPrice < 0))
-    ) {
-      setError('Package values must be positive and price must be zero or greater.');
-      return;
-    }
+  function selectListQuote(observation: GroceryListPriceObservation) {
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            pendingSourcePriceObservationId: observation.id,
+            priceAmount: '',
+          }
+        : current,
+    );
+    setManualPriceIntent(false);
+    setSubpanel('main');
+  }
 
-    const patch: Parameters<typeof planService.updateGroceryHaulItem>[2] = {};
-    const textChanges: Array<[keyof typeof patch, string, string | null]> = [
-      ['product_title', productTitle, editableItem.product_title],
-      ['brand_name', brandName, editableItem.brand_name],
-      ['purchase_unit', purchaseUnit, editableItem.purchase_unit],
-      ['package_unit', packageUnit, editableItem.package_unit],
-      ['retailer', retailer, editableItem.retailer],
-      ['store_location', storeLocation, editableItem.store_location],
-      ['postal_code', postalCode, editableItem.postal_code],
-    ];
-    for (const [key, value, original] of textChanges) {
-      const normalized = value.trim() || null;
-      if (normalized !== original) Object.assign(patch, { [key]: normalized });
+  async function save() {
+    if (saving || !draft) return;
+    const validationError = validateHaulItemSave(editableItem, draft);
+    if (validationError) {
+      setError(validationError);
+      return;
     }
-    if (selectedFoodObjectId !== editableItem.selected_food_object_id) {
-      patch.selected_food_object_id = selectedFoodObjectId;
-    }
-    if (quantity !== editableItem.final_quantity) patch.final_quantity = quantity;
-    if (nextPackageSize !== editableItem.package_size) patch.package_size = nextPackageSize;
-    if (nextPackageCount !== editableItem.package_count) patch.package_count = nextPackageCount;
-    if (nextPrice !== editableItem.price_amount) {
-      patch.price_amount = nextPrice;
-      if (nextPrice != null) patch.price_currency = editableItem.price_currency ?? 'USD';
-    }
-    if (Object.keys(patch).length === 0) {
+    const patch = buildHaulItemPreparationPatch(editableItem, draft, { manualPriceIntent });
+    if (!patch) {
       onClose();
+      return;
+    }
+    const nextPackageSize = patch.package_size;
+    const nextPackageCount = patch.package_count;
+    if (
+      (nextPackageSize != null && (typeof nextPackageSize !== 'number' || nextPackageSize <= 0))
+      || (nextPackageCount != null && (typeof nextPackageCount !== 'number' || nextPackageCount <= 0))
+    ) {
+      setError('Package size and count must be positive when set.');
+      return;
+    }
+    const nextPrice = patch.price_amount;
+    if (
+      nextPrice != null
+      && (typeof nextPrice !== 'number' || !Number.isFinite(nextPrice) || nextPrice < 0)
+    ) {
+      setError('Price must be zero or greater.');
       return;
     }
 
@@ -166,103 +253,291 @@ export function HaulItemEditor({
     }
   }
 
+  const panelTitle =
+    subpanel === 'change_product'
+      ? 'Change product'
+      : subpanel === 'manual_price'
+        ? 'Edit purchasing manually'
+        : subpanel === 'source_quotes'
+          ? 'Find / update price'
+          : 'Edit Haul item';
+
   return (
-    <AppDialog
+    <ItemManagementDialog
       open={Boolean(item)}
       onClose={onClose}
       labelledBy="haul-item-editor-title"
-      panelClassName="border border-white/15 bg-[#211a14] p-6 text-white shadow-2xl"
+      busy={saving}
+      footer={(
+        <>
+          {error && (
+            <p className="mb-3 text-sm text-red-200" role="alert">{error}</p>
+          )}
+          {subpanel === 'main' ? (
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                className="px-4 py-2 text-sm text-white/55"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void save()}
+                disabled={saving}
+                className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          ) : subpanel === 'manual_price' ? (
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSubpanel('main')}
+                disabled={saving}
+                className="px-4 py-2 text-sm text-white/55"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  updateDraft({ pendingSourcePriceObservationId: null });
+                  setSubpanel('main');
+                }}
+                disabled={saving}
+                className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d]"
+              >
+                Done
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSubpanel('main')}
+                disabled={saving}
+                className="px-4 py-2 text-sm text-white/55"
+              >
+                Back
+              </button>
+            </div>
+          )}
+        </>
+      )}
     >
-      <h2 id="haul-item-editor-title" className="text-2xl font-light text-brand-50">
-        Edit {editableItem.name_snapshot}
-      </h2>
-      <p className="mt-2 text-sm text-white/50">
-        These purchasing details belong to this Haul only. The source List stays unchanged.
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">
+        Haul item
       </p>
+      <h2 id="haul-item-editor-title" className="mt-1 text-2xl font-semibold text-white">
+        {panelTitle}
+      </h2>
 
-      <div className="mt-5">
-        <button
-          type="button"
-          onClick={() => setSearchOpen((value) => !value)}
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold hover:bg-white/[0.04]"
-        >
-          {productTitle ? 'Change Product' : 'Choose Product'}
-        </button>
-        {searchOpen && (
-          <div className="mt-3 rounded-xl border border-white/15 p-3">
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search products"
-              className="min-h-11 w-full rounded-lg bg-[#16110d] px-3 text-xl outline-none"
+      {subpanel === 'main' && (
+        <>
+          <p className="mt-2 text-sm text-white/45">
+            These purchasing details belong to this Haul only. The source List stays unchanged.
+          </p>
+          <ItemManagementSection title="Source need">
+            <p className="text-lg font-semibold text-white">{editableItem.name_snapshot}</p>
+            <p className="mt-1 text-xs text-white/45">{sourceDemandLabel(editableItem)}</p>
+            <p className="mt-2 text-[11px] text-white/35">
+              Source need snapshot is read-only provenance for this Haul.
+            </p>
+          </ItemManagementSection>
+        </>
+      )}
+
+      {subpanel === 'change_product' && (
+        <div className="mt-6 space-y-3">
+          <p className="text-sm text-white/45">
+            Changes the prepared product for this Haul only, not the source List need.
+          </p>
+          <input
+            autoFocus
+            type="search"
+            value={productSearchQuery}
+            onChange={(event) => setProductSearchQuery(event.target.value)}
+            placeholder="Search products"
+            className={INPUT_CLASS}
+          />
+          <div className="max-h-72 overflow-y-auto rounded-xl border border-white/10">
+            <FoodSearchResultsList
+              busy={searchingProduct}
+              results={productSearchResults}
+              disabled={saving}
+              onSelect={selectProduct}
             />
-            <div className="mt-2 max-h-52 overflow-y-auto">
-              {searching && <p className="px-2 py-3 text-xs text-white/40">Searching…</p>}
-              {!searching && searchResults.map((result) => (
+          </div>
+        </div>
+      )}
+
+      {subpanel === 'source_quotes' && (
+        <div className="mt-6 space-y-3">
+          <p className="text-sm text-white/45">
+            Select a compatible price from the source List quote history. Provider search is not
+            available in the Haul editor in this phase.
+          </p>
+          {!item.grocery_item_id ? (
+            <p className="text-sm text-white/40">This item has no linked source List row.</p>
+          ) : quotesLoading ? (
+            <p className="text-sm text-white/45">Loading List quotes…</p>
+          ) : listQuotes.length === 0 ? (
+            <p className="text-sm text-white/40">No List price quotes found for this item.</p>
+          ) : (
+            <div className="max-h-72 space-y-2 overflow-y-auto">
+              {listQuotes.map((observation) => (
                 <button
-                  key={result.food.id}
+                  key={observation.id}
                   type="button"
-                  onClick={() => chooseProduct(result)}
-                  className="block w-full rounded-lg px-2 py-2 text-left hover:bg-white/[0.05]"
+                  disabled={saving}
+                  onClick={() => selectListQuote(observation)}
+                  className="block w-full rounded-xl border border-white/10 px-3 py-3 text-left hover:bg-white/[0.04]"
                 >
-                  <span className="block text-sm font-semibold">{result.food.canonicalName}</span>
-                  {result.food.brandName && <span className="block text-xs text-white/45">{result.food.brandName}</span>}
+                  <span className="block text-sm text-white">{observation.product_title}</span>
+                  <span className="mt-1 block text-xs text-white/45">
+                    {[observation.retailer, observation.postal_code].filter(Boolean).join(' · ')}
+                    {' · '}
+                    {observation.unit_price}
+                    {observation.currency ? ` ${observation.currency}` : ''}
+                  </span>
                 </button>
               ))}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        {[
-          ['Product', productTitle, setProductTitle],
-          ['Brand', brandName, setBrandName],
-          ['Purchase unit', purchaseUnit, setPurchaseUnit],
-          ['Package unit', packageUnit, setPackageUnit],
-          ['Retailer', retailer, setRetailer],
-          ['Store location', storeLocation, setStoreLocation],
-          ['ZIP code', postalCode, setPostalCode],
-        ].map(([label, value, setter]) => (
-          <label key={label as string} className="text-xs font-semibold text-white/50">
-            {label as string}
+      {subpanel === 'manual_price' && (
+        <div className="mt-6 space-y-4">
+          <label className="block">
+            <span className="text-xs text-white/55">Product title</span>
             <input
-              value={value as string}
-              onChange={(event) => (setter as (value: string) => void)(event.target.value)}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-xl font-normal text-white outline-none focus:border-white/45"
+              value={draft.productTitle}
+              onChange={(event) => updateDraft({ productTitle: event.target.value })}
+              className={INPUT_CLASS}
             />
           </label>
-        ))}
-        {[
-          ['Package size', packageSize, setPackageSize],
-          ['Package count', packageCount, setPackageCount],
-          ['Manual price', priceAmount, setPriceAmount],
-          ['Final Haul quantity', finalQuantity, setFinalQuantity],
-        ].map(([label, value, setter]) => (
-          <label key={label as string} className="text-xs font-semibold text-white/50">
-            {label as string}
+          <label className="block">
+            <span className="text-xs text-white/55">Brand</span>
+            <input
+              value={draft.brandName}
+              onChange={(event) => updateDraft({ brandName: event.target.value })}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-white/55">Purchase unit</span>
+            <input
+              value={draft.purchaseUnit}
+              onChange={(event) => updateDraft({ purchaseUnit: event.target.value })}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <PackageFields
+            packageSize={draft.packageSize}
+            packageUnit={draft.packageUnit}
+            packageCount={draft.packageCount}
+            onPackageSizeChange={(value) => updateDraft({ packageSize: value })}
+            onPackageUnitChange={(value) => updateDraft({ packageUnit: value })}
+            onPackageCountChange={(value) => updateDraft({ packageCount: value })}
+            inputClassName={INPUT_CLASS}
+          />
+          <label className="block">
+            <span className="text-xs text-white/55">Retailer</span>
+            <input
+              value={draft.retailer}
+              onChange={(event) => updateDraft({ retailer: event.target.value })}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-white/55">Store location</span>
+            <input
+              value={draft.storeLocation}
+              onChange={(event) => updateDraft({ storeLocation: event.target.value })}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-white/55">ZIP/postal</span>
+            <input
+              value={draft.postalCode}
+              onChange={(event) => updateDraft({ postalCode: event.target.value })}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-white/55">Price</span>
             <input
               type="number"
               min="0"
-              step="any"
-              value={value as string}
-              onChange={(event) => (setter as (value: string) => void)(event.target.value)}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 text-xl font-normal text-white outline-none focus:border-white/45"
+              step="0.01"
+              value={draft.priceAmount}
+              onChange={(event) => {
+                setManualPriceIntent(true);
+                updateDraft({
+                  priceAmount: event.target.value,
+                  pendingSourcePriceObservationId: null,
+                });
+              }}
+              className={INPUT_CLASS}
             />
           </label>
-        ))}
-      </div>
+        </div>
+      )}
 
-      {error && <p role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
-      <div className="mt-6 flex justify-end gap-2">
-        <button type="button" onClick={onClose} disabled={saving} className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold">
-          Cancel
-        </button>
-        <button type="button" onClick={() => void save()} disabled={saving} className="rounded-full bg-brand-50 px-6 py-2.5 text-sm font-semibold text-[#16110d] disabled:opacity-50">
-          {saving ? 'Saving…' : 'Save changes'}
-        </button>
-      </div>
-    </AppDialog>
+      {subpanel === 'main' && (
+        <div className="mt-6">
+          <ItemManagementSection title="Purchasing">
+            {sourcedWouldClear && (
+              <p className="mb-3 text-xs text-amber-100/80" role="status">
+                Sourced List price will clear when you save these context changes.
+              </p>
+            )}
+            {hasDetails ? (
+              <>
+                <PurchaseDetailsSummary
+                  details={summaryInput}
+                  onEditManually={() => setSubpanel('manual_price')}
+                  onFindUpdate={() => setSubpanel('source_quotes')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSubpanel('change_product')}
+                  disabled={saving}
+                  className="mt-3 rounded-full border border-white/15 px-4 py-1.5 text-xs font-medium text-white hover:bg-white/[0.06]"
+                >
+                  Change product
+                </button>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-white/45">
+                  Choose a product, then add store and price details for this Haul trip.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSubpanel('change_product')}
+                  className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d]"
+                >
+                  Choose product
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubpanel('manual_price')}
+                  className="rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-white hover:bg-white/[0.06]"
+                >
+                  Edit manually
+                </button>
+              </div>
+            )}
+          </ItemManagementSection>
+        </div>
+      )}
+    </ItemManagementDialog>
   );
 }

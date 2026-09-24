@@ -512,6 +512,9 @@ export interface PantryOnHandItem {
   updated_at: string;
 }
 
+export type PantryAcquisitionLotResolutionStatus = 'open' | 'completed' | 'disposed';
+export type PantryAcquisitionLotDispositionReason = 'expired' | 'manual' | 'other';
+
 export interface PantryAcquisitionLot {
   id: string;
   pantry_item_id: string;
@@ -523,6 +526,10 @@ export interface PantryAcquisitionLot {
   expected_shelf_life_days: number | null;
   quantity_acquired: number;
   quantity_remaining: number;
+  resolution_status: PantryAcquisitionLotResolutionStatus;
+  resolved_at: string | null;
+  disposed_quantity: number | null;
+  disposition_reason: PantryAcquisitionLotDispositionReason | null;
   unit: string | null;
   product_title: string | null;
   brand_name: string | null;
@@ -747,6 +754,25 @@ export interface GroceryHaulExecutionReadiness {
   deferred_findings: GroceryHaulExecutionDeferredFinding[];
 }
 
+/** Current mutable Haul preparation joined from grocery_haul_items for active execution. */
+export interface GroceryHaulExecutionCurrentPreparation {
+  quantity: number;
+  selected_food_object_id: string | null;
+  product_title: string | null;
+  brand_name: string | null;
+  purchase_unit: string | null;
+  package_size: number | null;
+  package_unit: string | null;
+  package_count: number | null;
+  retailer: string | null;
+  store_location: string | null;
+  postal_code: string | null;
+  price_amount: number | null;
+  price_currency: string | null;
+  price_source: GroceryHaulPriceSource | null;
+  is_executable: boolean;
+}
+
 export interface GroceryHaulExecutionItem {
   id: string;
   person_id: string;
@@ -754,6 +780,8 @@ export interface GroceryHaulExecutionItem {
   haul_item_id: string;
   sort_ordinal: number;
   state: GroceryHaulExecutionItemState;
+  /** Live Haul preparation for pending rows; null when not joined. */
+  current_preparation: GroceryHaulExecutionCurrentPreparation | null;
   source_grocery_list_id: string;
   source_list_title: string | null;
   source_name_snapshot: string;
@@ -804,6 +832,8 @@ export interface GroceryHaulExecutionSummary {
   pending_count: number;
   in_basket_count: number;
   skipped_count: number;
+  /** Rows kept for audit but excluded from executable Shopping View (e.g. qty 0). */
+  excluded_count: number;
 }
 
 export interface GroceryHaulExecutionDetail {
@@ -864,6 +894,8 @@ export interface GroceryHaulCollectionItem {
   execution_item_count: number;
   unpriced_item_count: number;
   estimated_total: number;
+  /** Sum of persisted acquired price×quantity when at least one priced acquisition exists. */
+  acquired_subtotal: number | null;
   currency: string;
   budget_amount: number | null;
   store_names: string[];

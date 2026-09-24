@@ -109,7 +109,7 @@ beforeEach(() => {
 });
 
 describe('Packet 6 Haul preparation service', () => {
-  it('builds the Packet 8 Library model with complete memberships and persisted estimates in four batched reads', async () => {
+  it('builds the Packet 8 Library model with complete memberships and persisted estimates in five batched reads', async () => {
     installFake();
     const rows = await listGroceryHaulsForPerson(PERSON);
     expect(rows).toHaveLength(1);
@@ -120,10 +120,37 @@ describe('Packet 6 Haul preparation service', () => {
       execution_item_count: 1,
       unpriced_item_count: 0,
       estimated_total: 6,
+      acquired_subtotal: null,
       currency: 'USD',
       store_names: ['Downtown'],
     });
-    expect(mockFrom).toHaveBeenCalledTimes(4);
+    expect(mockFrom).toHaveBeenCalledTimes(5);
+  });
+
+  it('derives acquired_subtotal from persisted execution price×quantity when present', async () => {
+    const fake = installFake('active');
+    fake.getTable('grocery_haul_execution_items').push({
+      haul_id: 'haul-1',
+      person_id: PERSON,
+      state: 'in_basket',
+      acquired_price_amount: 4,
+      acquired_quantity: 2,
+    });
+    const rows = await listGroceryHaulsForPerson(PERSON);
+    expect(rows[0].acquired_subtotal).toBe(8);
+  });
+
+  it('ignores seeded pending execution prices when deriving acquired_subtotal', async () => {
+    const fake = installFake('active');
+    fake.getTable('grocery_haul_execution_items').push({
+      haul_id: 'haul-1',
+      person_id: PERSON,
+      state: 'pending',
+      acquired_price_amount: 4,
+      acquired_quantity: 2,
+    });
+    const rows = await listGroceryHaulsForPerson(PERSON);
+    expect(rows[0].acquired_subtotal).toBeNull();
   });
 
   it('returns complete memberships, persisted resolutions, and one estimate in fixed queries', async () => {
@@ -203,6 +230,8 @@ describe('Packet 6 Haul preparation service', () => {
     Object.assign(fake.getTable('grocery_list_price_observations')[0], {
       person_id: PERSON,
       grocery_list_id: 'list-1',
+      grocery_item_id: 'list-item-1',
+      food_object_id: 'product-oats',
       source: 'serpapi',
       product_title: 'Selected source product',
       brand_name: 'Source Brand',
@@ -231,6 +260,54 @@ describe('Packet 6 Haul preparation service', () => {
       price_source: 'sourced',
       source_price_observation_id: 'price-1',
       resolution_source: 'haul_edit',
+    });
+  });
+
+  it('rejects List quotes that do not match the Haul prepared product', async () => {
+    const fake = installFake();
+    Object.assign(fake.getTable('grocery_list_price_observations')[0], {
+      person_id: PERSON,
+      grocery_list_id: 'list-1',
+      grocery_item_id: 'list-item-1',
+      food_object_id: 'other-product',
+      currency: 'USD',
+      unit_price: 4.5,
+    });
+
+    await expect(
+      updateGroceryHaulItemPreparation({
+        personId: PERSON,
+        haulId: 'haul-1',
+        itemId: 'haul-item-1',
+        patch: { sourcePriceObservationId: 'price-1' },
+      }),
+    ).rejects.toBeInstanceOf(GroceryHaulValidationError);
+  });
+
+  it('clears store_location when a List quote changes retailer or postal code', async () => {
+    const fake = installFake();
+    Object.assign(fake.getTable('grocery_list_price_observations')[0], {
+      person_id: PERSON,
+      grocery_list_id: 'list-1',
+      grocery_item_id: 'list-item-1',
+      food_object_id: 'product-oats',
+      currency: 'USD',
+      retailer: 'Other Market',
+      postal_code: '94107',
+      unit_price: 4.5,
+      product_title: 'Rolled oats',
+    });
+
+    const updated = await updateGroceryHaulItemPreparation({
+      personId: PERSON,
+      haulId: 'haul-1',
+      itemId: 'haul-item-1',
+      patch: { sourcePriceObservationId: 'price-1' },
+    });
+
+    expect(updated).toMatchObject({
+      retailer: 'Other Market',
+      store_location: null,
     });
   });
 

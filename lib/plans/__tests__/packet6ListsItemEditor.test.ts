@@ -1,0 +1,49 @@
+import fs from 'fs';
+import path from 'path';
+
+const root = process.cwd();
+const read = (relativePath: string) =>
+  fs.readFileSync(path.join(root, relativePath), 'utf8');
+
+describe('Packet 6 Lists item-management convergence', () => {
+  const manager = read('components/food/lists/ListsManager.tsx');
+  const editor = read('components/food/lists/ListsItemEditor.tsx');
+
+  it('uses shared item-management primitives in the Lists editor', () => {
+    expect(editor).toContain('ItemManagementDialog');
+    expect(editor).toContain('ItemManagementSection');
+    expect(editor).toContain('PurchaseDetailsSummary');
+    expect(editor).toContain('PackageFields');
+    expect(manager).toContain('<ListsItemEditor');
+  });
+
+  it('separates need change from purchasing product change', () => {
+    expect(editor).toContain('Change need');
+    expect(editor).toContain('Change product');
+    expect(editor).toContain('NeedResolveResultsList');
+    expect(editor).toContain('ProductChoiceResultsList');
+    expect(manager).toContain('resolvePersistentGroceryItemForList');
+    expect(manager).toContain('changePersistentGroceryListItemNeed');
+    expect(manager).toContain('grocery_list_need_resolve');
+    expect(manager).toContain('grocery_list_product_choice');
+    expect(manager).toContain('buildGroceryProductChoiceCandidates');
+    expect(manager).not.toContain('resolveDefaultIntakeProfile');
+  });
+
+  it('keeps notes progressive and hides currency in manual purchasing', () => {
+    expect(editor).toContain('More details');
+    expect(editor).not.toContain('>Currency<');
+    expect(editor).toContain('PurchaseDetailsSummary');
+  });
+
+  it('keeps the new choice when changing product clears only local price', () => {
+    expect(manager).toContain('clearLocalPriceForItem');
+    expect(manager).not.toMatch(/setChoices\(\(current\) => \(\{ \.\.\.current, \[editItem\.id\]: result\.choice \}\)\);\s*clearLocalPurchasingForItem/);
+  });
+
+  it('routes list price discovery through item management', () => {
+    expect(manager).toContain('openPriceSearchFromEditor');
+    expect(manager).toContain('open={Boolean(editItem) && !pricePanelItem}');
+    expect(manager).not.toContain('Find Price');
+  });
+});

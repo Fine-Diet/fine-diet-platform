@@ -30,6 +30,7 @@ function executionItem(overrides: Partial<GroceryHaulExecutionItem> = {}): Groce
     haul_item_id: 'haul-item-1',
     sort_ordinal: 1,
     state: 'pending',
+    current_preparation: null,
     source_grocery_list_id: 'list-1',
     source_list_title: 'Essentials',
     source_name_snapshot: 'Oats',
@@ -138,12 +139,12 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
 
   it('renders execution rows, provenance, prepared instruction, and progress counts', () => {
     const shop = read('components/food/hauls/HaulShoppingView.tsx');
-    expect(shop).toContain('execution.items.map');
+    expect(shop).toContain('execution.items.filter(isExecutableShoppingRow).map');
     expect(shop).toContain('execution.summary.pending_count');
     expect(shop).toContain('execution.summary.in_basket_count');
     expect(shop).toContain('execution.summary.skipped_count');
     expect(shop).toContain('executionSourceDemandLabel(item)');
-    expect(shop).toContain('preparedInstructionLabel(item)');
+    expect(shop).toContain('currentPlanInstructionLabel(item)');
     expect(shop).toContain('acquisitionOutcomeDiverged(item)');
     expect(shop).toContain('Active shopping');
     expect(executionSourceDemandLabel(executionItem())).toBe('Need · 4 cup');
@@ -228,28 +229,45 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(shop).not.toContain('addGroceryListsToHaul');
   });
 
-  it('routes active Hauls to Shopping View and keeps closed/cancelled Hauls in history', () => {
+  it('routes active Hauls to Shopping View and converges the collection into one Recent table', () => {
     expect(haulHrefForStatus('haul-1', 'planned')).toBe('/app/food/hauls/haul-1');
     expect(haulHrefForStatus('haul-1', 'active')).toBe('/app/food/hauls/haul-1/shop');
     expect(haulHrefForStatus('haul-1', 'closed')).toBe('/app/food/hauls/haul-1');
     expect(haulHrefForStatus('haul-1', 'cancelled')).toBe('/app/food/hauls/haul-1');
     const library = read('components/food/hauls/HaulsLibrary.tsx');
     const builder = read('components/food/hauls/HaulBuilder.tsx');
-    expect(library).toContain('Shopping in progress');
-    expect(library).toContain("haul.status === 'active'");
-    expect(library).toContain("haul.status === 'closed' || haul.status === 'cancelled'");
+    const shop = read('components/food/hauls/HaulShoppingView.tsx');
+    expect(library).toContain('Recent');
+    expect(library).toContain('HaulCollectionTable');
+    expect(library).toContain('<span>Date</span>');
+    expect(library).toContain('<span>Store</span>');
+    expect(library).toContain('<span>Spend</span>');
+    expect(library).toContain('<span>Status</span>');
+    expect(library).toContain('formatHaulCollectionSpend');
     expect(library).toContain('haulHrefForStatus(haul.id, haul.status)');
-    expect(builder).toContain("detail.haul.status === 'active'");
+    expect(library).not.toContain('Draft preparation');
+    expect(library).not.toContain('Shopping in progress');
+    expect(library).not.toContain('History');
+    expect(shop).toContain('haulPrepareHref(haulId)');
+    expect(shop).toContain('Edit');
+    expect(shop).toContain('currentPlanInstructionLabel');
+    expect(shop).toContain('isExecutableShoppingRow');
+    expect(builder).toContain("router.query.prepare === '1'");
+    expect(builder).toContain('itemPreparationLocked');
     expect(builder).toContain('APP_ROUTE_BUILDERS.foodHaulShop(haulId)');
     expect(builder).toContain('Continue to Shopping View');
     expect(builder).toContain('<HistoricalHaul detail={detail} />');
   });
 
-  it('shows a factual acquired subtotal only from persisted price × quantity and does not invent completion', () => {
+  it('shows a factual acquired subtotal only from in-basket price × quantity and does not invent completion', () => {
     expect(factualAcquiredSubtotal([
-      executionItem({ acquired_price_amount: 3, acquired_quantity: 2 }),
-      executionItem({ id: 'execution-2', acquired_price_amount: null, acquired_quantity: 1 }),
+      executionItem({ state: 'in_basket', acquired_price_amount: 3, acquired_quantity: 2 }),
+      executionItem({ id: 'execution-2', state: 'pending', acquired_price_amount: 3, acquired_quantity: 2 }),
+      executionItem({ id: 'execution-3', acquired_price_amount: null, acquired_quantity: 1 }),
     ])).toBe(6);
+    expect(factualAcquiredSubtotal([
+      executionItem({ state: 'pending', acquired_price_amount: 3, acquired_quantity: 2 }),
+    ])).toBeNull();
     expect(factualAcquiredSubtotal([
       executionItem({ acquired_price_amount: null, acquired_quantity: 1 }),
     ])).toBeNull();
@@ -262,7 +280,8 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(shop).not.toContain('Complete Shopping');
     expect(shop).not.toContain('Finish Haul');
     expect(shop).not.toMatch(/\$\d+\s*[–-]\s*\$?\d+/);
-    expect(shop).toContain('no executable shopping rows');
+    expect(shop).toContain('Nothing to shop right now');
+    expect(shop).toContain('Edit preparation');
   });
 
   it('does not add completion, Pantry side effects, or DDL', () => {

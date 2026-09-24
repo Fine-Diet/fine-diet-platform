@@ -98,6 +98,17 @@ function rowToLot(
       row.expected_shelf_life_days == null ? null : Number(row.expected_shelf_life_days),
     quantity_acquired: Number(row.quantity_acquired),
     quantity_remaining: Number(row.quantity_remaining),
+    resolution_status:
+      row.resolution_status == null
+        ? 'open'
+        : String(row.resolution_status) as PantryAcquisitionLot['resolution_status'],
+    resolved_at: row.resolved_at == null ? null : String(row.resolved_at),
+    disposed_quantity:
+      row.disposed_quantity == null ? null : Number(row.disposed_quantity),
+    disposition_reason:
+      row.disposition_reason == null
+        ? null
+        : String(row.disposition_reason) as PantryAcquisitionLot['disposition_reason'],
     unit: row.unit == null ? null : String(row.unit),
     product_title: row.product_title == null ? null : String(row.product_title),
     brand_name: row.brand_name == null ? null : String(row.brand_name),
@@ -226,6 +237,9 @@ export async function updatePantryAcquisitionLot(args: {
   if (!existing) throw new Error('Pantry acquisition lot not found.');
 
   const current = rowToLot(existing as Record<string, unknown>);
+  if (current.resolution_status !== 'open') {
+    throw new Error('Resolved pantry acquisition lots cannot be edited.');
+  }
   const merged: PantryAcquisitionLotWrite = {
     acquiredOn: args.patch.acquiredOn ?? current.acquired_on,
     expiresOn: args.patch.expiresOn === undefined ? current.expires_on : args.patch.expiresOn,
@@ -260,11 +274,61 @@ export async function updatePantryAcquisitionLot(args: {
     .update(writeToRow(merged))
     .eq('id', args.lotId)
     .eq('person_id', args.personId)
+    .eq('resolution_status', 'open')
     .select('*')
-    .single();
-  if (error || !data) {
-    throw new Error(`Failed to update pantry acquisition lot: ${error?.message ?? 'not found'}`);
+    .maybeSingle();
+  if (error) {
+    const message = error.message ?? '';
+    if (message.includes('TERMINAL_LOT_IMMUTABLE')) {
+      throw new Error('Resolved pantry acquisition lots cannot be edited.');
+    }
+    if (message.includes('LIFECYCLE_UPDATE_FORBIDDEN')) {
+      throw new Error('Pantry acquisition lot lifecycle cannot be changed through purchase edit.');
+    }
+    if (message.includes('expected exactly one row')) {
+      throw new Error('Pantry acquisition lot not found or no longer open for edit.');
+    }
+    throw new Error(`Failed to update pantry acquisition lot: ${message}`);
   }
+  if (!data) {
+    throw new Error('Pantry acquisition lot not found or no longer open for edit.');
+  }
+  return rowToLot(data as Record<string, unknown>);
+}
+
+export type PantryAcquisitionLotResolutionOutcome = 'completed' | 'disposed';
+
+export async function resolvePantryAcquisitionLot(args: {
+  personId: string;
+  lotId: string;
+  outcome: PantryAcquisitionLotResolutionOutcome;
+}): Promise<PantryAcquisitionLot> {
+  const { data, error } = await supabaseAdmin.rpc('resolve_pantry_acquisition_lot', {
+    p_person_id: args.personId,
+    p_lot_id: args.lotId,
+    p_outcome: args.outcome,
+  });
+  if (error) {
+    const message = error.message ?? 'Failed to resolve pantry acquisition lot.';
+    if (message.includes('LOT_NOT_FOUND')) throw new Error('Pantry acquisition lot not found.');
+    if (message.includes('LOT_ALREADY_RESOLVED')) {
+      throw new Error('Pantry acquisition lot is already resolved.');
+    }
+    if (message.includes('NO_REMAINING_TO_DISPOSE')) {
+      throw new Error('No remaining quantity to dispose.');
+    }
+    if (message.includes('INVALID_OUTCOME')) {
+      throw new Error('Invalid pantry acquisition lot resolution outcome.');
+    }
+    if (message.includes('TERMINAL_LOT_IMMUTABLE')) {
+      throw new Error('Pantry acquisition lot is already resolved.');
+    }
+    if (message.includes('LIFECYCLE_UPDATE_FORBIDDEN')) {
+      throw new Error('Pantry acquisition lot lifecycle cannot be changed through purchase edit.');
+    }
+    throw new Error(message);
+  }
+  if (!data) throw new Error('Failed to resolve pantry acquisition lot: no row returned.');
   return rowToLot(data as Record<string, unknown>);
 }
 

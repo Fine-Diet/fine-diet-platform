@@ -5,12 +5,17 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireJournalAccess } from '@/lib/access/requireJournalAccess';
-import { GroceryListPriceValidationError } from '@/lib/plans/groceryListPriceObservationService';
+import { isGroceryListPriceValidationError } from '@/lib/plans/groceryListPriceObservationService';
 import { searchListGroceryItemPrices } from '@/lib/plans/groceryListPriceSearchService';
 import {
   GroceryPriceQuotaExceededError,
 } from '@/lib/plans/groceryPriceQuota';
 import { GroceryPriceValidationError } from '@/lib/plans/groceryPricingValidation';
+import { logListPriceSearchProviderError } from '@/lib/plans/listPriceSearchProviderDiagnostics';
+
+export const config = {
+  maxDuration: 30,
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -38,13 +43,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       retailer,
       postalCode,
     });
+    if (result.outcome === 'provider_error' && result.provider_error) {
+      logListPriceSearchProviderError({
+        listId,
+        itemId,
+        retailer: result.retailer,
+        postalCode: result.postal_code,
+        providerError: result.provider_error,
+      });
+      return res.status(502).json(result);
+    }
     return res.status(200).json(result);
   } catch (err) {
     if (err instanceof GroceryPriceQuotaExceededError) {
       return res.status(429).json({ error: err.message, quota: err.quota });
     }
     if (
-      err instanceof GroceryListPriceValidationError ||
+      isGroceryListPriceValidationError(err) ||
       err instanceof GroceryPriceValidationError
     ) {
       return res.status(400).json({ error: err.message });

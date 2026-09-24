@@ -13,6 +13,8 @@ import { GroceryPriceProviderError, isGroceryPriceProviderError } from './grocer
 import {
   GROCERY_PRICE_PROVIDER_TIMEOUT_MS,
   isGroceryPriceProviderEnabled,
+  resolveGroceryPriceSerpApiApiKey,
+  warnIfGroceryPriceSerpApiKeyMissingInDev,
 } from './groceryPricingConfig';
 import { assertSafeOutboundUrl } from './groceryPricingValidation';
 import {
@@ -395,6 +397,10 @@ function extractSafeSerpApiErrorDetail(body: unknown): string | null {
   return null;
 }
 
+export function isSerpApiNoShoppingResultsError(message: string): boolean {
+  return /hasn't returned any results/i.test(message.trim());
+}
+
 function sanitizeSerpApiErrorDetail(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -454,8 +460,9 @@ export function buildSerpApiSearchParams(
 }
 
 function buildSerpApiUrl(query: GroceryPriceProviderQuery, context: GroceryPriceSearchContext): string {
-  const apiKey = process.env.SERPAPI_API_KEY;
+  const apiKey = resolveGroceryPriceSerpApiApiKey();
   if (!apiKey) {
+    warnIfGroceryPriceSerpApiKeyMissingInDev();
     throw new GroceryPriceProviderError('disabled', 'SerpAPI is not configured');
   }
   const params = buildSerpApiSearchParams(query, context, apiKey);
@@ -484,7 +491,7 @@ export const serpApiGroceryPriceProvider: GroceryPriceProviderAdapter = {
         ? `https://serpapi.test/search.json?q=${encodeURIComponent(query.query)}`
         : buildSerpApiUrl(query, context);
       const raw = await fetchFn(url, { signal });
-      if (raw.error) {
+      if (raw.error && !isSerpApiNoShoppingResultsError(raw.error)) {
         throw new GroceryPriceProviderError('provider_error', raw.error);
       }
       const retrievedAt = new Date().toISOString();

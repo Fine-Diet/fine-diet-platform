@@ -12,6 +12,25 @@ describe('resolvePantryRetailSearchLocation', () => {
     jest.useRealTimers();
   });
 
+  it('resolves Tulsa ZIP 74105 via Supported Locations', async () => {
+    setPantryRetailLocationsFetchOverride(async () => ([
+      {
+        name: '74105, Oklahoma, United States',
+        canonical_name: '74105, Oklahoma, United States',
+        country_code: 'US',
+        target_type: 'Postal Code',
+      },
+    ]));
+
+    const result = await resolvePantryRetailSearchLocation('74105');
+    expect(result).toMatchObject({
+      postal_code: '74105',
+      provider_location: '74105, Oklahoma, United States',
+      country_code: 'US',
+      resolution_source: 'serpapi_supported_locations',
+    });
+  });
+
   it('prefers an exact postal Supported Locations candidate', async () => {
     setPantryRetailLocationsFetchOverride(async () => ([
       {

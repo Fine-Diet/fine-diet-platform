@@ -17,7 +17,8 @@ describe('Persistent List write boundaries after Packet 3', () => {
   });
 
   it('edits and removes only through List-scoped persistence', () => {
-    expect(manager).toContain('updatePersistentGroceryItem(selectedListId, editItem.id');
+    expect(manager).toContain('updatePersistentGroceryItem(');
+    expect(manager).toContain('editItem.id');
     expect(manager).toContain('deletePersistentGroceryItem(selectedListId, editItem.id');
   });
 

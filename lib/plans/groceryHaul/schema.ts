@@ -24,6 +24,10 @@ export const GROCERY_HAUL_EXECUTION_READINESS_RPC_NAME =
   'get_grocery_haul_execution_readiness';
 export const GROCERY_HAUL_EXECUTION_START_RPC_NAME =
   'start_grocery_haul_execution';
+export const GROCERY_HAUL_EXECUTION_BASKET_RPC_NAME =
+  'mark_grocery_haul_execution_in_basket';
+export const GROCERY_HAUL_EXECUTION_BASKET_SQL_PATH =
+  'scripts/sql/markGroceryHaulExecutionInBasket.sql';
 export const FOOD_PERSISTENCE_FOUNDATION_SQL_PATH =
   'scripts/sql/addFoodPersistenceFoundation.sql';
 export const HAUL_BUILDER_PERSISTENCE_SQL_PATH =
@@ -34,6 +38,8 @@ export const SHOPPING_VIEW_EXECUTION_SQL_PATH =
   'scripts/sql/addShoppingViewExecution.sql';
 export const SHOPPING_VIEW_EXECUTION_VERIFY_SQL_PATH =
   'scripts/sql/verifyShoppingViewExecution.sql';
+export const ACTIVE_HAUL_PENDING_PREPARATION_SQL_PATH =
+  'scripts/sql/allowActiveHaulPendingPreparationEdits.sql';
 export const SHOPPING_EXECUTION_OWNER_POLICY_SQL_PATH =
   'scripts/sql/optimizeShoppingExecutionOwnerPolicy.sql';
 export const SHOPPING_EXECUTION_OWNER_POLICY_VERIFY_SQL_PATH =

@@ -20,10 +20,15 @@ import type {
   GeneratedGroceryList,
   GroceryHaulDetail,
   GroceryHaulExecutionReadiness,
+  GroceryHaulExecutionItemState,
   GroceryHaulItem,
 } from '@/lib/plans/types';
 import { HaulExecutionReadinessDialog } from './HaulExecutionReadinessDialog';
 import { HaulItemEditor } from './HaulItemEditor';
+import {
+  computeGroceryHaulPreparationEstimate,
+  countDistinctAssignedStores,
+} from '@/lib/plans/groceryHaul/estimate';
 import {
   formatHaulCurrency,
   formatHaulDate,
@@ -109,6 +114,9 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [addingLists, setAddingLists] = useState(false);
   const [addListsError, setAddListsError] = useState<string | null>(null);
+  const [executionStateByItemId, setExecutionStateByItemId] = useState(
+    () => new Map<string, GroceryHaulExecutionItemState>(),
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -130,6 +138,14 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
           ? current
           : nextDetail.source_lists[0]?.grocery_list_id ?? null,
       );
+      if (nextDetail.haul.status === 'active') {
+        const execution = await planService.getGroceryHaulExecution(haulId);
+        setExecutionStateByItemId(new Map(
+          execution.items.map((item) => [item.haul_item_id, item.state]),
+        ));
+      } else {
+        setExecutionStateByItemId(new Map());
+      }
       setLoadState('ready');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load this Haul.');
@@ -147,10 +163,24 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
     void load();
   }, [load]);
 
+  const prepareView = router.isReady && router.query.prepare === '1';
+  const metadataReadOnly = detail?.haul.status !== 'planned';
+  const activePrepareView = detail?.haul.status === 'active' && prepareView;
+
+  function itemPreparationLocked(itemId: string): boolean {
+    if (detail?.haul.status === 'planned') return false;
+    if (activePrepareView) {
+      return executionStateByItemId.get(itemId) !== 'pending';
+    }
+    return true;
+  }
+
   useEffect(() => {
+    if (!router.isReady) return;
     if (detail?.haul.status !== 'active') return;
+    if (router.query.prepare === '1') return;
     void router.replace(APP_ROUTE_BUILDERS.foodHaulShop(haulId));
-  }, [detail, haulId, router]);
+  }, [detail, haulId, router, router.isReady, router.query.prepare]);
 
   useEffect(() => {
     if (!detail || detail.haul.status !== 'planned' || !metadata) return;
@@ -194,6 +224,11 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
     return grouped;
   }, [detail?.items]);
 
+  const distinctStoreCount = useMemo(
+    () => countDistinctAssignedStores(detail?.items ?? []),
+    [detail?.items],
+  );
+
   const memberIds = new Set(detail?.source_lists.map((source) => source.grocery_list_id) ?? []);
   const availableLists = lists.filter((list) => !memberIds.has(list.id));
   const visibleAddLists = availableLists.filter((list) =>
@@ -215,7 +250,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   }
 
   async function changeQuantity(item: GroceryHaulItem, delta: number) {
-    if (itemBusy) return;
+    if (itemPreparationLocked(item.id) || itemBusy) return;
     const nextQuantity = Math.max(0, item.final_quantity + delta);
     if (nextQuantity === item.final_quantity) return;
     setItemBusy(item.id);
@@ -325,18 +360,29 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               Try again
             </button>
           </div>
-        ) : detail.haul.status === 'active' ? (
+        ) : detail.haul.status === 'active' && !prepareView ? (
           <div className="mx-auto max-w-[1000px] space-y-4">
             <div className="h-12 w-2/3 animate-pulse rounded-xl bg-white/[0.05]" />
             <p className="text-sm text-white/50">Continue to Shopping View…</p>
           </div>
-        ) : detail.haul.status !== 'planned' ? (
+        ) : detail.haul.status !== 'planned' && !activePrepareView ? (
           <HistoricalHaul detail={detail} />
         ) : (
           <div className="mx-auto w-full max-w-[1000px]">
             <Link href={APP_ROUTES.foodHauls} className="text-xs font-semibold text-white/45 hover:text-white/75">
               ← Hauls
             </Link>
+            {activePrepareView && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
+                <p>Pending items can be edited here. Return in-basket or skipped items to pending in Shopping View first.</p>
+                <Link
+                  href={APP_ROUTE_BUILDERS.foodHaulShop(haulId)}
+                  className="font-semibold text-brand-50 hover:text-brand-50/80"
+                >
+                  Back to Shopping View
+                </Link>
+              </div>
+            )}
             <header className="mt-5">
               <p className="text-lg font-semibold text-white">Haul Builder</p>
               <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
@@ -344,47 +390,52 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               </h1>
             </header>
 
-            <section className="mt-8 grid gap-4 border-b border-white/20 pb-6 sm:grid-cols-[1.7fr_1fr_1fr]">
-              <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
-                Haul title
-                <input
-                  value={metadata.title}
-                  onChange={(event) => setMetadata({ ...metadata, title: event.target.value })}
-                  className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-semibold normal-case tracking-normal text-brand-50 outline-none focus:border-white/45"
-                />
-              </label>
-              <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
-                Shopping date
-                <input
-                  type="date"
-                  value={metadata.shoppingDate}
-                  onChange={(event) => setMetadata({ ...metadata, shoppingDate: event.target.value })}
-                  className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
-                />
-              </label>
-              <div className="grid grid-cols-[1fr_5rem] gap-2">
-                <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
-                  Budget
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={metadata.budgetAmount}
-                    onChange={(event) => setMetadata({ ...metadata, budgetAmount: event.target.value })}
-                    placeholder="Optional"
-                    className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
-                  />
-                </label>
-                <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
-                  Currency
-                  <input
-                    maxLength={3}
-                    value={metadata.currency}
-                    onChange={(event) => setMetadata({ ...metadata, currency: event.target.value.toUpperCase() })}
-                    className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-2 text-center text-xl font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
-                  />
-                </label>
-              </div>
+            <section
+              className="mt-8 flex flex-wrap items-center gap-2 border-b border-white/20 pb-6"
+              aria-label="Haul builder controls"
+            >
+              {!activePrepareView && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedListIds([]);
+                    setAddListsError(null);
+                    setAddListsOpen(true);
+                  }}
+                  disabled={availableLists.length === 0}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/20 px-4 text-xs font-semibold disabled:opacity-35"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                  Add Lists
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white/70">
+                    {detail.source_lists.length}
+                  </span>
+                </button>
+              )}
+              <span className="inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-xs font-semibold text-white/70">
+                Stores
+                <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-[10px] tabular-nums text-white/60">
+                  {distinctStoreCount}
+                </span>
+              </span>
+              <button
+                type="button"
+                disabled
+                title="Adding stores from the builder is not available yet."
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/10 px-4 text-xs font-semibold text-white/35 disabled:cursor-not-allowed"
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                Store
+              </button>
+              <button
+                type="button"
+                disabled
+                title="Invite to Haul is planned for a later phase."
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/10 px-4 text-xs font-semibold text-white/35 disabled:cursor-not-allowed"
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                Invite to Haul
+              </button>
             </section>
 
             {autosaveError && (
@@ -403,37 +454,21 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
             )}
 
             <section className="mt-7" aria-labelledby="source-lists-title">
-              <div className="flex flex-col gap-3 border-b border-white/25 pb-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 id="source-lists-title" className="text-sm font-semibold text-brand-50">Source Lists</h2>
-                  <p className="mt-1 text-xs text-white/45">
-                    {detail.source_lists.length} {detail.source_lists.length === 1 ? 'List' : 'Lists'} · {detail.estimate.execution_item_count} live items
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedListIds([]);
-                    setAddListsError(null);
-                    setAddListsOpen(true);
-                  }}
-                  disabled={availableLists.length === 0}
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/20 px-4 text-xs font-semibold disabled:opacity-35"
-                >
-                  <Plus className="h-4 w-4" /> Add Lists
-                </button>
+              <div className="border-b border-white/25 pb-3">
+                <h2 id="source-lists-title" className="text-sm font-semibold text-brand-50">Source Lists</h2>
+                <p className="mt-1 text-xs text-white/45">
+                  {detail.source_lists.length} {detail.source_lists.length === 1 ? 'List' : 'Lists'} · {detail.estimate.execution_item_count} live items
+                </p>
               </div>
 
               <div>
                 {detail.source_lists.map((source) => {
                   const sourceItems = itemsBySource.get(source.grocery_list_id) ?? [];
                   const open = openSourceId === source.grocery_list_id;
-                  const sourceEstimate = sourceItems.reduce(
-                    (sum, item) => sum + (item.final_quantity > 0 && item.price_amount != null
-                      ? item.final_quantity * item.price_amount
-                      : 0),
-                    0,
-                  );
+                  const sourceEstimate = computeGroceryHaulPreparationEstimate(
+                    detail.haul.currency,
+                    sourceItems,
+                  ).estimated_total;
                   return (
                     <div key={source.grocery_list_id} className="border-b border-white/15">
                       <button
@@ -461,84 +496,111 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                           ) : sourceItems.map((item) => {
                             const excluded = item.final_quantity === 0;
                             const store = itemStoreLabel(item);
+                            const haulCurrency = detail.haul.currency;
+                            const priceIsCurrent = item.price_amount != null
+                              && item.price_source != null
+                              && item.price_currency === haulCurrency;
+                            const productLabel = [item.brand_name, item.product_title].filter(Boolean).join(' · ');
                             return (
                               <article
                                 key={item.id}
-                                className={`relative border-l border-white/15 px-4 py-5 sm:px-6 ${excluded ? 'opacity-45' : ''}`}
+                                className={`relative border-l border-white/15 px-4 py-4 sm:px-6 ${excluded ? 'opacity-45' : ''}`}
                               >
-                                <div className="flex items-start justify-between gap-4">
+                                <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,5.5rem)_auto_auto] sm:items-center sm:gap-x-3 sm:gap-y-2">
                                   <div className="min-w-0">
                                     <h3 className="text-sm font-semibold text-brand-50">{item.name_snapshot}</h3>
-                                    <p className="mt-1 text-[11px] text-white/40">{sourceDemandLabel(item)}</p>
+                                    <p className="mt-0.5 text-[11px] text-white/40">{sourceDemandLabel(item)}</p>
+                                  </div>
+                                  <div className="min-w-0 sm:col-start-2">
                                     {item.product_title ? (
-                                      <>
-                                        <p className="mt-2 text-sm text-white/70">
-                                          {[item.brand_name, item.product_title].filter(Boolean).join(' · ')}
-                                        </p>
-                                        {store && <p className="mt-1 text-xs text-white/45">{store}</p>}
-                                        {item.price_amount != null && (
-                                          <p className="mt-1 text-sm text-white/65">
-                                            {formatHaulCurrency(item.price_amount, item.price_currency ?? detail.haul.currency)}
-                                            {item.price_source === 'manual' ? ' · Manual price' : ''}
-                                          </p>
-                                        )}
-                                      </>
-                                    ) : (
+                                      <p className="text-sm text-white/70">{productLabel}</p>
+                                    ) : !itemPreparationLocked(item.id) ? (
                                       <button
                                         type="button"
                                         onClick={() => {
                                           setChooseProductFirst(true);
                                           setEditingItem(item);
                                         }}
-                                        className="mt-2 rounded-full bg-brand-50 px-4 py-1.5 text-xs font-semibold text-[#16110d]"
+                                        className="rounded-full bg-brand-50 px-4 py-1.5 text-xs font-semibold text-[#16110d]"
                                       >
                                         Choose Product
                                       </button>
+                                    ) : (
+                                      <p className="text-sm text-white/45">Product not set</p>
                                     )}
                                   </div>
-                                  <details className="relative shrink-0">
-                                    <summary aria-label={`More actions for ${item.name_snapshot}`} className="cursor-pointer list-none rounded-full px-2 py-1 text-lg tracking-widest text-white/65">
-                                      •••
-                                    </summary>
-                                    <div className="absolute right-0 z-20 mt-1 w-28 rounded-xl border border-white/15 bg-[#2a2119] p-1 shadow-xl">
+                                  <div className="min-w-0 text-xs text-white/45 sm:col-start-3">
+                                    {store ?? (item.product_title ? 'Store not set' : '—')}
+                                  </div>
+                                  <div className="text-sm text-white/65 sm:col-start-4 sm:text-right">
+                                    {priceIsCurrent ? (
+                                      <>
+                                        {formatHaulCurrency(item.price_amount!, item.price_currency ?? haulCurrency)}
+                                        {item.price_source === 'manual' ? (
+                                          <span className="block text-[10px] text-white/40">Manual</span>
+                                        ) : null}
+                                      </>
+                                    ) : item.product_title && item.final_quantity > 0 ? (
+                                      <span className="text-xs text-amber-100/70">Price needed</span>
+                                    ) : (
+                                      <span className="text-white/30">—</span>
+                                    )}
+                                  </div>
+                                  <div className="inline-flex w-fit items-center rounded-full border border-white/20 sm:col-start-5">
+                                    {!itemPreparationLocked(item.id) && (
                                       <button
                                         type="button"
-                                        onClick={(event) => {
-                                          (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open');
-                                          setChooseProductFirst(false);
-                                          setEditingItem(item);
-                                        }}
-                                        className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-white/[0.06]"
+                                        aria-label={`Decrease ${item.name_snapshot} final Haul quantity`}
+                                        onClick={() => void changeQuantity(item, -1)}
+                                        disabled={itemBusy === item.id}
+                                        className="h-8 w-9 text-sm text-white/60 disabled:opacity-35"
                                       >
-                                        Edit
+                                        −
                                       </button>
-                                    </div>
-                                  </details>
+                                    )}
+                                    <span className="min-w-9 text-center text-xs font-semibold" aria-label={`Final Haul quantity ${item.final_quantity}`}>
+                                      {item.final_quantity}
+                                    </span>
+                                    {!itemPreparationLocked(item.id) && (
+                                      <button
+                                        type="button"
+                                        aria-label={`Increase ${item.name_snapshot} final Haul quantity`}
+                                        onClick={() => void changeQuantity(item, 1)}
+                                        disabled={itemBusy === item.id}
+                                        className="h-8 w-9 text-sm text-white/60 disabled:opacity-35"
+                                      >
+                                        +
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="flex justify-end sm:col-start-6">
+                                    {!itemPreparationLocked(item.id) && (
+                                      <details className="relative shrink-0">
+                                        <summary aria-label={`More actions for ${item.name_snapshot}`} className="cursor-pointer list-none rounded-full px-2 py-1 text-lg tracking-widest text-white/65">
+                                          •••
+                                        </summary>
+                                        <div className="absolute right-0 z-20 mt-1 w-28 rounded-xl border border-white/15 bg-[#2a2119] p-1 shadow-xl">
+                                          <button
+                                            type="button"
+                                            onClick={(event) => {
+                                              (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open');
+                                              setChooseProductFirst(false);
+                                              setEditingItem(item);
+                                            }}
+                                            className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-white/[0.06]"
+                                          >
+                                            Edit
+                                          </button>
+                                        </div>
+                                      </details>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="mt-4 inline-flex items-center rounded-full border border-white/20">
-                                  <button
-                                    type="button"
-                                    aria-label={`Decrease ${item.name_snapshot} final Haul quantity`}
-                                    onClick={() => void changeQuantity(item, -1)}
-                                    disabled={itemBusy === item.id}
-                                    className="h-8 w-9 text-sm text-white/60 disabled:opacity-35"
-                                  >
-                                    −
-                                  </button>
-                                  <span className="min-w-9 text-center text-xs font-semibold" aria-label={`Final Haul quantity ${item.final_quantity}`}>
-                                    {item.final_quantity}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    aria-label={`Increase ${item.name_snapshot} final Haul quantity`}
-                                    onClick={() => void changeQuantity(item, 1)}
-                                    disabled={itemBusy === item.id}
-                                    className="h-8 w-9 text-sm text-white/60 disabled:opacity-35"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                                {excluded && <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">Excluded from estimate and shopping execution</p>}
+                                {excluded && (
+                                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
+                                    Excluded from estimate and shopping execution
+                                  </p>
+                                )}
                               </article>
                             );
                           })}
@@ -550,9 +612,42 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               </div>
             </section>
 
-            <section className="mt-12 rounded-[24px] border border-white/25 p-6 sm:p-8" aria-labelledby="haul-estimate-title">
-              <h2 id="haul-estimate-title" className="text-xl font-semibold text-brand-50">Haul Estimate</h2>
-              <p className="mt-2 text-sm text-white/55">{formatHaulDate(detail.haul.shopping_date)}</p>
+            <section className="mt-12 rounded-[24px] border border-white/25 p-6 sm:p-8" aria-labelledby="shopping-summary-title">
+              <h2 id="shopping-summary-title" className="text-xl font-semibold text-brand-50">Shopping Summary</h2>
+              <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                Haul name
+                <input
+                  value={metadata.title}
+                  readOnly={metadataReadOnly}
+                  onChange={(event) => setMetadata({ ...metadata, title: event.target.value })}
+                  className="mt-1.5 min-h-10 w-full max-w-md rounded-xl border border-white/10 bg-transparent px-3 text-sm font-medium normal-case tracking-normal text-white/80 outline-none focus:border-white/30"
+                />
+              </label>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                  Shopping date
+                  <input
+                    type="date"
+                    value={metadata.shoppingDate}
+                    readOnly={metadataReadOnly}
+                    onChange={(event) => setMetadata({ ...metadata, shoppingDate: event.target.value })}
+                    className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-base font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
+                  />
+                </label>
+                <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                  Budget ({metadata.currency})
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={metadata.budgetAmount}
+                    readOnly={metadataReadOnly}
+                    onChange={(event) => setMetadata({ ...metadata, budgetAmount: event.target.value })}
+                    placeholder="Optional"
+                    className="mt-2 min-h-11 w-full rounded-xl border border-white/15 bg-transparent px-3 text-base font-normal normal-case tracking-normal text-white outline-none focus:border-white/45"
+                  />
+                </label>
+              </div>
               <p className="mt-6 text-4xl font-light text-brand-50">
                 {formatHaulCurrency(detail.estimate.estimated_total, detail.estimate.currency)}
               </p>
@@ -585,14 +680,23 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               <p className="mt-5 text-xs text-white/35">
                 Based on persisted Haul prices. Tax is not included.
               </p>
-              <button
-                type="button"
-                onClick={() => void requestShoppingView()}
-                disabled={activationBusy}
-                className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] disabled:opacity-50 sm:w-auto"
-              >
-                {activationBusy ? 'Checking readiness…' : 'Open Shopping View'}
-              </button>
+              {activePrepareView ? (
+                <Link
+                  href={APP_ROUTE_BUILDERS.foodHaulShop(haulId)}
+                  className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] sm:w-auto"
+                >
+                  Continue to Shopping View
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void requestShoppingView()}
+                  disabled={activationBusy}
+                  className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] disabled:opacity-50 sm:w-auto"
+                >
+                  {activationBusy ? 'Checking readiness…' : 'Open Shopping View'}
+                </button>
+              )}
             </section>
           </div>
         )}
@@ -601,9 +705,13 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
 
       <HaulItemEditor
         haulId={haulId}
+        haulCurrency={detail?.haul.currency ?? 'USD'}
         item={editingItem}
         openInProductSearch={chooseProductFirst}
-        onClose={() => setEditingItem(null)}
+        onClose={() => {
+          setChooseProductFirst(false);
+          setEditingItem(null);
+        }}
         onSaved={reloadDetail}
       />
 

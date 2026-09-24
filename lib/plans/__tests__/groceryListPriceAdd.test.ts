@@ -1,4 +1,6 @@
 import {
+  buildGroceryProductChoiceCandidates,
+  filterGroceryNeedResolveCandidates,
   groupGroceryAddSuggestions,
   parseGroceryAddIntent,
 } from '../groceryListAddIntent';
@@ -110,6 +112,36 @@ describe('groceryListAddIntent', () => {
     expect(grouped.ingredients[0]?.label).toMatch(/chicken breast/i);
     expect(grouped.ingredients[0]?.did_you_mean).toBe(true);
     expect(grouped.products[0]?.group).toBe('product');
+  });
+
+  it('splits need-resolve vs product-choice search candidates', () => {
+    const results = [
+      {
+        food: {
+          id: 'food-common',
+          canonicalName: 'Blueberries',
+          brandName: null,
+          sourceType: 'common',
+        },
+      },
+      {
+        food: {
+          id: 'food-brand',
+          canonicalName: 'Blueberries',
+          brandName: 'Driscoll',
+          sourceType: 'branded',
+          upc: '123',
+        },
+      },
+    ] as unknown as FoodSearchResult[];
+
+    expect(filterGroceryNeedResolveCandidates(results).map((r) => r.food.id)).toEqual([
+      'food-common',
+    ]);
+    expect(buildGroceryProductChoiceCandidates(results).map((r) => r.food.id)).toEqual([
+      'food-brand',
+      'food-common',
+    ]);
   });
 });
 

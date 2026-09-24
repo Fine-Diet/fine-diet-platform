@@ -2,11 +2,32 @@ import {
   fetchConfirmGroceryPrice,
   fetchGroceryHaulSummary,
   fetchGroceryPriceSearch,
+  fetchListGroceryPriceSearch,
   fetchManualGroceryPrice,
+  GROCERY_PRICE_SEARCH_UNAVAILABLE_MESSAGE,
+  parseGroceryPriceSearchResult,
 } from '../groceryPricingClient';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch as typeof fetch;
+
+function validSearchPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    provider: 'serpapi',
+    search_event_id: 'event-list',
+    query: 'spinach',
+    retailer: 'Target',
+    postal_code: '94110',
+    cache_hit: false,
+    outcome: 'results',
+    retrieved_at: '2026-07-15T00:00:00.000Z',
+    expires_at: '2026-07-22T00:00:00.000Z',
+    offers: [{ provider_result_id: 'r1', title: 'Spinach', price: 2.5 }],
+    quota: { remaining: 1 },
+    provider_error: null,
+    ...overrides,
+  };
+}
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -20,19 +41,49 @@ describe('groceryPricingClient', () => {
     mockFetch.mockReset();
   });
 
-  it('returns search results for 200 and 502', async () => {
-    const payload = {
-      provider: 'serpapi',
+  it('parses valid list search 200 and structured 502 provider_error payloads', async () => {
+    const success = validSearchPayload();
+    expect(parseGroceryPriceSearchResult(success)).not.toBeNull();
+
+    const providerError = validSearchPayload({
+      outcome: 'provider_error',
+      offers: [],
+      provider_error: { code: 'timeout', message: 'Timed out' },
+    });
+    expect(parseGroceryPriceSearchResult(providerError)?.outcome).toBe('provider_error');
+
+    mockFetch.mockResolvedValueOnce(jsonResponse(502, providerError));
+    await expect(
+      fetchListGroceryPriceSearch('list-1', 'item-1', {
+        retailer: 'Target',
+        postal_code: '94110',
+      }),
+    ).resolves.toMatchObject({ outcome: 'provider_error' });
+  });
+
+  it('rejects malformed 502 gateway payloads', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(502, { error: 'Bad Gateway' }));
+
+    await expect(
+      fetchListGroceryPriceSearch('list-1', 'item-1', {
+        retailer: 'Target',
+        postal_code: '94110',
+      }),
+    ).rejects.toThrow(GROCERY_PRICE_SEARCH_UNAVAILABLE_MESSAGE);
+  });
+
+  it('returns search results for 200 and structured 502', async () => {
+    const payload = validSearchPayload({
       search_event_id: 'event-1',
       outcome: 'provider_error',
       offers: [],
-      quota: { remaining: 1 },
-    };
+      provider_error: { code: 'disabled', message: 'SerpAPI is not configured' },
+    });
     mockFetch.mockResolvedValueOnce(jsonResponse(502, payload));
 
     await expect(
       fetchGroceryPriceSearch('item-1', { retailer: 'Target', postal_code: '94110' }),
-    ).resolves.toEqual(payload);
+    ).resolves.toMatchObject({ outcome: 'provider_error' });
   });
 
   it('throws quota error on 429', async () => {

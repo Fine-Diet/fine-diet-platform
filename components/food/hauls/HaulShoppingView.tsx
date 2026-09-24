@@ -19,11 +19,14 @@ import {
   acquisitionOutcomeDiverged,
   allowedExecutionActions,
   executionSourceDemandLabel,
+  currentPlanInstructionLabel,
+  currentPlanStoreLabel,
   factualAcquiredSubtotal,
   formatHaulCurrency,
   formatHaulDate,
+  haulPrepareHref,
+  isExecutableShoppingRow,
   preparedExecutionSubtotal,
-  preparedInstructionLabel,
   preparedStoreLabel,
 } from './presentation';
 
@@ -54,7 +57,8 @@ function ExecutionItemRow({
 }) {
   const actions = allowedExecutionActions(item.state);
   const diverged = acquisitionOutcomeDiverged(item);
-  const preparedStore = preparedStoreLabel(item);
+  const planInstruction = currentPlanInstructionLabel(item);
+  const preparedStore = currentPlanStoreLabel(item) ?? preparedStoreLabel(item);
   const acquiredStore = acquiredStoreLabel(item);
   const skipped = item.state === 'skipped';
   const basketed = item.state === 'in_basket';
@@ -67,7 +71,7 @@ function ExecutionItemRow({
           <p className="mt-1 text-[11px] text-white/40">
             {item.source_list_title?.trim() || 'Source List'} · {executionSourceDemandLabel(item)}
           </p>
-          <p className="mt-2 text-sm text-white/70">{preparedInstructionLabel(item)}</p>
+          <p className="mt-2 text-sm text-white/70">{planInstruction}</p>
           {preparedStore && !diverged && (
             <p className="mt-1 text-xs text-white/45">{preparedStore}</p>
           )}
@@ -272,14 +276,35 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
               Try again
             </button>
           </div>
-        ) : execution.items.length === 0 ? (
+        ) : execution.items.filter(isExecutableShoppingRow).length === 0 ? (
           <div className="mx-auto max-w-[800px]">
-            <p role="alert" className="rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-              This active Haul has no executable shopping rows. That is an inconsistent execution state, not an empty shopping list.
-            </p>
-            <Link href={APP_ROUTES.foodHauls} className="mt-4 inline-flex rounded-full border border-white/20 px-5 py-2 text-sm font-semibold">
-              Back to Hauls
-            </Link>
+            {execution.items.length === 0 ? (
+              <>
+                <p role="alert" className="rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                  This active Haul has no executable shopping rows. That is an inconsistent execution state, not an empty shopping list.
+                </p>
+                <Link href={APP_ROUTES.foodHauls} className="mt-4 inline-flex rounded-full border border-white/20 px-5 py-2 text-sm font-semibold">
+                  Back to Hauls
+                </Link>
+              </>
+            ) : (
+              <>
+                <h1 className="text-3xl font-light text-brand-50">Nothing to shop right now</h1>
+                <p className="mt-3 text-sm text-white/55">
+                  Every item is currently excluded from shopping
+                  {execution.summary.excluded_count > 0
+                    ? ` (${execution.summary.excluded_count} excluded).`
+                    : '.'}
+                  {' '}Edit preparation to restore quantities or products, then return here.
+                </p>
+                <Link
+                  href={haulPrepareHref(haulId)}
+                  className="mt-5 inline-flex rounded-full bg-brand-50 px-6 py-3 text-sm font-semibold text-[#16110d]"
+                >
+                  Edit preparation
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           <div className="mx-auto w-full max-w-[1000px]">
@@ -287,13 +312,23 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
               ← Hauls
             </Link>
             <header className="mt-5">
-              <p className="text-lg font-semibold text-white">Shopping View</p>
-              <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
-                {execution.haul.title || `Haul · ${formatHaulDate(execution.haul.shopping_date)}`}
-              </h1>
-              <p className="mt-2 text-sm text-white/50">
-                {formatHaulDate(execution.haul.shopping_date)} · Active shopping
-              </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-lg font-semibold text-white">Shopping View</p>
+                  <h1 className="mt-1 text-4xl font-light tracking-tight text-brand-50 sm:text-5xl">
+                    {execution.haul.title || `Haul · ${formatHaulDate(execution.haul.shopping_date)}`}
+                  </h1>
+                  <p className="mt-2 text-sm text-white/50">
+                    {formatHaulDate(execution.haul.shopping_date)} · Active shopping
+                  </p>
+                </div>
+                <Link
+                  href={haulPrepareHref(haulId)}
+                  className="rounded-full border border-white/20 px-5 py-2.5 text-sm font-semibold text-brand-50 hover:bg-white/[0.04]"
+                >
+                  Edit
+                </Link>
+              </div>
             </header>
 
             <section className="mt-8 rounded-[24px] border border-white/25 p-6 sm:p-8">
@@ -318,7 +353,7 @@ export default function HaulShoppingView({ haulId }: { haulId: string }) {
               <h2 id="shopping-items-title" className="border-b border-white/20 pb-3 text-sm font-semibold text-brand-50">
                 Shopping items
               </h2>
-              {execution.items.map((item) => (
+              {execution.items.filter(isExecutableShoppingRow).map((item) => (
                 <ExecutionItemRow
                   key={item.id}
                   item={item}

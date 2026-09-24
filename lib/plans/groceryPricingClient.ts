@@ -18,6 +18,11 @@ import {
 
 export { GroceryPriceManualReplaceRequiredError };
 
+export const GROCERY_PRICE_SEARCH_INVALID_RESPONSE_MESSAGE =
+  'Price search returned an invalid response.';
+export const GROCERY_PRICE_SEARCH_UNAVAILABLE_MESSAGE =
+  'Price lookup is temporarily unavailable. Please try again.';
+
 export class GroceryPriceQuotaExceededClientError extends Error {
   readonly quota: GroceryPriceSearchQuota;
 
@@ -40,6 +45,60 @@ function errorMessage(body: Record<string, unknown>, fallback: string): string {
   return typeof body.error === 'string' ? body.error : fallback;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isProviderErrorShape(
+  value: unknown,
+): value is { code: string; message: string } {
+  return (
+    isRecord(value)
+    && typeof value.code === 'string'
+    && typeof value.message === 'string'
+  );
+}
+
+export function parseGroceryPriceSearchResult(
+  body: Record<string, unknown>,
+): GroceryPriceSearchResult | null {
+  const outcome = body.outcome;
+  if (
+    outcome !== 'results'
+    && outcome !== 'zero_results'
+    && outcome !== 'provider_error'
+  ) {
+    return null;
+  }
+  if (typeof body.search_event_id !== 'string') return null;
+  if (typeof body.query !== 'string') return null;
+  if (typeof body.retailer !== 'string') return null;
+  if (typeof body.postal_code !== 'string') return null;
+  if (typeof body.retrieved_at !== 'string') return null;
+  if (typeof body.expires_at !== 'string') return null;
+  if (typeof body.cache_hit !== 'boolean') return null;
+  if (!Array.isArray(body.offers)) return null;
+  if (!isRecord(body.quota)) return null;
+  if (body.provider_error != null && !isProviderErrorShape(body.provider_error)) {
+    return null;
+  }
+
+  return {
+    provider: 'serpapi',
+    search_event_id: body.search_event_id,
+    query: body.query,
+    retailer: body.retailer,
+    postal_code: body.postal_code,
+    cache_hit: body.cache_hit,
+    outcome,
+    retrieved_at: body.retrieved_at,
+    expires_at: body.expires_at,
+    offers: body.offers as GroceryPriceSearchResult['offers'],
+    quota: body.quota as unknown as GroceryPriceSearchQuota,
+    provider_error: body.provider_error as GroceryPriceSearchResult['provider_error'],
+  };
+}
+
 export async function fetchGroceryPriceSearch(
   itemId: string,
   input: { retailer: string; postal_code: string },
@@ -51,8 +110,60 @@ export async function fetchGroceryPriceSearch(
     body: JSON.stringify(input),
   });
   const body = await readJsonBody(res);
-  if (res.status === 200 || res.status === 502) {
-    return body as unknown as GroceryPriceSearchResult;
+  if (res.status === 200) {
+    const parsed = parseGroceryPriceSearchResult(body);
+    if (!parsed) {
+      throw new Error(GROCERY_PRICE_SEARCH_INVALID_RESPONSE_MESSAGE);
+    }
+    return parsed;
+  }
+  if (res.status === 502) {
+    const parsed = parseGroceryPriceSearchResult(body);
+    if (parsed?.outcome === 'provider_error') {
+      return parsed;
+    }
+    throw new Error(GROCERY_PRICE_SEARCH_UNAVAILABLE_MESSAGE);
+  }
+  if (res.status === 429) {
+    const quota = body.quota;
+    if (quota != null && typeof quota === 'object') {
+      throw new GroceryPriceQuotaExceededClientError(
+        errorMessage(body, 'Grocery price search quota exceeded'),
+        quota as GroceryPriceSearchQuota,
+      );
+    }
+  }
+  throw new Error(errorMessage(body, `Price search failed (${res.status})`));
+}
+
+export async function fetchListGroceryPriceSearch(
+  listId: string,
+  itemId: string,
+  input: { retailer: string; postal_code: string },
+): Promise<GroceryPriceSearchResult> {
+  const res = await fetch(
+    `/api/journal/food/grocery-lists/${listId}/items/${itemId}/price-search`,
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  const body = await readJsonBody(res);
+  if (res.status === 200) {
+    const parsed = parseGroceryPriceSearchResult(body);
+    if (!parsed) {
+      throw new Error(GROCERY_PRICE_SEARCH_INVALID_RESPONSE_MESSAGE);
+    }
+    return parsed;
+  }
+  if (res.status === 502) {
+    const parsed = parseGroceryPriceSearchResult(body);
+    if (parsed?.outcome === 'provider_error') {
+      return parsed;
+    }
+    throw new Error(GROCERY_PRICE_SEARCH_UNAVAILABLE_MESSAGE);
   }
   if (res.status === 429) {
     const quota = body.quota;

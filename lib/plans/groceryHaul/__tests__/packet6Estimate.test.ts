@@ -1,5 +1,5 @@
 import type { GroceryHaulItem } from '@/lib/plans/types';
-import { computeGroceryHaulPreparationEstimate } from '../estimate';
+import { computeGroceryHaulPreparationEstimate, countDistinctAssignedStores } from '../estimate';
 
 function item(overrides: Partial<GroceryHaulItem> = {}): GroceryHaulItem {
   return {
@@ -97,5 +97,65 @@ describe('Packet 6 persisted Haul estimate', () => {
     expect(estimate.estimated_total).toBe(0);
     expect(estimate.priced_item_count).toBe(0);
     expect(estimate.unpriced_item_count).toBe(2);
+  });
+
+  it('counts distinct control-rail store assignments without postal-only identity', () => {
+    expect(countDistinctAssignedStores([
+      item({ retailer: 'Market', store_location: null, postal_code: '60601' }),
+      item({
+        id: 'item-2',
+        grocery_item_id: 'source-item-2',
+        retailer: 'Market',
+        store_location: null,
+        postal_code: '60699',
+      }),
+    ])).toBe(1);
+
+    expect(countDistinctAssignedStores([
+      item({ retailer: null, store_location: null, postal_code: '60601' }),
+    ])).toBe(0);
+
+    expect(countDistinctAssignedStores([
+      item({ retailer: 'Market', store_location: 'Downtown', postal_code: '60601' }),
+      item({
+        id: 'item-2',
+        grocery_item_id: 'source-item-2',
+        retailer: 'Market',
+        store_location: 'Uptown',
+        postal_code: '60602',
+      }),
+    ])).toBe(2);
+
+    expect(countDistinctAssignedStores([
+      item({
+        retailer: 'Market',
+        store_location: 'Downtown',
+        price_amount: null,
+        price_source: null,
+      }),
+    ])).toBe(1);
+  });
+
+  it('keeps source-list accordion totals aligned with canonical price validity', () => {
+    const estimate = computeGroceryHaulPreparationEstimate('USD', [
+      item({ price_amount: 4, price_currency: 'USD', price_source: 'sourced', final_quantity: 2 }),
+      item({
+        id: 'item-2',
+        grocery_item_id: 'source-item-2',
+        price_amount: 9,
+        price_currency: 'CAD',
+        price_source: 'sourced',
+        final_quantity: 1,
+      }),
+      item({
+        id: 'item-3',
+        grocery_item_id: 'source-item-3',
+        price_amount: 5,
+        price_currency: 'USD',
+        price_source: null,
+        final_quantity: 1,
+      }),
+    ]);
+    expect(estimate.estimated_total).toBe(8);
   });
 });
