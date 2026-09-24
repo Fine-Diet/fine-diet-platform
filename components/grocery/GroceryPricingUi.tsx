@@ -294,6 +294,7 @@ export function GroceryPricePanel({
   onSaveManual,
   onQuotaUpdate,
   onObservationSaved,
+  workspace = false,
 }: {
   item: GroceryItem;
   currentObservation?: GroceryPriceObservation | null;
@@ -317,6 +318,7 @@ export function GroceryPricePanel({
   }) => Promise<GroceryPriceObservation>;
   onQuotaUpdate?: (quota: GroceryPriceSearchQuota | null) => void;
   onObservationSaved: (observation: GroceryPriceObservation) => void;
+  workspace?: boolean;
 }) {
   const manualOnly = entryMode === 'manual-only';
   const prefs = loadGroceryPriceSearchPrefs();
@@ -462,15 +464,19 @@ export function GroceryPricePanel({
   const panelBusy = busy || working;
 
   return (
-    <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
-      <div className="w-full max-w-lg rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="p-4 border-b border-white/[0.06] flex-shrink-0">
+    <div className={workspace
+      ? "fixed inset-0 z-[90] flex items-end justify-center bg-black/70 px-3 py-5 backdrop-blur-sm sm:items-center lg:left-[var(--app-drawer-width,280px)] lg:items-start lg:overflow-y-auto lg:bg-neutral-900/90 lg:p-0"
+      : "fixed inset-0 z-50 flex items-end justify-center bg-brand-950/80 px-3 py-5 backdrop-blur-sm sm:items-center"}>
+      <div className={workspace
+        ? "flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-white/10 bg-brand-900 shadow-2xl lg:max-h-none lg:max-w-[800px] lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:px-8 lg:pb-16 lg:pt-12 lg:shadow-none"
+        : "flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-white/10 bg-brand-900 shadow-2xl"}>
+        <div className={workspace ? "flex-shrink-0 border-b border-white/[0.06] p-4 lg:border-0 lg:p-0" : "flex-shrink-0 border-b border-white/[0.06] p-4"}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-denim-300/70 antialiased">
+              <p className={workspace ? "text-base text-white/45 lg:font-semibold" : "text-[10px] uppercase tracking-wider text-denim-300/70 antialiased"}>
                 {step === 'manual' || manualOnly ? 'Enter price manually' : 'Find price'}
               </p>
-              <h2 className="text-base font-semibold text-white antialiased mt-1">{item.name}</h2>
+              <h2 className={workspace ? "mt-2 text-[2.35rem] font-medium leading-tight text-white sm:text-[2.5rem] lg:mt-4 lg:text-[44px] lg:font-normal lg:leading-[44px]" : "mt-1 text-base font-semibold text-white antialiased"}>{item.name}</h2>
               <p className="text-[11px] text-white/40 antialiased mt-1">
                 Pricing is optional guidance only. Required amounts and shopping status are unchanged.
               </p>
@@ -486,7 +492,7 @@ export function GroceryPricePanel({
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+        <div className={workspace ? "flex-1 space-y-4 overflow-y-auto p-4 lg:overflow-visible lg:px-0 lg:pb-0 lg:pt-7" : "flex-1 space-y-3 overflow-y-auto p-4"}>
           {step === 'search' && !manualOnly && (
             <>
               <div className="grid grid-cols-2 gap-2">
@@ -497,7 +503,7 @@ export function GroceryPricePanel({
                     value={retailer}
                     onChange={(e) => setRetailer(e.target.value)}
                     placeholder="Target, Whole Foods…"
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
+                    className={workspace ? "w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none focus:border-white/60 sm:text-xl" : "w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"}
                   />
                 </label>
                 <label className="space-y-1 col-span-2 sm:col-span-1">
@@ -507,7 +513,7 @@ export function GroceryPricePanel({
                     value={postalCode}
                     onChange={(e) => setPostalCode(e.target.value)}
                     placeholder="94110"
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
+                    className={workspace ? "w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none focus:border-white/60 sm:text-xl" : "w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"}
                   />
                 </label>
               </div>
@@ -592,7 +598,7 @@ export function GroceryPricePanel({
                     step="1"
                     value={packageCount}
                     onChange={(e) => setPackageCount(e.target.value)}
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
+                    className={workspace ? "w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none focus:border-white/60 sm:text-xl" : "w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"}
                   />
                 </label>
               )}
@@ -716,7 +722,7 @@ export function GroceryPricePanel({
                   type="text"
                   value={manualProductTitle}
                   onChange={(e) => setManualProductTitle(e.target.value)}
-                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
+                  className={workspace ? "w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none focus:border-white/60 sm:text-xl" : "w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"}
                 />
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -729,7 +735,7 @@ export function GroceryPricePanel({
                     value={manualUnitPrice}
                     onChange={(e) => setManualUnitPrice(e.target.value)}
                     placeholder="3.99"
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
+                    className={workspace ? "w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none focus:border-white/60 sm:text-xl" : "w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"}
                   />
                 </label>
                 <label className="space-y-1">
@@ -738,7 +744,7 @@ export function GroceryPricePanel({
                     type="text"
                     value={manualRetailer}
                     onChange={(e) => setManualRetailer(e.target.value)}
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
+                    className={workspace ? "w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none focus:border-white/60 sm:text-xl" : "w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"}
                   />
                 </label>
               </div>
@@ -748,7 +754,7 @@ export function GroceryPricePanel({
                   type="text"
                   value={manualPostalCode}
                   onChange={(e) => setManualPostalCode(e.target.value)}
-                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"
+                  className={workspace ? "w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none focus:border-white/60 sm:text-xl" : "w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-xl text-white antialiased focus:outline-none focus:border-denim-400"}
                 />
               </label>
               <button
