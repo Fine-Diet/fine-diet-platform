@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 
 import { AuthPanel } from '@/components/account/AuthPanel';
 import { useResolvedAuthContext } from '@/lib/auth/useResolvedAuthContext';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export default function LoginPage() {
       </Head>
       <div className="min-h-screen bg-brand-900 flex justify-center px-6 pb-10 pt-[120px]">
         <div className="max-w-md w-full bg-neutral-900/95 backdrop-blur-lg rounded-2xl p-8 text-white">
-          <AuthPanel context={context} loginFallback="/home" />
+          <AuthPanel context={context} loginFallback={APP_ROUTES.home} />
 
           <div className="mt-6 text-center">
             <button
