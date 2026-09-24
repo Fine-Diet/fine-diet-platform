@@ -293,6 +293,20 @@ function mostUrgentEligibleEvidence(
   return null;
 }
 
+export type ParentPantryStatusDot = 'expired' | 'expiring_soon';
+
+export function parentPantryStatusDot(
+  lots: PantryAcquisitionLot[],
+  todayYmd: string,
+): ParentPantryStatusDot | null {
+  if (expiredUnresolvedLots(lots, todayYmd).length > 0) return 'expired';
+  const urgent = mostUrgentEligibleEvidence(lots, todayYmd);
+  if (!urgent || urgent.kind !== 'exact') return null;
+  const daysUntilExpiration = daysBetween(todayYmd, urgent.date);
+  if (daysUntilExpiration >= 0 && daysUntilExpiration <= 3) return 'expiring_soon';
+  return null;
+}
+
 export function parentPantryStatus(
   item: PantryOnHandItem,
   lots: PantryAcquisitionLot[],

@@ -14,6 +14,7 @@ import {
   parentDisplayExpirationEvidence,
   parentExpirationShortState,
   parentPantryStatus,
+  parentPantryStatusDot,
   pantryInventoryReading,
   sortPurchaseHistoryLots,
 } from '../pantryPolicy';
@@ -241,6 +242,40 @@ describe('Pantry v2 deterministic policy', () => {
       updated_at: '2026-09-01',
     };
     expect(pantryInventoryReading(item, [], todayYmd)).toBe('5 lb');
+  });
+
+  it('shows parent status dots for exact expiration urgency only', () => {
+    const todayYmd = '2026-09-18';
+    const expiredUnresolved = [
+      lot('expired', {
+        expires_on: '2026-09-10',
+        quantity_remaining: 1,
+      }),
+    ];
+    expect(parentPantryStatusDot(expiredUnresolved, todayYmd)).toBe('expired');
+
+    const exactToday = [lot('today', { expires_on: '2026-09-18' })];
+    expect(parentPantryStatusDot(exactToday, todayYmd)).toBe('expiring_soon');
+
+    const exactPlusOne = [lot('one', { expires_on: '2026-09-19' })];
+    expect(parentPantryStatusDot(exactPlusOne, todayYmd)).toBe('expiring_soon');
+
+    const exactPlusThree = [lot('three', { expires_on: '2026-09-21' })];
+    expect(parentPantryStatusDot(exactPlusThree, todayYmd)).toBe('expiring_soon');
+
+    const exactPlusFour = [lot('four', { expires_on: '2026-09-22' })];
+    expect(parentPantryStatusDot(exactPlusFour, todayYmd)).toBeNull();
+
+    const expectedOnly = [lot('expected', {
+      acquired_on: '2026-09-16',
+      expected_shelf_life_days: 3,
+    })];
+    expect(parentPantryStatusDot(expectedOnly, todayYmd)).toBeNull();
+
+    expect(parentPantryStatusDot([
+      ...expiredUnresolved,
+      ...exactToday,
+    ], todayYmd)).toBe('expired');
   });
 
   it('uses Use Soon for expected shelf-life inside the 7-day horizon', () => {

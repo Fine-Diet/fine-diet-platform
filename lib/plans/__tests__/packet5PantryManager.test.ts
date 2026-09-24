@@ -60,8 +60,11 @@ describe('Packet 5 Pantry feed convergence', () => {
     expect(manager).toContain('h-[15px] w-[15px]');
     expect(manager).toContain('polygon points="12,18 2,6 22,6"');
     expect(manager).toContain('parentPantryStatus');
+    expect(manager).toContain('parentPantryStatusDot');
+    expect(manager).toContain('bg-amber-400');
     expect(manager).toContain('pantryInventoryReading');
     expect(manager).toContain('Purchase History');
+    expect(manager).not.toMatch(/Purchase History[\s\S]{0,180}sm:justify-between/);
     expect(manager).toContain('Resolve expired item');
   });
 

@@ -21,6 +21,7 @@ import {
   isPantryLotTerminal,
   localTodayYmd,
   parentPantryStatus,
+  parentPantryStatusDot,
   pantryInventoryReading,
   sortPurchaseHistoryLots,
 } from './pantryPolicy';
@@ -920,7 +921,7 @@ export default function PantryManager() {
                   {section.items.map((item) => {
                     const itemLots = lotsByPantryKey[item.key] ?? [];
                     const status = parentPantryStatus(item, itemLots, todayYmd);
-                    const showExpiredDot = status.kind === 'expired_unresolved';
+                    const statusDot = parentPantryStatusDot(itemLots, todayYmd);
                     const statusEmphasis = status.kind !== 'in_stock';
                     const expanded = expandedKey === item.key;
                     const editingOnHand = onHandEditKey === item.key;
@@ -943,8 +944,11 @@ export default function PantryManager() {
                           >
                             <span className="block text-base font-semibold text-white">{item.name}</span>
                             <span className={`mt-0.5 flex items-center gap-1.5 text-xs text-white/50 sm:text-sm ${statusEmphasis ? 'font-medium text-white/55' : ''}`}>
-                              {showExpiredDot && (
+                              {statusDot === 'expired' && (
                                 <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+                              )}
+                              {statusDot === 'expiring_soon' && (
+                                <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
                               )}
                               {status.label}
                             </span>
@@ -1041,16 +1045,14 @@ export default function PantryManager() {
                               </div>
                             )}
                             <div className="mt-4 border-t border-white/15 pt-4">
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-sm font-semibold text-white/50">Purchase History</p>
-                                <button
-                                  type="button"
-                                  onClick={() => openLot(item)}
-                                  className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-white/90"
-                                >
-                                  + Add purchase
-                                </button>
-                              </div>
+                              <p className="text-sm font-semibold text-white/50">Purchase History</p>
+                              <button
+                                type="button"
+                                onClick={() => openLot(item)}
+                                className="mt-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-white/90"
+                              >
+                                + Add purchase
+                              </button>
                               {itemLots.length === 0 ? (
                                 <p className="mt-4 text-sm text-white/50">
                                   No purchases recorded yet.
