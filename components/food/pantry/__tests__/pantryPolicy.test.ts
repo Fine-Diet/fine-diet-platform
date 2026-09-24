@@ -4,11 +4,17 @@ import {
   earliestActiveExpirationEvidence,
   expirationEvidence,
   expirationEvidenceTense,
+  buildPantryFeedSections,
+  comparableAcquiredDenominator,
   filterAndSortPantryItems,
   formatExpirationEvidenceLabel,
   formatPurchaseStateLabel,
+  isPantryItemLowStock,
+  LOW_STOCK_RATIO,
   parentDisplayExpirationEvidence,
   parentExpirationShortState,
+  parentPantryStatus,
+  pantryInventoryReading,
   sortPurchaseHistoryLots,
 } from '../pantryPolicy';
 
@@ -26,6 +32,10 @@ function lot(
     expected_shelf_life_days: null,
     quantity_acquired: 1,
     quantity_remaining: 1,
+    resolution_status: 'open',
+    resolved_at: null,
+    disposed_quantity: null,
+    disposition_reason: null,
     unit: 'item',
     product_title: null,
     brand_name: null,
@@ -83,29 +93,23 @@ describe('Pantry v2 deterministic policy', () => {
     expect(activeAcquisitionLots(lots).map((entry) => entry.id)).toEqual(['active']);
   });
 
-  it('filters only on factual active expiration and exact aggregate inventory states', () => {
+  it('classifies attention vs inventory sections without legacy UI filters', () => {
+    const todayYmd = '2026-09-18';
     const items: PantryOnHandItem[] = [
       { key: 'food-1::item', food_object_id: 'food-1', name: 'Spinach', quantity: 1, unit: 'item', updated_at: '2026-09-01' },
-      { key: 'food-2::item', food_object_id: 'food-2', name: 'Rice', quantity: 0, unit: 'item', updated_at: '2026-09-01' },
-      { key: 'food-3::item', food_object_id: 'food-3', name: 'Beans', quantity: 1, unit: 'item', updated_at: '2026-09-01' },
+      { key: 'food-2::item', food_object_id: 'food-2', name: 'Rice', quantity: 2, unit: 'cup', updated_at: '2026-09-01' },
     ];
-    const result = filterAndSortPantryItems({
+    const sections = buildPantryFeedSections({
       items,
       lotsByPantryKey: {
-        'food-1::item': [lot('spinach', { pantry_item_key: 'food-1::item', expires_on: '2026-09-04' })],
-        'food-3::item': [
-          lot('depleted-only', {
-            pantry_item_key: 'food-3::item',
-            quantity_remaining: 0,
-            expires_on: '2026-09-04',
-          }),
-        ],
+        'food-1::item': [lot('spinach', { pantry_item_key: 'food-1::item', expires_on: '2026-09-20' })],
+        'food-2::item': [lot('rice', { pantry_item_key: 'food-2::item', acquired_on: '2026-09-01' })],
       },
       query: '',
-      perishability: 'evidence',
-      inventory: 'positive',
+      todayYmd,
     });
-    expect(result.map((item) => item.name)).toEqual(['Spinach']);
+    expect(sections.attention.map((item) => item.name)).toEqual(['Spinach']);
+    expect(sections.inventory.map((item) => item.name)).toEqual(['Rice']);
   });
 
   it('keeps parent expired when an older active purchase is expired and a newer active purchase has no evidence', () => {
@@ -176,33 +180,55 @@ describe('Pantry v2 deterministic policy', () => {
     expect(earliestActiveExpirationEvidence(lots)).toBeNull();
   });
 
-  it('does not drive parent expiration sort from depleted purchases', () => {
-    const items: PantryOnHandItem[] = [
-      { key: 'food-1::item', food_object_id: 'food-1', name: 'Spinach', quantity: 1, unit: 'item', updated_at: '2026-09-01' },
-      { key: 'food-2::item', food_object_id: 'food-2', name: 'Kale', quantity: 1, unit: 'item', updated_at: '2026-09-01' },
+  it('marks low stock at the 25% boundary and skips mixed-unit denominators', () => {
+    const todayYmd = '2026-09-18';
+    const item: PantryOnHandItem = {
+      key: 'food-1::lb',
+      food_object_id: 'food-1',
+      name: 'Chicken',
+      quantity: 1,
+      unit: 'lb',
+      updated_at: '2026-09-01',
+    };
+    const lots = [
+      lot('a', { pantry_item_key: 'food-1::lb', quantity_acquired: 2, quantity_remaining: 2, unit: 'lb' }),
+      lot('b', { pantry_item_key: 'food-1::lb', quantity_acquired: 2, quantity_remaining: 2, unit: 'oz' }),
     ];
-    const result = filterAndSortPantryItems({
-      items,
-      lotsByPantryKey: {
-        'food-1::item': [
-          lot('depleted-soon', {
-            pantry_item_key: 'food-1::item',
-            quantity_remaining: 0,
-            expires_on: '2026-09-01',
-          }),
-        ],
-        'food-2::item': [
-          lot('active-later', {
-            pantry_item_key: 'food-2::item',
-            expires_on: '2026-09-20',
-          }),
-        ],
-      },
-      query: '',
-      perishability: 'all',
-      inventory: 'all',
-    });
-    expect(result.map((item) => item.name)).toEqual(['Kale', 'Spinach']);
+    expect(comparableAcquiredDenominator(lots, 'lb', todayYmd)).toBeNull();
+    const uniformLots = [lot('only', { pantry_item_key: 'food-1::lb', quantity_acquired: 4, quantity_remaining: 4, unit: 'lb' })];
+    expect(isPantryItemLowStock({ ...item, quantity: 1 }, uniformLots, todayYmd)).toBe(true);
+    expect(LOW_STOCK_RATIO).toBe(0.25);
+  });
+
+  it('reads inventory with comparable purchase denominator and safe fallback', () => {
+    const todayYmd = '2026-09-18';
+    const item: PantryOnHandItem = {
+      key: 'food-1::lb',
+      food_object_id: 'food-1',
+      name: 'Chicken',
+      quantity: 1,
+      unit: 'lb',
+      updated_at: '2026-09-01',
+    };
+    const lots = [lot('only', { pantry_item_key: 'food-1::lb', quantity_acquired: 4, quantity_remaining: 4, unit: 'lb' })];
+    expect(pantryInventoryReading(item, lots, todayYmd)).toBe('1 / 4 lb remaining');
+    expect(pantryInventoryReading({ ...item, quantity: 5 }, lots, todayYmd)).toBe('5 lb');
+  });
+
+  it('uses Use Soon for expected shelf-life inside the 7-day horizon', () => {
+    const todayYmd = '2026-09-18';
+    const lots = [lot('expected', {
+      acquired_on: '2026-09-16',
+      expected_shelf_life_days: 3,
+    })];
+    expect(parentPantryStatus({
+      key: 'food-1::item',
+      food_object_id: 'food-1',
+      name: 'Yogurt',
+      quantity: 2,
+      unit: 'item',
+      updated_at: '2026-09-01',
+    }, lots, todayYmd).label).toBe('Use Soon');
   });
 
   it('formats exact expiration tense relative to today', () => {

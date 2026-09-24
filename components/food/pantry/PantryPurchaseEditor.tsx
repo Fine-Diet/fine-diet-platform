@@ -10,6 +10,7 @@ import type {
 } from '@/lib/plans/pantryProductSearchTypes';
 import type { PantryAcquisitionLot } from '@/lib/plans/types';
 
+import { isPantryLotTerminal } from './pantryPolicy';
 import { expectedShelfLifeDetailsProps } from './pantryExpectedShelfLifeDetails';
 import { PantryProductLookupPanel } from './PantryProductLookupPanel';
 import type { PantryLotDraft } from './pantryLotSave';
@@ -92,6 +93,7 @@ export function PantryPurchaseEditor({
   onRemovePurchase,
 }: PantryPurchaseEditorProps) {
   const eyebrow = existingLot ? 'Edit purchase' : 'Add purchase';
+  const readOnly = existingLot != null && isPantryLotTerminal(existingLot);
   const hasExactExpiration = Boolean(lotForm.expiresOn.trim());
   const shelfLifeDetailsProps = expectedShelfLifeDetailsProps(
     lotForm.expiresOn,
@@ -134,7 +136,7 @@ export function PantryPurchaseEditor({
               <button
                 type="button"
                 onClick={onSave}
-                disabled={lotBusy}
+                disabled={lotBusy || readOnly}
                 className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40"
               >
                 {lotBusy ? 'Saving…' : existingLot ? 'Save' : 'Add purchase'}
@@ -163,6 +165,7 @@ export function PantryPurchaseEditor({
                 type="date"
                 value={lotForm.acquiredOn}
                 onChange={(event) => onUpdateLotForm({ acquiredOn: event.target.value })}
+                disabled={readOnly}
                 className={inputClassName}
               />
             </label>
@@ -185,6 +188,19 @@ export function PantryPurchaseEditor({
                 step="any"
                 value={lotForm.quantityAcquired}
                 onChange={(event) => onUpdateAcquiredQuantity(event.target.value)}
+                disabled={readOnly}
+                className={inputClassName}
+              />
+            </label>
+            <label>
+              <span className="text-xs text-white/55">Remaining from this purchase</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={lotForm.quantityRemaining}
+                onChange={(event) => onUpdateLotForm({ quantityRemaining: event.target.value })}
+                disabled={readOnly}
                 className={inputClassName}
               />
             </label>
@@ -193,6 +209,7 @@ export function PantryPurchaseEditor({
               <input
                 value={lotForm.unit}
                 onChange={(event) => onUpdateLotForm({ unit: event.target.value })}
+                disabled={readOnly}
                 className={inputClassName}
               />
             </label>

@@ -512,6 +512,9 @@ export interface PantryOnHandItem {
   updated_at: string;
 }
 
+export type PantryAcquisitionLotResolutionStatus = 'open' | 'completed' | 'disposed';
+export type PantryAcquisitionLotDispositionReason = 'expired' | 'manual' | 'other';
+
 export interface PantryAcquisitionLot {
   id: string;
   pantry_item_id: string;
@@ -523,6 +526,10 @@ export interface PantryAcquisitionLot {
   expected_shelf_life_days: number | null;
   quantity_acquired: number;
   quantity_remaining: number;
+  resolution_status: PantryAcquisitionLotResolutionStatus;
+  resolved_at: string | null;
+  disposed_quantity: number | null;
+  disposition_reason: PantryAcquisitionLotDispositionReason | null;
   unit: string | null;
   product_title: string | null;
   brand_name: string | null;

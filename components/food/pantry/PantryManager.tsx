@@ -15,16 +15,14 @@ import {
   validatePantryLotSave,
 } from './pantryLotSave';
 import {
-  expirationEvidence,
-  expirationEvidenceTense,
-  filterAndSortPantryItems,
-  formatExpirationEvidenceLabel,
+  buildPantryFeedSections,
   formatPurchaseStateLabel,
+  isLotExpiredUnresolved,
+  isPantryLotTerminal,
   localTodayYmd,
-  parentDisplayExpirationEvidence,
+  parentPantryStatus,
+  pantryInventoryReading,
   sortPurchaseHistoryLots,
-  type InventoryFilter,
-  type PerishabilityFilter,
 } from './pantryPolicy';
 import { applyPantryProductOfferToLotDraft } from '@/lib/plans/pantryProductSearchMapping';
 import {
@@ -152,46 +150,83 @@ function LotCard({
   lot,
   onEdit,
   todayYmd,
+  onResolve,
+  resolving,
 }: {
   lot: PantryAcquisitionLot;
   onEdit: () => void;
   todayYmd: string;
+  onResolve: (outcome: 'completed' | 'disposed') => void;
+  resolving: boolean;
 }) {
   const product = [lot.brand_name, lot.product_title].filter(Boolean).join(' · ');
   const packageText = packageLabel(lot);
   const purchaseState = formatPurchaseStateLabel(lot, todayYmd);
-  const evidence = expirationEvidence(lot);
-  const purchaseStateEmphasis = lot.quantity_remaining === 0
-    || (evidence?.kind === 'exact'
-      && ['expired', 'today'].includes(expirationEvidenceTense(evidence, todayYmd)));
+  const expiredUnresolved = isLotExpiredUnresolved(lot, todayYmd);
+  const terminal = isPantryLotTerminal(lot);
+  const purchaseStateEmphasis = expiredUnresolved
+    || purchaseState.includes('Expires today')
+    || purchaseState.startsWith('Expired ');
   return (
-    <article className="border-t border-white/[0.09] py-4 first:border-t-0 first:pt-0">
+    <article className="border-t border-white/10 py-4 first:border-t-0 first:pt-0">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {product && <p className="text-xl font-semibold text-white">{product}</p>}
-          <p className={`${product ? 'mt-1' : ''} text-sm text-white/50`}>
-            {formatQuantityLine(lot.quantity_remaining, lot.quantity_acquired, lot.unit)}
-          </p>
-          <p className="mt-1 text-sm text-white/50">Purchased {formatDate(lot.acquired_on)}</p>
-          <p className={`mt-1 text-sm text-white/50 ${purchaseStateEmphasis ? 'font-semibold' : ''}`}>
+          {product && <p className="text-base font-semibold text-white">{product}</p>}
+          {!terminal && (
+            <p className={`${product ? 'mt-1' : ''} text-xs text-white/50 sm:text-sm`}>
+              {formatQuantityLine(lot.quantity_remaining, lot.quantity_acquired, lot.unit)}
+            </p>
+          )}
+          <p className="mt-1 text-xs text-white/50 sm:text-sm">Purchased {formatDate(lot.acquired_on)}</p>
+          <p className={`mt-1 flex items-center gap-1.5 text-xs text-white/50 sm:text-sm ${purchaseStateEmphasis ? 'font-semibold text-white/55' : ''}`}>
+            {expiredUnresolved && (
+              <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+            )}
             {purchaseState}
           </p>
-          {packageText && <p className="mt-1 text-sm text-white/50">{packageText}</p>}
-          {lot.retailer && <p className="mt-1 text-sm text-white/50">{lot.retailer}</p>}
-          {lot.source_haul_id && <p className="mt-1 text-sm text-white/50">From a Haul</p>}
+          {expiredUnresolved && (
+            <details className="mt-2">
+              <summary className="cursor-pointer rounded-full border border-white/25 px-3 py-1 text-xs text-white/80 hover:border-white/40">
+                Resolve expired item
+              </summary>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={resolving}
+                  onClick={() => onResolve('completed')}
+                  className="rounded-full border border-white/25 px-3 py-1 text-xs text-white/80 hover:border-white/40 disabled:opacity-40"
+                >
+                  Mark completed / used
+                </button>
+                <button
+                  type="button"
+                  disabled={resolving}
+                  onClick={() => onResolve('disposed')}
+                  className="rounded-full border border-white/25 px-3 py-1 text-xs text-white/80 hover:border-white/40 disabled:opacity-40"
+                >
+                  Discard remaining
+                </button>
+              </div>
+            </details>
+          )}
+          {packageText && <p className="mt-1 text-xs text-white/45 sm:text-sm">{packageText}</p>}
+          {lot.retailer && <p className="mt-1 text-xs text-white/45 sm:text-sm">{lot.retailer}</p>}
+          {lot.source_haul_id && <p className="mt-1 text-xs text-white/45 sm:text-sm">From a Haul</p>}
           {lot.price_amount != null && (
-            <p className="mt-2 text-xl font-semibold text-white/50">
+            <p className="mt-2 text-sm text-white/50">
               {formatCurrency(lot.price_amount, lot.currency)}
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="shrink-0 text-sm font-medium text-white/50 hover:text-white"
-        >
-          Edit
-        </button>
+        {!terminal && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="shrink-0 text-sm font-medium text-white/50 hover:text-white"
+          >
+            Edit
+          </button>
+        )}
       </div>
     </article>
   );
@@ -205,10 +240,13 @@ export default function PantryManager() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [perishability, setPerishability] = useState<PerishabilityFilter>('all');
-  const [inventory, setInventory] = useState<InventoryFilter>('all');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [onHandEditKey, setOnHandEditKey] = useState<string | null>(null);
+  const [onHandDraftQuantity, setOnHandDraftQuantity] = useState('');
+  const [onHandDraftUnit, setOnHandDraftUnit] = useState('');
+  const [onHandBusy, setOnHandBusy] = useState(false);
+  const [onHandError, setOnHandError] = useState<string | null>(null);
+  const [resolvingLotId, setResolvingLotId] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
   const [addQuery, setAddQuery] = useState('');
@@ -219,12 +257,6 @@ export default function PantryManager() {
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [searchingFoods, setSearchingFoods] = useState(false);
-
-  const [editItem, setEditItem] = useState<PantryOnHandItem | null>(null);
-  const [editQuantity, setEditQuantity] = useState('');
-  const [editUnit, setEditUnit] = useState('');
-  const [editBusy, setEditBusy] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
 
   const [lotContext, setLotContext] = useState<{
     pantryKey: string;
@@ -297,15 +329,14 @@ export default function PantryManager() {
     return grouped;
   }, [lots]);
 
-  const visibleItems = useMemo(
-    () => filterAndSortPantryItems({
+  const feedSections = useMemo(
+    () => buildPantryFeedSections({
       items,
       lotsByPantryKey,
       query,
-      perishability,
-      inventory,
+      todayYmd,
     }),
-    [inventory, items, lotsByPantryKey, perishability, query],
+    [items, lotsByPantryKey, query, todayYmd],
   );
 
   const pantryKnownEmpty = loadState === 'ready' && items.length === 0;
@@ -428,50 +459,77 @@ export default function PantryManager() {
     }
   }
 
-  function openAggregateEdit(item: PantryOnHandItem) {
-    setEditItem(item);
-    setEditQuantity(item.quantity == null ? '' : String(item.quantity));
-    setEditUnit(item.unit ?? '');
-    setEditError(null);
+  function openInlineOnHandEdit(item: PantryOnHandItem) {
+    setOnHandEditKey(item.key);
+    setOnHandDraftQuantity(item.quantity == null ? '' : String(item.quantity));
+    setOnHandDraftUnit(item.unit ?? '');
+    setOnHandError(null);
   }
 
-  async function saveAggregateEdit() {
-    if (!editItem) return;
-    const quantity = Number(editQuantity);
+  function closeInlineOnHandEdit(item: PantryOnHandItem) {
+    setOnHandEditKey(null);
+    setOnHandDraftQuantity(item.quantity == null ? '' : String(item.quantity));
+    setOnHandDraftUnit(item.unit ?? '');
+    setOnHandError(null);
+  }
+
+  const onHandDirty = useCallback((item: PantryOnHandItem) => {
+    const quantity = item.quantity == null ? '' : String(item.quantity);
+    const unit = item.unit ?? '';
+    return onHandDraftQuantity !== quantity || onHandDraftUnit !== unit;
+  }, [onHandDraftQuantity, onHandDraftUnit]);
+
+  async function saveInlineOnHand(item: PantryOnHandItem) {
+    const quantity = Number(onHandDraftQuantity);
     if (!Number.isFinite(quantity) || quantity < 0) {
-      return setEditError('Quantity must be a non-negative number.');
+      return setOnHandError('Quantity must be a non-negative number.');
     }
-    setEditBusy(true);
-    setEditError(null);
+    setOnHandBusy(true);
+    setOnHandError(null);
     try {
-      const updated = await planService.updatePantryOnHandItem(editItem.key, {
+      const updated = await planService.updatePantryOnHandItem(item.key, {
         quantity,
-        unit: editUnit.trim() || null,
+        unit: onHandDraftUnit.trim() || null,
       });
       setItems((current) => [
-        ...current.filter((item) => item.key !== editItem.key && item.key !== updated.key),
+        ...current.filter((entry) => entry.key !== item.key && entry.key !== updated.key),
         updated,
       ]);
-      setEditItem(null);
+      setOnHandEditKey(null);
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : 'Unable to save Pantry item.');
+      setOnHandError(err instanceof Error ? err.message : 'Unable to save Pantry item.');
     } finally {
-      setEditBusy(false);
+      setOnHandBusy(false);
     }
   }
 
-  async function deleteAggregateItem() {
-    if (!editItem || !window.confirm(`Remove ${editItem.name} from your Pantry?`)) return;
-    setEditBusy(true);
-    setEditError(null);
+  async function deleteInlineOnHand(item: PantryOnHandItem) {
+    if (!window.confirm(`Remove ${item.name} from your Pantry?`)) return;
+    setOnHandBusy(true);
+    setOnHandError(null);
     try {
-      await planService.deletePantryOnHandItem(editItem.key);
-      setItems((current) => current.filter((item) => item.key !== editItem.key));
-      setEditItem(null);
+      await planService.deletePantryOnHandItem(item.key);
+      setItems((current) => current.filter((entry) => entry.key !== item.key));
+      setOnHandEditKey(null);
+      if (expandedKey === item.key) setExpandedKey(null);
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : 'Unable to remove Pantry item.');
+      setOnHandError(err instanceof Error ? err.message : 'Unable to remove Pantry item.');
     } finally {
-      setEditBusy(false);
+      setOnHandBusy(false);
+    }
+  }
+
+  async function resolveLot(lotId: string, outcome: 'completed' | 'disposed') {
+    setResolvingLotId(lotId);
+    try {
+      const updated = await planService.resolvePantryAcquisitionLot(lotId, outcome);
+      setLots((current) => current.map((lot) => (
+        lot.id === updated.id ? { ...updated, pantry_item_key: lot.pantry_item_key } : lot
+      )));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to resolve purchase.');
+    } finally {
+      setResolvingLotId(null);
     }
   }
 
@@ -720,13 +778,13 @@ export default function PantryManager() {
               align="center"
               anchorBackgroundClass="bg-[#17130f]"
             />
-            <h1 className="text-[2.5rem] font-medium tracking-tight text-brand-50 sm:text-[2.75rem] leading-[1]">
-              Your inventory truth <br /> as a feed
+            <h1 className="text-[2.5rem] font-normal tracking-tight text-brand-50 sm:text-[2.75rem] leading-[1.05]">
+              Your inventory truth as a feed
             </h1>
           </header>
 
           <section className="mt-8">
-            <div className="flex border-b border-white/25">
+            <div className="flex border-b border-white/20">
               <button
                 type="button"
                 onClick={openAdd}
@@ -735,72 +793,27 @@ export default function PantryManager() {
                 <Plus className="h-4 w-4" />
                 Add Pantry Item
               </button>
-              <button
-                type="button"
-                onClick={() => setSearchOpen((open) => !open)}
-                className="flex min-h-11 flex-1 items-center justify-between gap-2 pl-4 text-xl font-medium text-white/55 hover:text-white sm:justify-between"
-              >
-                Search Pantry
-                <Search className="h-4 w-4" />
-              </button>
-            </div>
-
-            {searchOpen && (
-              <div className="relative mt-3">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+              <div className="relative flex min-h-11 min-w-0 flex-1 items-center pl-4">
                 <input
-                  autoFocus
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search items, products, brands, or retailers"
-                  className="w-full rounded-xl border border-white/12 bg-white/[0.04] py-2.5 pl-10 pr-10 text-xl text-white outline-none placeholder:text-white/28 focus:border-white/30"
+                  placeholder="Search Pantry"
+                  aria-label="Search Pantry"
+                  className="w-full bg-transparent py-2.5 pl-10 pr-10 text-xl text-white outline-none placeholder:text-white/35"
                 />
+                <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                 {query && (
                   <button
                     type="button"
                     onClick={() => setQuery('')}
                     aria-label="Clear Pantry search"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                    className="absolute right-9 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 )}
               </div>
-            )}
-
-            <div className="mt-4 flex flex-wrap items-end gap-3 border-b border-white/[0.08] pb-3">
-              <label className="min-w-40">
-                <span className="block text-sm font-semibold text-white/50">
-                  Perishability
-                </span>
-                <select
-                  value={perishability}
-                  onChange={(event) => setPerishability(event.target.value as PerishabilityFilter)}
-                  className="mt-1 w-full bg-transparent text-xl font-regular text-white/50 outline-none"
-                >
-                  <option value="all">All items</option>
-                  <option value="evidence">Expiration evidence</option>
-                  <option value="no_evidence">No expiration evidence</option>
-                </select>
-              </label>
-              <label className="min-w-36">
-                <span className="block text-sm font-semibold text-white/50">
-                  Inventory Status
-                </span>
-                <select
-                  value={inventory}
-                  onChange={(event) => setInventory(event.target.value as InventoryFilter)}
-                  className="mt-1 w-full bg-transparent text-xl font-regular text-white/50 outline-none"
-                >
-                  <option value="all">All amounts</option>
-                  <option value="positive">Positive amount</option>
-                  <option value="zero">Exactly zero</option>
-                </select>
-              </label>
-              <p className="ml-auto text-xs text-white/35">
-                {visibleItems.length} {visibleItems.length === 1 ? 'item' : 'items'}
-              </p>
             </div>
           </section>
 
@@ -862,121 +875,183 @@ export default function PantryManager() {
             </div>
           )}
 
-          {loadState === 'ready' && items.length > 0 && visibleItems.length === 0 && (
+          {loadState === 'ready' && feedSections.showSearchEmpty && (
             <div className="py-12 text-center text-sm text-white/45">
-              No Pantry items match these factual filters.
+              No Pantry items match this search.
             </div>
           )}
 
-          {loadState === 'ready' && visibleItems.length > 0 && (
+          {loadState === 'ready' && items.length > 0 && !feedSections.showSearchEmpty && (
             <div className="mt-2">
-              {visibleItems.map((item) => {
-                const itemLots = lotsByPantryKey[item.key] ?? [];
-                const evidence = parentDisplayExpirationEvidence(itemLots, todayYmd);
-                const evidenceLabel = evidence
-                  ? formatExpirationEvidenceLabel(evidence, todayYmd)
-                  : null;
-                const evidenceTense = evidence
-                  ? expirationEvidenceTense(evidence, todayYmd)
-                  : null;
-                const isAttentionEvidence = evidence?.kind === 'exact'
-                  && (evidenceTense === 'expired' || evidenceTense === 'today');
-                const showExpiredDot = evidence?.kind === 'exact' && evidenceTense === 'expired';
-                const expanded = expandedKey === item.key;
-                return (
-                  <article
-                    key={item.key}
-                    className={`relative transition-colors ${expanded ? 'bg-white/[0.055]' : ''}`}
-                  >
-                    <div className="flex min-h-[72px] items-start gap-3 px-3 py-4">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedKey(expanded ? null : item.key)}
-                        aria-expanded={expanded}
-                        className="min-w-0 flex-1 text-left"
+              {([
+                { id: 'attention' as const, title: 'Perishing & Low Stock', items: feedSections.attention, count: feedSections.attentionCount },
+                { id: 'inventory' as const, title: 'Your Inventory', items: feedSections.inventory, count: feedSections.inventoryCount },
+              ]).map((section) => (
+                <div key={section.id} className="border-t border-white/10 first:border-t-0">
+                  <div className="flex items-center justify-between px-3 py-3 text-xs text-white/45 sm:text-sm">
+                    <span>{section.title}</span>
+                    <span>{section.count}</span>
+                  </div>
+                  {section.items.map((item) => {
+                    const itemLots = lotsByPantryKey[item.key] ?? [];
+                    const status = parentPantryStatus(item, itemLots, todayYmd);
+                    const showExpiredDot = status.kind === 'expired_unresolved';
+                    const statusEmphasis = status.kind !== 'in_stock';
+                    const expanded = expandedKey === item.key;
+                    const editingOnHand = onHandEditKey === item.key;
+                    const dirty = editingOnHand && onHandDirty(item);
+                    return (
+                      <article
+                        key={item.key}
+                        className={`relative transition-colors ${expanded ? 'bg-black/35' : ''}`}
                       >
-                        <span className="block text-xl font-semibold text-white">{item.name}</span>
-                        {evidenceLabel && (
-                          <span className={`mt-1 flex items-center gap-1.5 text-sm text-white/50 ${isAttentionEvidence ? 'font-semibold' : ''}`}>
-                            {showExpiredDot && (
-                              <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
-                            )}
-                            {evidenceLabel}
-                          </span>
-                        )}
-                        <span className="mt-1 block text-sm text-white/50">
-                          {formatAmount(item.quantity, item.unit)}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        aria-expanded={expanded}
-                        aria-label={expanded ? `Collapse ${item.name}` : `Expand ${item.name}`}
-                        onClick={() => setExpandedKey(expanded ? null : item.key)}
-                        className="mt-1 grid h-7 w-8 shrink-0 place-items-center rounded-md text-base text-white/55 hover:text-white focus:outline-none focus-visible:text-white"
-                      >
-                        <svg
-                          aria-hidden
-                          className={`h-[15px] w-[15px] flex-shrink-0 transition-transform duration-200 ${
-                            expanded ? 'rotate-180' : ''
-                          }`}
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <polygon points="12,18 2,6 22,6" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {expanded && (
-                      <div className="px-4 pb-5 sm:px-6">
-                        <button
-                          type="button"
-                          onClick={() => openAggregateEdit(item)}
-                          className="text-sm font-medium text-white/50 hover:text-white"
-                        >
-                          Edit on-hand amount
-                        </button>
-                        <div className="mt-4 border-t border-white/[0.12] pt-4">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-white/50">
-                                Purchase history
-                              </p>
-                              <p className="mt-1 text-sm text-white/50">
-                                Each purchase is tracked separately from your total on hand.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => openLot(item)}
-                              className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-black hover:bg-white/90 focus:outline-none focus:ring-1 focus:ring-white/40"
+                        <div className="flex min-h-[56px] items-start gap-3 px-3 py-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = expanded ? null : item.key;
+                              setExpandedKey(next);
+                              if (!next) closeInlineOnHandEdit(item);
+                            }}
+                            aria-expanded={expanded}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <span className="block text-base font-semibold text-white">{item.name}</span>
+                            <span className={`mt-0.5 flex items-center gap-1.5 text-xs text-white/50 sm:text-sm ${statusEmphasis ? 'font-medium text-white/55' : ''}`}>
+                              {showExpiredDot && (
+                                <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+                              )}
+                              {status.label}
+                            </span>
+                            <span className="mt-0.5 block text-xs text-white/50 sm:text-sm">
+                              {pantryInventoryReading(item, itemLots, todayYmd)}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            aria-label={expanded ? `Collapse ${item.name}` : `Expand ${item.name}`}
+                            onClick={() => {
+                              const next = expanded ? null : item.key;
+                              setExpandedKey(next);
+                              if (!next) closeInlineOnHandEdit(item);
+                            }}
+                            className="mt-0.5 grid h-7 w-8 shrink-0 place-items-center rounded-md text-base text-white/55 hover:text-white focus:outline-none focus-visible:text-white"
+                          >
+                            <svg
+                              aria-hidden
+                              className={`h-[15px] w-[15px] flex-shrink-0 transition-transform duration-200 ${
+                                expanded ? 'rotate-180' : ''
+                              }`}
+                              fill="currentColor"
+                              viewBox="0 0 24 24"
                             >
-                              + Add purchase
-                            </button>
-                          </div>
-                          {itemLots.length === 0 ? (
-                            <p className="mt-4 text-sm text-white/50">
-                              No purchases recorded yet.
-                            </p>
-                          ) : (
-                            <div className="mt-4">
-                              {itemLots.map((lot) => (
-                                <LotCard
-                                  key={lot.id}
-                                  lot={lot}
-                                  todayYmd={todayYmd}
-                                  onEdit={() => openLot(item, lot)}
-                                />
-                              ))}
-                            </div>
-                          )}
+                              <polygon points="12,18 2,6 22,6" />
+                            </svg>
+                          </button>
                         </div>
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
+
+                        {expanded && (
+                          <div className="px-4 pb-5 sm:px-6">
+                            {!editingOnHand ? (
+                              <button
+                                type="button"
+                                onClick={() => openInlineOnHandEdit(item)}
+                                className="text-sm font-medium text-white/50 hover:text-white"
+                              >
+                                Edit on-hand amount
+                              </button>
+                            ) : (
+                              <div className="mt-1">
+                                <div className="flex flex-wrap items-end gap-2">
+                                  <label className="rounded-full border border-white/20 px-3 py-1.5">
+                                    <span className="text-[10px] uppercase tracking-wide text-white/40">Qty</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="any"
+                                      value={onHandDraftQuantity}
+                                      onChange={(event) => setOnHandDraftQuantity(event.target.value)}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter') void saveInlineOnHand(item);
+                                        if (event.key === 'Escape') closeInlineOnHandEdit(item);
+                                      }}
+                                      className="mt-0.5 w-20 bg-transparent text-sm text-white outline-none"
+                                    />
+                                  </label>
+                                  <label className="rounded-full border border-white/20 px-3 py-1.5">
+                                    <span className="text-[10px] uppercase tracking-wide text-white/40">Unit</span>
+                                    <input
+                                      value={onHandDraftUnit}
+                                      onChange={(event) => setOnHandDraftUnit(event.target.value)}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter') void saveInlineOnHand(item);
+                                        if (event.key === 'Escape') closeInlineOnHandEdit(item);
+                                      }}
+                                      className="mt-0.5 w-24 bg-transparent text-sm text-white outline-none"
+                                    />
+                                  </label>
+                                  {dirty && (
+                                    <button
+                                      type="button"
+                                      disabled={onHandBusy}
+                                      onClick={() => void saveInlineOnHand(item)}
+                                      className="text-xs text-white/45 hover:text-white disabled:opacity-40"
+                                    >
+                                      Save
+                                    </button>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={onHandBusy}
+                                  onClick={() => void deleteInlineOnHand(item)}
+                                  className="mt-3 text-sm text-red-200/70 hover:text-red-200 disabled:opacity-40"
+                                >
+                                  Remove from Pantry
+                                </button>
+                                {onHandError && (
+                                  <p className="mt-2 text-sm text-red-200" role="alert">{onHandError}</p>
+                                )}
+                              </div>
+                            )}
+                            <div className="mt-4 border-t border-white/15 pt-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-sm font-semibold text-white/50">Purchase History</p>
+                                <button
+                                  type="button"
+                                  onClick={() => openLot(item)}
+                                  className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-white/90"
+                                >
+                                  + Add purchase
+                                </button>
+                              </div>
+                              {itemLots.length === 0 ? (
+                                <p className="mt-4 text-sm text-white/50">
+                                  No purchases recorded yet.
+                                </p>
+                              ) : (
+                                <div className="mt-4">
+                                  {itemLots.map((lot) => (
+                                    <LotCard
+                                      key={lot.id}
+                                      lot={lot}
+                                      todayYmd={todayYmd}
+                                      resolving={resolvingLotId === lot.id}
+                                      onResolve={(outcome) => void resolveLot(lot.id, outcome)}
+                                      onEdit={() => openLot(item, lot)}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1076,44 +1151,6 @@ export default function PantryManager() {
                 {addBusy ? 'Saving…' : 'Save Pantry Item'}
               </button>
             )}
-          </div>
-        </div>
-      </AppDialog>
-
-      <AppDialog
-        open={Boolean(editItem)}
-        onClose={() => !editBusy && setEditItem(null)}
-        labelledBy="edit-pantry-title"
-        panelClassName="border border-white/10 bg-[#211a14] shadow-2xl"
-      >
-        <div className="p-5">
-          <h2 id="edit-pantry-title" className="text-xl font-semibold text-white">
-            Edit on-hand amount
-          </h2>
-          <p className="mt-1 text-sm text-white/45">
-            {editItem?.name} · Purchase history stays unchanged.
-          </p>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <label>
-              <span className="text-xs text-white/55">Aggregate quantity</span>
-              <input type="number" min="0" step="any" value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} className={inputClass} />
-            </label>
-            <label>
-              <span className="text-xs text-white/55">Unit</span>
-              <input value={editUnit} onChange={(event) => setEditUnit(event.target.value)} className={inputClass} />
-            </label>
-          </div>
-          {editError && <p className="mt-3 text-sm text-red-200" role="alert">{editError}</p>}
-          <div className="mt-5 flex items-center justify-between gap-3">
-            <button type="button" onClick={() => void deleteAggregateItem()} disabled={editBusy} className="text-sm text-red-200/75">
-              Remove from Pantry
-            </button>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setEditItem(null)} disabled={editBusy} className="px-4 py-2 text-sm text-white/55">Cancel</button>
-              <button type="button" onClick={() => void saveAggregateEdit()} disabled={editBusy} className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40">
-                {editBusy ? 'Saving…' : 'Save'}
-              </button>
-            </div>
           </div>
         </div>
       </AppDialog>

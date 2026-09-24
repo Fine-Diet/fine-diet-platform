@@ -1160,6 +1160,20 @@ export const planService = {
     return res.lot;
   },
 
+  async resolvePantryAcquisitionLot(
+    lotId: string,
+    outcome: 'completed' | 'disposed',
+  ): Promise<PantryAcquisitionLot> {
+    const res = await request<{ lot: PantryAcquisitionLot }>(
+      '/api/journal/plans/pantry/lots/resolve',
+      {
+        method: 'POST',
+        body: JSON.stringify({ lot_id: lotId, outcome }),
+      },
+    );
+    return res.lot;
+  },
+
   async deletePantryAcquisitionLot(lotId: string): Promise<void> {
     await request<{ ok: true }>(
       `/api/journal/plans/pantry/lots?lot_id=${encodeURIComponent(lotId)}`,
