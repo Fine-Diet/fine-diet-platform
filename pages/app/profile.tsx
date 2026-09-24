@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import JournalProfilePage from '../journal/profile';
 import { signOut } from '@/lib/authHelpers';
+import { buildAuthUrl } from '@/lib/auth/authContext';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 export default function AppProfilePage() {
   const router = useRouter();
@@ -17,7 +19,9 @@ export default function AppProfilePage() {
     try {
       const { error } = await signOut();
       if (error) throw error;
-      router.reload();
+      await router.replace(
+        buildAuthUrl({ intent: 'login', redirectTo: APP_ROUTES.home }),
+      );
     } catch (error) {
       console.error('[AppProfilePage] Logout error:', error);
       setLogoutError('Could not log out. Please try again.');
