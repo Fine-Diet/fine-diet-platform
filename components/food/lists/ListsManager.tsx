@@ -1119,6 +1119,7 @@ export default function ListsManager() {
               : null
           }
           entryMode="search"
+          workspace
           busy={priceBusy}
           onClose={() => !priceBusy && setPricePanelItem(null)}
           onSearch={async (input) => {
