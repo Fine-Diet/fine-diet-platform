@@ -106,32 +106,25 @@ export function validatePantryLotSave(
     return { ok: false, error: 'Amount acquired must be greater than zero.' };
   }
 
-  const preservedRemaining = existingLot
-    ? existingLot.quantity_remaining
+  const quantityRemaining = existingLot
+    ? Number(draft.quantityRemaining)
     : quantityAcquired;
 
-  if (existingLot && quantityAcquired < preservedRemaining) {
+  if (
+    !Number.isFinite(quantityRemaining)
+    || quantityRemaining < 0
+    || quantityRemaining > quantityAcquired
+  ) {
     return {
       ok: false,
-      error: `Amount acquired cannot be less than what's still on hand from this purchase (${preservedRemaining}${draft.unit.trim() ? ` ${draft.unit.trim()}` : ''}). Adjust on-hand amount separately if needed.`,
+      error: 'Remaining from this purchase must be between zero and the amount acquired.',
     };
   }
 
   const input = lotInputFromPantryLotDraft({
     ...draft,
-    quantityRemaining: String(preservedRemaining),
+    quantityRemaining: String(quantityRemaining),
   });
-
-  if (
-    !Number.isFinite(input.quantity_remaining)
-    || input.quantity_remaining < 0
-    || input.quantity_remaining > input.quantity_acquired
-  ) {
-    return {
-      ok: false,
-      error: 'Purchase quantities are inconsistent. Check amount acquired and try again.',
-    };
-  }
 
   return { ok: true, input };
 }

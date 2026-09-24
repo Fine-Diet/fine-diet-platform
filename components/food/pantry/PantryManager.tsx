@@ -715,11 +715,16 @@ export default function PantryManager() {
           lotContext.lot.id,
           input,
         );
+        const saved = { ...updated, pantry_item_key: lotContext.pantryKey };
         setLots((current) => current.map((lot) => (
-          lot.id === updated.id
-            ? { ...updated, pantry_item_key: lotContext.pantryKey }
-            : lot
+          lot.id === saved.id ? saved : lot
         )));
+        setLotContext({
+          pantryKey: lotContext.pantryKey,
+          itemName: lotContext.itemName,
+          lot: saved,
+        });
+        setLotForm(lotDraft(saved));
       } else {
         const created = await planService.createPantryAcquisitionLot(
           lotContext.pantryKey,

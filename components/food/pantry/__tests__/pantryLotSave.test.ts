@@ -60,27 +60,34 @@ describe('validatePantryLotSave', () => {
     }
   });
 
-  it('preserves remaining on edit and ignores draft remaining', () => {
-    const result = validatePantryLotSave(
-      { ...baseDraft, quantityAcquired: '6', quantityRemaining: '99' },
-      mockLot({ quantity_acquired: 4, quantity_remaining: 2 }),
+  it('persists draft remaining on edit', () => {
+    const lot = mockLot({ quantity_acquired: 5, quantity_remaining: 5 });
+    const toTwo = validatePantryLotSave(
+      { ...baseDraft, quantityAcquired: '5', quantityRemaining: '2' },
+      lot,
     );
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.input.quantity_acquired).toBe(6);
-      expect(result.input.quantity_remaining).toBe(2);
+    expect(toTwo.ok).toBe(true);
+    if (toTwo.ok) {
+      expect(toTwo.input.quantity_remaining).toBe(2);
+    }
+    const toZero = validatePantryLotSave(
+      { ...baseDraft, quantityAcquired: '5', quantityRemaining: '0' },
+      lot,
+    );
+    expect(toZero.ok).toBe(true);
+    if (toZero.ok) {
+      expect(toZero.input.quantity_remaining).toBe(0);
     }
   });
 
-  it('blocks acquired below preserved remaining', () => {
+  it('rejects remaining above acquired', () => {
     const result = validatePantryLotSave(
-      { ...baseDraft, quantityAcquired: '1' },
+      { ...baseDraft, quantityAcquired: '4', quantityRemaining: '5' },
       mockLot({ quantity_acquired: 4, quantity_remaining: 2 }),
     );
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toContain('cannot be less');
-      expect(result.error).toContain('2');
+      expect(result.error).toContain('between zero and the amount acquired');
     }
   });
 
