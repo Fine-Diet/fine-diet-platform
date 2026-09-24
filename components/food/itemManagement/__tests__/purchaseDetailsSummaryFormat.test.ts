@@ -1,4 +1,7 @@
-import { formatPurchaseDetailsSummary } from '../purchaseDetailsSummaryFormat';
+import {
+  formatPurchaseDetailsSummary,
+  PANTRY_EMBEDDED_SUMMARY_FORMAT,
+} from '../purchaseDetailsSummaryFormat';
 
 describe('formatPurchaseDetailsSummary', () => {
   it('formats package, retailer, and price compactly', () => {
@@ -18,7 +21,7 @@ describe('formatPurchaseDetailsSummary', () => {
     expect(summary.priceLine).toContain('3.49');
   });
 
-  it('supports pantry embedded brand prefix and x count style', () => {
+  it('supports pantry embedded brand prefix, bullet join, and x count style', () => {
     const summary = formatPurchaseDetailsSummary({
       productTitle: 'Baby Spinach',
       brandName: 'Organic Girl',
@@ -28,12 +31,24 @@ describe('formatPurchaseDetailsSummary', () => {
       retailer: 'Whole Foods Market',
       priceAmount: '4.99',
       currency: 'USD',
-    }, {
-      brandPrefix: true,
-      packageCountStyle: 'letter-x',
-    });
+    }, PANTRY_EMBEDDED_SUMMARY_FORMAT);
     expect(summary.brandLine).toBe('Brand: Organic Girl');
-    expect(summary.packageRetailerLine).toBe('5 oz x 1 · Whole Foods Market');
+    expect(summary.packageRetailerLine).toBe('5 oz x 1 • Whole Foods Market');
+  });
+
+  it('shows embedded brand even when brand appears in product title', () => {
+    const summary = formatPurchaseDetailsSummary({
+      productTitle: 'Organic Girl Baby Spinach',
+      brandName: 'Organic Girl',
+      packageSize: '5',
+      packageUnit: 'oz',
+      packageCount: '1',
+      retailer: 'Whole Foods Market',
+      priceAmount: '4.99',
+      currency: 'USD',
+    }, PANTRY_EMBEDDED_SUMMARY_FORMAT);
+    expect(summary.brandLine).toBe('Brand: Organic Girl');
+    expect(summary.packageRetailerLine).toBe('5 oz x 1 • Whole Foods Market');
   });
 
   it('omits brand when already obvious from title', () => {

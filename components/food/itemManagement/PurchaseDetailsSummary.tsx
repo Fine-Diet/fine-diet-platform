@@ -60,7 +60,7 @@ export function PurchaseDetailsSummary({
         </p>
       )}
       {!summary.hasDetails && (
-        <p className="mt-1 text-sm text-white/40">
+        <p className={`mt-1 ${embedded ? 'text-sm' : 'text-xs'} text-white/40`}>
           Add product and purchase details manually or search retail offers.
         </p>
       )}

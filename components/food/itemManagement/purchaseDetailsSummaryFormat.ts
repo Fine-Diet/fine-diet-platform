@@ -28,6 +28,17 @@ function formatPrice(amount: string, currency: string): string | null {
 export type PurchaseDetailsSummaryFormatOptions = {
   brandPrefix?: boolean;
   packageCountStyle?: 'symbol' | 'letter-x';
+  /** Pantry embedded: show brand whenever brandName is set, even if title contains it. */
+  alwaysShowBrand?: boolean;
+  /** Pantry embedded: join package and retailer with bullet ( • ) instead of middle dot. */
+  retailerJoinBullet?: boolean;
+};
+
+export const PANTRY_EMBEDDED_SUMMARY_FORMAT: PurchaseDetailsSummaryFormatOptions = {
+  brandPrefix: true,
+  packageCountStyle: 'letter-x',
+  alwaysShowBrand: true,
+  retailerJoinBullet: true,
 };
 
 function formatPackageLine(
@@ -71,8 +82,11 @@ export function formatPurchaseDetailsSummary(
   hasDetails: boolean;
 } {
   const productTitle = input.productTitle.trim() || 'No product details yet';
-  const rawBrand = brandAddsInformation(input.productTitle, input.brandName)
-    ? input.brandName.trim()
+  const trimmedBrand = input.brandName.trim();
+  const rawBrand = trimmedBrand
+    ? (options?.alwaysShowBrand || brandAddsInformation(input.productTitle, input.brandName)
+      ? trimmedBrand
+      : null)
     : null;
   const brandLine = rawBrand
     ? (options?.brandPrefix ? `Brand: ${rawBrand}` : rawBrand)
@@ -82,7 +96,8 @@ export function formatPurchaseDetailsSummary(
     options?.packageCountStyle ?? 'symbol',
   );
   const retailer = input.retailer.trim();
-  const packageRetailerLine = [packagePart, retailer].filter(Boolean).join(' · ') || null;
+  const retailerJoin = options?.retailerJoinBullet ? ' • ' : ' · ';
+  const packageRetailerLine = [packagePart, retailer].filter(Boolean).join(retailerJoin) || null;
   const priceLine = formatPrice(input.priceAmount, input.currency);
   const hasDetails = Boolean(
     input.productTitle.trim()

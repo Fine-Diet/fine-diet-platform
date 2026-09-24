@@ -24,8 +24,9 @@ describe('Packet 5 Pantry purchase modal convergence', () => {
   it('opts Pantry purchase editor into workspace shell geometry', () => {
     expect(purchaseEditor).toContain('shell="workspace"');
     expect(dialog).toContain('SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS');
-    expect(dialog).toContain('max-w-[800px]');
+    expect(dialog).toContain('lg:max-w-[800px]');
     expect(dialog).toContain('app-chrome-offset');
+    expect(dialog).toContain('DEFAULT_PANEL_CLASS');
   });
 
   it('locks purchase field grid and Remaining label', () => {
@@ -70,6 +71,19 @@ describe('Packet 5 Pantry purchase modal convergence', () => {
   it('returns to manual tab after offer selection', () => {
     expect(manager).toContain("setPurchaseDetailsMode('manual')");
     expect(manager).toContain('applyPantryProductOfferToLotDraft');
+  });
+
+  it('locks terminal lots as fully read-only in the modal', () => {
+    expect(purchaseEditor).toContain('isPantryLotTerminal');
+    expect(purchaseEditor).toContain('expiresOn: event.target.value');
+    expect(purchaseEditor).toContain('expectedShelfLifeDays: event.target.value');
+    expect(purchaseEditor).toContain('disabled={readOnly}');
+    expect(purchaseEditor).toContain('disabled={readOnly}');
+    expect(purchaseEditor).toContain("purchaseDetailsMode === 'manual' || readOnly");
+    expect(purchaseEditor).toContain('onClick={switchToSearch}');
+    expect(purchaseEditor).toContain('disabled={readOnly}');
+    expect(purchaseEditor).toContain('disabled={readOnly}');
+    expect(purchaseEditor).toContain('PANTRY_EMBEDDED_SUMMARY_FORMAT');
   });
 
   it('removes header explanatory sentence and uppercase purchase section', () => {

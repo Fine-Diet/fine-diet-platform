@@ -8,6 +8,7 @@ export interface PackageFieldsProps {
   onPackageUnitChange: (value: string) => void;
   onPackageCountChange: (value: string) => void;
   inputClassName: string;
+  disabled?: boolean;
 }
 
 export function PackageFields({
@@ -18,6 +19,7 @@ export function PackageFields({
   onPackageUnitChange,
   onPackageCountChange,
   inputClassName,
+  disabled = false,
 }: PackageFieldsProps) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -29,6 +31,7 @@ export function PackageFields({
           step="any"
           value={packageSize}
           onChange={(event) => onPackageSizeChange(event.target.value)}
+          disabled={disabled}
           className={inputClassName}
         />
       </label>
@@ -37,6 +40,7 @@ export function PackageFields({
         <input
           value={packageUnit}
           onChange={(event) => onPackageUnitChange(event.target.value)}
+          disabled={disabled}
           className={inputClassName}
         />
       </label>
@@ -48,6 +52,7 @@ export function PackageFields({
           step="1"
           value={packageCount}
           onChange={(event) => onPackageCountChange(event.target.value)}
+          disabled={disabled}
           className={inputClassName}
         />
       </label>

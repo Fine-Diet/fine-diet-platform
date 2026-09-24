@@ -3,6 +3,7 @@
 import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
 import { PackageFields } from '@/components/food/itemManagement/PackageFields';
 import { PurchaseDetailsSummary } from '@/components/food/itemManagement/PurchaseDetailsSummary';
+import { PANTRY_EMBEDDED_SUMMARY_FORMAT } from '@/components/food/itemManagement/purchaseDetailsSummaryFormat';
 import type {
   PantryProductSearchOffer,
   PantryProductSearchProvenance,
@@ -203,6 +204,7 @@ export function PantryPurchaseEditor({
                 type="date"
                 value={lotForm.expiresOn}
                 onChange={(event) => onUpdateLotForm({ expiresOn: event.target.value })}
+                disabled={readOnly}
                 className={pillInput}
               />
             </label>
@@ -242,11 +244,14 @@ export function PantryPurchaseEditor({
               />
             </label>
           </div>
-          <details className="group" {...shelfLifeDetailsProps}>
+          <details
+            className="group"
+            {...(readOnly ? { open: false } : shelfLifeDetailsProps)}
+          >
             <summary
-              className={`cursor-pointer text-sm select-none ${
-                hasExactExpiration ? 'text-white/35' : 'text-white/50'
-              }`}
+              className={`text-sm select-none ${
+                readOnly ? 'cursor-default text-white/35' : 'cursor-pointer'
+              } ${hasExactExpiration ? 'text-white/35' : 'text-white/50'}`}
             >
               * Don&apos;t know the exact date? Use expected shelf life
             </summary>
@@ -260,6 +265,7 @@ export function PantryPurchaseEditor({
                 onChange={(event) => onUpdateLotForm({
                   expectedShelfLifeDays: event.target.value,
                 })}
+                disabled={readOnly}
                 className={pillInput}
               />
             </label>
@@ -274,10 +280,7 @@ export function PantryPurchaseEditor({
             <PurchaseDetailsSummary
               variant="embedded"
               details={summaryDetails}
-              formatOptions={{
-                brandPrefix: true,
-                packageCountStyle: 'letter-x',
-              }}
+              formatOptions={PANTRY_EMBEDDED_SUMMARY_FORMAT}
             />
             <div
               className="grid grid-cols-2 border-y border-white/10"
@@ -302,17 +305,18 @@ export function PantryPurchaseEditor({
                 role="tab"
                 aria-selected={purchaseDetailsMode === 'search'}
                 onClick={switchToSearch}
+                disabled={readOnly}
                 className={
                   purchaseDetailsMode === 'search'
                     ? 'bg-white/15 py-3 text-center text-base font-medium text-white'
-                    : 'bg-transparent py-3 text-center text-base text-white/45 hover:text-white/70'
+                    : 'bg-transparent py-3 text-center text-base text-white/45 hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-40'
                 }
               >
                 Find / update details
               </button>
             </div>
             <div className="bg-white/[0.03] px-4 py-5 sm:px-5">
-              {purchaseDetailsMode === 'manual' ? (
+              {purchaseDetailsMode === 'manual' || readOnly ? (
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                     <label className="sm:col-span-2">
@@ -320,6 +324,7 @@ export function PantryPurchaseEditor({
                       <input
                         value={lotForm.productTitle}
                         onChange={(event) => onUpdateLotForm({ productTitle: event.target.value })}
+                        disabled={readOnly}
                         className={pillInput}
                       />
                     </label>
@@ -328,6 +333,7 @@ export function PantryPurchaseEditor({
                       <input
                         value={lotForm.brandName}
                         onChange={(event) => onUpdateLotForm({ brandName: event.target.value })}
+                        disabled={readOnly}
                         className={pillInput}
                       />
                     </label>
@@ -340,6 +346,7 @@ export function PantryPurchaseEditor({
                     onPackageUnitChange={(value) => onUpdateLotForm({ packageUnit: value })}
                     onPackageCountChange={(value) => onUpdateLotForm({ packageCount: value })}
                     inputClassName={pillInput}
+                    disabled={readOnly}
                   />
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                     <label className="sm:col-span-2">
@@ -347,6 +354,7 @@ export function PantryPurchaseEditor({
                       <input
                         value={lotForm.retailer}
                         onChange={(event) => onUpdateLotForm({ retailer: event.target.value })}
+                        disabled={readOnly}
                         className={pillInput}
                       />
                     </label>
@@ -358,6 +366,7 @@ export function PantryPurchaseEditor({
                         step="0.01"
                         value={lotForm.priceAmount}
                         onChange={(event) => onUpdateLotForm({ priceAmount: event.target.value })}
+                        disabled={readOnly}
                         className={pillInput}
                       />
                     </label>
