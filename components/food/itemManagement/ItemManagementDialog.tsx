@@ -16,6 +16,12 @@ const DEFAULT_BODY_CLASS = 'min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-5';
 const DEFAULT_FOOTER_CLASS =
   'sticky bottom-0 border-t border-white/[0.08] bg-[#211a14] px-5 py-4';
 
+/** Pantry workspace: bleed sticky footer over panel side/bottom border below lg. */
+const WORKSPACE_MOBILE_FOOTER_CLASS = cn(
+  DEFAULT_FOOTER_CLASS,
+  'max-lg:-mx-px max-lg:border-x-0 max-lg:border-b-0 max-lg:bg-[#211a14]',
+);
+
 export interface ItemManagementDialogProps {
   open: boolean;
   onClose: () => void;
@@ -68,8 +74,8 @@ export function ItemManagementDialog({
           </div>
           <div
             className={cn(
-              DEFAULT_FOOTER_CLASS,
-              'lg:static lg:mt-10 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0',
+              WORKSPACE_MOBILE_FOOTER_CLASS,
+              'lg:static lg:mt-10 lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0',
             )}
           >
             {footer}

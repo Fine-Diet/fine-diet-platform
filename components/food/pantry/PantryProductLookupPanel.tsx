@@ -119,11 +119,11 @@ export function PantryProductLookupPanel({
         <div
           className={
             embedded
-              ? 'grid grid-cols-1 gap-4 sm:grid-cols-3'
+              ? 'grid min-w-0 grid-cols-3 gap-3'
               : 'grid grid-cols-1 gap-3 sm:grid-cols-2'
           }
         >
-          <label className={embedded ? 'block sm:col-span-1' : 'block'}>
+          <label className={embedded ? 'col-span-1 block' : 'block'}>
             <span className="text-[13px] text-white/50">ZIP/postal code</span>
             <input
               value={productSearchPostal}
@@ -134,7 +134,7 @@ export function PantryProductLookupPanel({
               className={inputClassName}
             />
           </label>
-          <label className={embedded ? 'block sm:col-span-2' : 'block'}>
+          <label className={embedded ? 'col-span-2 block' : 'block'}>
             <span className="text-[13px] text-white/50">Retailer filter (optional)</span>
             <input
               value={productSearchRetailer}

@@ -9,6 +9,8 @@ export interface PackageFieldsProps {
   onPackageCountChange: (value: string) => void;
   inputClassName: string;
   disabled?: boolean;
+  /** Pantry purchase modal: keep three compact columns from phone layout upward. */
+  densePhoneLayout?: boolean;
 }
 
 export function PackageFields({
@@ -20,9 +22,16 @@ export function PackageFields({
   onPackageCountChange,
   inputClassName,
   disabled = false,
+  densePhoneLayout = false,
 }: PackageFieldsProps) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div
+      className={
+        densePhoneLayout
+          ? 'grid min-w-0 grid-cols-3 gap-3'
+          : 'grid grid-cols-1 gap-3 sm:grid-cols-3'
+      }
+    >
       <label>
         <span className="text-xs text-white/55">Package size</span>
         <input

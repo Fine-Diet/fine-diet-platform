@@ -30,11 +30,24 @@ describe('Packet 5 Pantry purchase modal convergence', () => {
   });
 
   it('locks purchase field grid and Remaining label', () => {
-    expect(purchaseEditor).toContain('sm:grid-cols-2');
+    expect(purchaseEditor).toContain('PANTRY_PURCHASE_DATE_GRID_CLASS');
+    expect(purchaseEditor).toContain('grid-cols-2');
+    expect(purchaseEditor).toContain('PANTRY_PURCHASE_AMOUNT_GRID_CLASS');
     expect(purchaseEditor).toContain('Amount acquired');
-    expect(purchaseEditor).toContain('sm:grid-cols-3');
+    expect(purchaseEditor).toContain('col-span-2 sm:col-span-1');
     expect(purchaseEditor).toContain('>Remaining<');
     expect(purchaseEditor).toContain('rounded-full');
+  });
+
+  it('locks responsive multi-column groups and rounded product-detail tabs', () => {
+    expect(purchaseEditor).toContain('PANTRY_PURCHASE_PRODUCT_TITLE_GRID_CLASS');
+    expect(purchaseEditor).toContain('PANTRY_PURCHASE_RETAILER_PRICE_GRID_CLASS');
+    expect(purchaseEditor).toContain('PANTRY_PRODUCT_DETAIL_TAB_CLASS');
+    expect(purchaseEditor).toContain('rounded-t-xl');
+    expect(purchaseEditor).toContain('densePhoneLayout');
+    expect(lookup).toContain('grid min-w-0 grid-cols-3 gap-3');
+    expect(lookup).toContain('col-span-2');
+    expect(dialog).toContain('WORKSPACE_MOBILE_FOOTER_CLASS');
   });
 
   it('uses inline expected shelf life disclosure copy', () => {
@@ -62,8 +75,8 @@ describe('Packet 5 Pantry purchase modal convergence', () => {
 
   it('uses embedded flat product search presentation', () => {
     expect(purchaseEditor).toContain('variant="embedded"');
-    expect(lookup).toContain('sm:grid-cols-3');
-    expect(lookup).toContain('sm:col-span-2');
+    expect(lookup).toContain('grid-cols-3');
+    expect(lookup).toContain('col-span-2');
     expect(lookup).toContain('w-full rounded-full bg-white/10');
     expect(lookup).toContain('divide-y divide-white/10');
   });
