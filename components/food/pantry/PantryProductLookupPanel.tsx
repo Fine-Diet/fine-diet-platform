@@ -42,7 +42,8 @@ export interface PantryProductLookupPanelProps {
   productSearchProvenance: PantryProductSearchProvenance | null;
   onSearch: () => void;
   onSelectOffer: (offer: PantryProductSearchOffer) => void;
-  onBackToSummary: () => void;
+  onBackToSummary?: () => void;
+  variant?: 'card' | 'embedded';
 }
 
 export function PantryProductLookupPanel({
@@ -65,26 +66,49 @@ export function PantryProductLookupPanel({
   onSearch,
   onSelectOffer,
   onBackToSummary,
+  variant = 'card',
 }: PantryProductLookupPanelProps) {
   const normalizedPostal = productSearchPostalValidation.ok
     ? productSearchPostalValidation.value ?? productSearchPostal
     : productSearchPostal;
+  const embedded = variant === 'embedded';
+
+  const scopeCopy = (() => {
+    if (productSearchState === 'searching' && productSearchPostalValidation.ok) {
+      return productSearchScopeLabel(normalizedPostal, productSearchRetailer);
+    }
+    if (productSearchState === 'results' && productSearchProvenance) {
+      return productSearchScopeLabel(
+        productSearchProvenance.requested_postal_code,
+        productSearchProvenance.retailer ?? '',
+      );
+    }
+    return null;
+  })();
+
+  const wrapperClass = embedded
+    ? 'space-y-4'
+    : 'rounded-xl border border-white/10 bg-white/[0.03] p-4';
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-medium text-white/55">Find product details</p>
-        <button
-          type="button"
-          onClick={onBackToSummary}
-          className="text-xs font-medium text-white/45 hover:text-white"
-        >
-          Back to summary
-        </button>
-      </div>
-      <div className="mt-3 space-y-3">
+    <div className={wrapperClass}>
+      {!embedded && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium text-white/55">Find product details</p>
+          {onBackToSummary && (
+            <button
+              type="button"
+              onClick={onBackToSummary}
+              className="text-xs font-medium text-white/45 hover:text-white"
+            >
+              Back to summary
+            </button>
+          )}
+        </div>
+      )}
+      <div className={embedded ? 'space-y-4' : 'mt-3 space-y-3'}>
         <label className="block">
-          <span className="text-xs text-white/55">Search product</span>
+          <span className="text-[13px] text-white/50">Search product</span>
           <input
             value={productSearchQuery}
             onChange={(event) => onProductSearchQueryChange(event.target.value)}
@@ -92,9 +116,15 @@ export function PantryProductLookupPanel({
             className={inputClassName}
           />
         </label>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="text-xs text-white/55">ZIP/postal code</span>
+        <div
+          className={
+            embedded
+              ? 'grid grid-cols-1 gap-4 sm:grid-cols-3'
+              : 'grid grid-cols-1 gap-3 sm:grid-cols-2'
+          }
+        >
+          <label className={embedded ? 'block sm:col-span-1' : 'block'}>
+            <span className="text-[13px] text-white/50">ZIP/postal code</span>
             <input
               value={productSearchPostal}
               onChange={(event) => onProductSearchPostalChange(event.target.value)}
@@ -104,8 +134,8 @@ export function PantryProductLookupPanel({
               className={inputClassName}
             />
           </label>
-          <label className="block">
-            <span className="text-xs text-white/55">Retailer filter (optional)</span>
+          <label className={embedded ? 'block sm:col-span-2' : 'block'}>
+            <span className="text-[13px] text-white/50">Retailer filter (optional)</span>
             <input
               value={productSearchRetailer}
               onChange={(event) => onProductSearchRetailerChange(event.target.value)}
@@ -119,60 +149,68 @@ export function PantryProductLookupPanel({
             {productSearchPostalValidation.message}
           </p>
         )}
-        <div className="flex justify-end">
+        <div className={embedded ? undefined : 'flex justify-end'}>
           <button
             type="button"
             onClick={onSearch}
             disabled={productSearchState === 'searching' || !productSearchCanSubmit}
-            className="shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white hover:bg-white/[0.06] disabled:opacity-40"
+            className={
+              embedded
+                ? 'w-full rounded-full bg-white/10 py-3 text-center text-base font-medium text-white hover:bg-white/[0.14] disabled:opacity-40'
+                : 'shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white hover:bg-white/[0.06] disabled:opacity-40'
+            }
           >
             {productSearchState === 'searching' ? 'Searching…' : 'Search'}
           </button>
         </div>
       </div>
-      {productSearchState === 'searching' && productSearchPostalValidation.ok && (
-        <p className="mt-3 text-xs text-white/45">
-          {productSearchScopeLabel(normalizedPostal, productSearchRetailer)}
-        </p>
+      {scopeCopy && (
+        <p className="text-sm text-white/45">{scopeCopy}</p>
       )}
       {productSearchState === 'zero_results' && (
-        <p className="mt-3 text-xs text-white/45">
+        <p className="text-sm text-white/45">
           No retail matches found. You can still enter product details manually.
         </p>
       )}
       {productSearchState === 'quota_exceeded' && productSearchError && (
-        <p className="mt-3 text-xs text-amber-200" role="alert">{productSearchError}</p>
+        <p className="text-sm text-amber-200" role="alert">{productSearchError}</p>
       )}
       {productSearchState === 'error' && productSearchError && (
-        <p className="mt-3 text-xs text-red-200" role="alert">{productSearchError}</p>
-      )}
-      {productSearchState === 'results' && productSearchProvenance && (
-        <p className="mt-3 text-xs text-white/45">
-          {productSearchScopeLabel(
-            productSearchProvenance.requested_postal_code,
-            productSearchProvenance.retailer ?? '',
-          )}
-        </p>
+        <p className="text-sm text-red-200" role="alert">{productSearchError}</p>
       )}
       {productSearchState === 'results' && productSearchOffers.length > 0 && (
-        <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+        <ul
+          className={
+            embedded
+              ? 'max-h-72 divide-y divide-white/10 overflow-y-auto border-t border-white/10'
+              : 'mt-3 max-h-56 space-y-2 overflow-y-auto'
+          }
+        >
           {productSearchOffers.map((offer) => (
             <li key={offer.provider_result_id}>
               <button
                 type="button"
                 onClick={() => onSelectOffer(offer)}
-                className="flex w-full items-start gap-3 rounded-lg border border-white/10 px-3 py-2 text-left hover:bg-white/[0.05]"
+                className={
+                  embedded
+                    ? 'flex w-full items-start gap-4 px-1 py-4 text-left hover:bg-white/[0.04] active:bg-white/[0.06]'
+                    : 'flex w-full items-start gap-3 rounded-lg border border-white/10 px-3 py-2 text-left hover:bg-white/[0.05]'
+                }
               >
                 {offer.image_url && (
                   <img
                     src={offer.image_url}
                     alt=""
-                    className="mt-0.5 h-10 w-10 shrink-0 rounded object-cover"
+                    className={
+                      embedded
+                        ? 'h-14 w-14 shrink-0 rounded-lg object-cover'
+                        : 'mt-0.5 h-10 w-10 shrink-0 rounded object-cover'
+                    }
                   />
                 )}
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium text-white">{offer.title}</span>
-                  <span className="mt-0.5 block text-xs text-white/50">
+                  <span className="block text-base font-medium text-white">{offer.title}</span>
+                  <span className="mt-0.5 block text-sm text-white/50">
                     {[
                       offer.retailer,
                       offer.price != null

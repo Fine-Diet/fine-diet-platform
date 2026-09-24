@@ -25,15 +25,31 @@ function formatPrice(amount: string, currency: string): string | null {
   }
 }
 
-function formatPackageLine(input: PurchaseDetailsSummaryInput): string | null {
+export type PurchaseDetailsSummaryFormatOptions = {
+  brandPrefix?: boolean;
+  packageCountStyle?: 'symbol' | 'letter-x';
+};
+
+function formatPackageLine(
+  input: PurchaseDetailsSummaryInput,
+  packageCountStyle: 'symbol' | 'letter-x' = 'symbol',
+): string | null {
   const size = input.packageSize.trim();
   const unit = input.packageUnit.trim();
   const count = input.packageCount.trim();
   const sizeText = size
     ? `${size}${unit ? ` ${unit}` : ''}`
     : null;
-  const countText = count ? `× ${count}` : null;
-  if (sizeText && countText) return `${sizeText} ${countText}`;
+  const countText = count
+    ? packageCountStyle === 'letter-x'
+      ? `x ${count}`
+      : `× ${count}`
+    : null;
+  if (sizeText && countText) {
+    return packageCountStyle === 'letter-x'
+      ? `${sizeText} ${countText}`
+      : `${sizeText} ${countText}`;
+  }
   return sizeText ?? countText;
 }
 
@@ -44,7 +60,10 @@ function brandAddsInformation(productTitle: string, brandName: string): boolean 
   return !title.includes(brand.toLowerCase());
 }
 
-export function formatPurchaseDetailsSummary(input: PurchaseDetailsSummaryInput): {
+export function formatPurchaseDetailsSummary(
+  input: PurchaseDetailsSummaryInput,
+  options?: PurchaseDetailsSummaryFormatOptions,
+): {
   productTitle: string;
   brandLine: string | null;
   packageRetailerLine: string | null;
@@ -52,10 +71,16 @@ export function formatPurchaseDetailsSummary(input: PurchaseDetailsSummaryInput)
   hasDetails: boolean;
 } {
   const productTitle = input.productTitle.trim() || 'No product details yet';
-  const brandLine = brandAddsInformation(input.productTitle, input.brandName)
+  const rawBrand = brandAddsInformation(input.productTitle, input.brandName)
     ? input.brandName.trim()
     : null;
-  const packagePart = formatPackageLine(input);
+  const brandLine = rawBrand
+    ? (options?.brandPrefix ? `Brand: ${rawBrand}` : rawBrand)
+    : null;
+  const packagePart = formatPackageLine(
+    input,
+    options?.packageCountStyle ?? 'symbol',
+  );
   const retailer = input.retailer.trim();
   const packageRetailerLine = [packagePart, retailer].filter(Boolean).join(' · ') || null;
   const priceLine = formatPrice(input.priceAmount, input.currency);

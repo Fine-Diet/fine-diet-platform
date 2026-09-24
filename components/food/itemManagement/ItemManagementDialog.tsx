@@ -2,8 +2,11 @@
 
 import type { ReactNode } from 'react';
 
+import { SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
 import { cn } from '@/lib/utils';
+
+export type ItemManagementDialogShell = 'default' | 'workspace';
 
 export interface ItemManagementDialogProps {
   open: boolean;
@@ -12,6 +15,8 @@ export interface ItemManagementDialogProps {
   busy?: boolean;
   children: ReactNode;
   footer: ReactNode;
+  /** Lists/Hauls use default. Pantry purchase editor opts into workspace shell. */
+  shell?: ItemManagementDialogShell;
 }
 
 /**
@@ -24,7 +29,35 @@ export function ItemManagementDialog({
   busy = false,
   children,
   footer,
+  shell = 'default',
 }: ItemManagementDialogProps) {
+  if (shell === 'workspace') {
+    return (
+      <AppDialog
+        open={open}
+        onClose={() => !busy && onClose()}
+        labelledBy={labelledBy}
+        overlayClassName={cn(
+          'items-start justify-center overflow-y-auto p-0 sm:p-0',
+          'bg-neutral-900/90 backdrop-blur-md',
+          'top-[var(--app-chrome-offset,2.25rem)] bottom-0 left-0 right-0',
+          SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS,
+        )}
+        panelClassName={cn(
+          'max-h-none max-w-[800px] overflow-visible rounded-none border-0 bg-transparent shadow-none',
+          'w-full px-5 pb-10 pt-8 sm:px-8 sm:pb-16 sm:pt-12',
+        )}
+      >
+        <div className="flex min-h-0 flex-col">
+          <div className="min-h-0 flex-1">{children}</div>
+          <div className="mt-10 max-sm:sticky max-sm:bottom-0 max-sm:border-t max-sm:border-white/[0.08] max-sm:bg-[#16110d] max-sm:py-4 max-sm:-mx-5 max-sm:px-5">
+            {footer}
+          </div>
+        </div>
+      </AppDialog>
+    );
+  }
+
   return (
     <AppDialog
       open={open}

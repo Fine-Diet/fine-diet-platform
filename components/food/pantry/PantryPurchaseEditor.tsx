@@ -1,7 +1,6 @@
 'use client';
 
 import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
-import { ItemManagementSection } from '@/components/food/itemManagement/ItemManagementSection';
 import { PackageFields } from '@/components/food/itemManagement/PackageFields';
 import { PurchaseDetailsSummary } from '@/components/food/itemManagement/PurchaseDetailsSummary';
 import type {
@@ -16,7 +15,10 @@ import { expectedShelfLifeDetailsProps } from './pantryExpectedShelfLifeDetails'
 import { PantryProductLookupPanel } from './PantryProductLookupPanel';
 import type { PantryLotDraft } from './pantryLotSave';
 
-export type PurchaseDetailsMode = 'summary' | 'manual' | 'search';
+export type PurchaseDetailsMode = 'manual' | 'search';
+
+export const PANTRY_PURCHASE_PILL_INPUT_CLASS =
+  'mt-1.5 w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/60 focus:ring-2 focus:ring-white/10 focus:ring-offset-0';
 
 export interface PantryPurchaseEditorProps {
   open: boolean;
@@ -61,6 +63,8 @@ export interface PantryPurchaseEditorProps {
   resolvingPurchase?: boolean;
 }
 
+const labelClass = 'text-[13px] text-white/50';
+
 export function PantryPurchaseEditor({
   open,
   itemName,
@@ -69,7 +73,6 @@ export function PantryPurchaseEditor({
   lotBusy,
   lotError,
   purchaseDetailsMode,
-  inputClassName,
   productSearchQuery,
   onProductSearchQueryChange,
   productSearchPostal,
@@ -97,6 +100,7 @@ export function PantryPurchaseEditor({
   onResolvePurchase,
   resolvingPurchase = false,
 }: PantryPurchaseEditorProps) {
+  const pillInput = PANTRY_PURCHASE_PILL_INPUT_CLASS;
   const eyebrow = existingLot ? 'Edit purchase' : 'Add purchase';
   const readOnly = existingLot != null && isPantryLotTerminal(existingLot);
   const remainingQuantity = Number(lotForm.quantityRemaining);
@@ -109,12 +113,29 @@ export function PantryPurchaseEditor({
     lotForm.expectedShelfLifeDays,
   );
 
+  const summaryDetails = {
+    productTitle: lotForm.productTitle,
+    brandName: lotForm.brandName,
+    packageSize: lotForm.packageSize,
+    packageUnit: lotForm.packageUnit,
+    packageCount: lotForm.packageCount,
+    retailer: lotForm.retailer,
+    priceAmount: lotForm.priceAmount,
+    currency: lotForm.currency,
+  };
+
+  function switchToSearch() {
+    onOpenProductSearch();
+    onSetPurchaseDetailsMode('search');
+  }
+
   return (
     <ItemManagementDialog
       open={open}
       onClose={onClose}
       labelledBy="purchase-editor-title"
       busy={lotBusy}
+      shell="workspace"
       footer={(
         <>
           {lotError && (
@@ -155,42 +176,40 @@ export function PantryPurchaseEditor({
         </>
       )}
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">
-        {eyebrow}
-      </p>
-      <h2 id="purchase-editor-title" className="mt-1 text-2xl font-semibold text-white">
+      <p className="text-base text-white/45">{eyebrow}</p>
+      <h2
+        id="purchase-editor-title"
+        className="mt-2 text-[2.35rem] font-medium leading-tight text-white sm:text-[2.5rem]"
+      >
         {itemName}
       </h2>
-      <p className="mt-2 text-sm text-white/45">
-        Purchase details do not change your total on-hand amount.
-      </p>
 
-      <div className="mt-6 space-y-6">
-        <ItemManagementSection title="Purchase">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="mt-10 space-y-10">
+        <section className="space-y-5">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label>
-              <span className="text-xs text-white/55">Purchased on</span>
+              <span className={labelClass}>Purchased on</span>
               <input
                 type="date"
                 value={lotForm.acquiredOn}
                 onChange={(event) => onUpdateLotForm({ acquiredOn: event.target.value })}
                 disabled={readOnly}
-                className={inputClassName}
+                className={pillInput}
               />
             </label>
             <label>
-              <span className="text-xs text-white/55">Expiration date</span>
+              <span className={labelClass}>Expiration date</span>
               <input
                 type="date"
                 value={lotForm.expiresOn}
                 onChange={(event) => onUpdateLotForm({ expiresOn: event.target.value })}
-                className={inputClassName}
+                className={pillInput}
               />
             </label>
           </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <label>
-              <span className="text-xs text-white/55">Amount acquired</span>
+              <span className={labelClass}>Amount acquired</span>
               <input
                 type="number"
                 min="0.01"
@@ -198,11 +217,11 @@ export function PantryPurchaseEditor({
                 value={lotForm.quantityAcquired}
                 onChange={(event) => onUpdateAcquiredQuantity(event.target.value)}
                 disabled={readOnly}
-                className={inputClassName}
+                className={pillInput}
               />
             </label>
             <label>
-              <span className="text-xs text-white/55">Remaining from this purchase</span>
+              <span className={labelClass}>Remaining</span>
               <input
                 type="number"
                 min="0"
@@ -210,32 +229,28 @@ export function PantryPurchaseEditor({
                 value={lotForm.quantityRemaining}
                 onChange={(event) => onUpdateLotForm({ quantityRemaining: event.target.value })}
                 disabled={readOnly}
-                className={inputClassName}
+                className={pillInput}
               />
             </label>
             <label>
-              <span className="text-xs text-white/55">Unit</span>
+              <span className={labelClass}>Unit</span>
               <input
                 value={lotForm.unit}
                 onChange={(event) => onUpdateLotForm({ unit: event.target.value })}
                 disabled={readOnly}
-                className={inputClassName}
+                className={pillInput}
               />
             </label>
           </div>
-          <details
-            className="mt-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
-            {...shelfLifeDetailsProps}
-          >
+          <details className="group" {...shelfLifeDetailsProps}>
             <summary
-              className={`cursor-pointer text-xs select-none ${
-                hasExactExpiration ? 'text-white/35' : 'text-white/55'
+              className={`cursor-pointer text-sm select-none ${
+                hasExactExpiration ? 'text-white/35' : 'text-white/50'
               }`}
             >
-              Expected shelf life
-              {hasExactExpiration ? ' (fallback when no expiration date)' : ''}
+              * Don&apos;t know the exact date? Use expected shelf life
             </summary>
-            <label className="mt-2 block">
+            <label className="mt-3 block max-w-xs">
               <span className="sr-only">Expected shelf life in days</span>
               <input
                 type="number"
@@ -245,118 +260,138 @@ export function PantryPurchaseEditor({
                 onChange={(event) => onUpdateLotForm({
                   expectedShelfLifeDays: event.target.value,
                 })}
-                className={inputClassName}
+                className={pillInput}
               />
             </label>
           </details>
-        </ItemManagementSection>
+        </section>
 
-        <ItemManagementSection title="Product & purchase details">
-          {purchaseDetailsMode === 'summary' && (
+        <section>
+          <h3 className="text-2xl font-medium text-white">
+            Product &amp; purchase details
+          </h3>
+          <div className="mt-5 overflow-hidden rounded-2xl border border-white/15">
             <PurchaseDetailsSummary
-              details={{
-                productTitle: lotForm.productTitle,
-                brandName: lotForm.brandName,
-                packageSize: lotForm.packageSize,
-                packageUnit: lotForm.packageUnit,
-                packageCount: lotForm.packageCount,
-                retailer: lotForm.retailer,
-                priceAmount: lotForm.priceAmount,
-                currency: lotForm.currency,
-              }}
-              onEditManually={() => onSetPurchaseDetailsMode('manual')}
-              onFindUpdate={() => {
-                onOpenProductSearch();
-                onSetPurchaseDetailsMode('search');
+              variant="embedded"
+              details={summaryDetails}
+              formatOptions={{
+                brandPrefix: true,
+                packageCountStyle: 'letter-x',
               }}
             />
-          )}
-          {purchaseDetailsMode === 'manual' && (
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => onSetPurchaseDetailsMode('summary')}
-                  className="text-xs font-medium text-white/45 hover:text-white"
-                >
-                  Back to summary
-                </button>
-              </div>
-              <label className="block">
-                <span className="text-xs text-white/55">Product title</span>
-                <input
-                  value={lotForm.productTitle}
-                  onChange={(event) => onUpdateLotForm({ productTitle: event.target.value })}
-                  className={inputClassName}
-                />
-              </label>
-              <label className="block">
-                <span className="text-xs text-white/55">Brand</span>
-                <input
-                  value={lotForm.brandName}
-                  onChange={(event) => onUpdateLotForm({ brandName: event.target.value })}
-                  className={inputClassName}
-                />
-              </label>
-              <PackageFields
-                packageSize={lotForm.packageSize}
-                packageUnit={lotForm.packageUnit}
-                packageCount={lotForm.packageCount}
-                onPackageSizeChange={(value) => onUpdateLotForm({ packageSize: value })}
-                onPackageUnitChange={(value) => onUpdateLotForm({ packageUnit: value })}
-                onPackageCountChange={(value) => onUpdateLotForm({ packageCount: value })}
-                inputClassName={inputClassName}
-              />
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label>
-                  <span className="text-xs text-white/55">Purchased at</span>
-                  <input
-                    value={lotForm.retailer}
-                    onChange={(event) => onUpdateLotForm({ retailer: event.target.value })}
-                    className={inputClassName}
-                  />
-                </label>
-                <label>
-                  <span className="text-xs text-white/55">Price</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={lotForm.priceAmount}
-                    onChange={(event) => onUpdateLotForm({ priceAmount: event.target.value })}
-                    className={inputClassName}
-                  />
-                </label>
-              </div>
+            <div
+              className="grid grid-cols-2 border-y border-white/10"
+              role="tablist"
+              aria-label="Product details entry mode"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={purchaseDetailsMode === 'manual'}
+                onClick={() => onSetPurchaseDetailsMode('manual')}
+                className={
+                  purchaseDetailsMode === 'manual'
+                    ? 'bg-white/15 py-3 text-center text-base font-medium text-white'
+                    : 'bg-transparent py-3 text-center text-base text-white/45 hover:text-white/70'
+                }
+              >
+                Edit manually
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={purchaseDetailsMode === 'search'}
+                onClick={switchToSearch}
+                className={
+                  purchaseDetailsMode === 'search'
+                    ? 'bg-white/15 py-3 text-center text-base font-medium text-white'
+                    : 'bg-transparent py-3 text-center text-base text-white/45 hover:text-white/70'
+                }
+              >
+                Find / update details
+              </button>
             </div>
-          )}
-          {purchaseDetailsMode === 'search' && (
-            <PantryProductLookupPanel
-              inputClassName={inputClassName}
-              productSearchQuery={productSearchQuery}
-              onProductSearchQueryChange={onProductSearchQueryChange}
-              productSearchPostal={productSearchPostal}
-              onProductSearchPostalChange={onProductSearchPostalChange}
-              onProductSearchPostalBlur={onProductSearchPostalBlur}
-              productSearchRetailer={productSearchRetailer}
-              onProductSearchRetailerChange={onProductSearchRetailerChange}
-              productSearchPostalTouched={productSearchPostalTouched}
-              productSearchPostalValidation={productSearchPostalValidation}
-              productSearchCanSubmit={productSearchCanSubmit}
-              productSearchState={productSearchState}
-              productSearchScopeLabel={productSearchScopeLabel}
-              productSearchOffers={productSearchOffers}
-              productSearchError={productSearchError}
-              productSearchProvenance={productSearchProvenance}
-              onSearch={onRunProductSearch}
-              onSelectOffer={onSelectProductOffer}
-              onBackToSummary={() => onSetPurchaseDetailsMode('summary')}
-            />
-          )}
-        </ItemManagementSection>
+            <div className="bg-white/[0.03] px-4 py-5 sm:px-5">
+              {purchaseDetailsMode === 'manual' ? (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                    <label className="sm:col-span-2">
+                      <span className={labelClass}>Product title</span>
+                      <input
+                        value={lotForm.productTitle}
+                        onChange={(event) => onUpdateLotForm({ productTitle: event.target.value })}
+                        className={pillInput}
+                      />
+                    </label>
+                    <label>
+                      <span className={labelClass}>Brand (optional)</span>
+                      <input
+                        value={lotForm.brandName}
+                        onChange={(event) => onUpdateLotForm({ brandName: event.target.value })}
+                        className={pillInput}
+                      />
+                    </label>
+                  </div>
+                  <PackageFields
+                    packageSize={lotForm.packageSize}
+                    packageUnit={lotForm.packageUnit}
+                    packageCount={lotForm.packageCount}
+                    onPackageSizeChange={(value) => onUpdateLotForm({ packageSize: value })}
+                    onPackageUnitChange={(value) => onUpdateLotForm({ packageUnit: value })}
+                    onPackageCountChange={(value) => onUpdateLotForm({ packageCount: value })}
+                    inputClassName={pillInput}
+                  />
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                    <label className="sm:col-span-2">
+                      <span className={labelClass}>Purchased at</span>
+                      <input
+                        value={lotForm.retailer}
+                        onChange={(event) => onUpdateLotForm({ retailer: event.target.value })}
+                        className={pillInput}
+                      />
+                    </label>
+                    <label>
+                      <span className={labelClass}>Price</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={lotForm.priceAmount}
+                        onChange={(event) => onUpdateLotForm({ priceAmount: event.target.value })}
+                        className={pillInput}
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <PantryProductLookupPanel
+                  variant="embedded"
+                  inputClassName={pillInput}
+                  productSearchQuery={productSearchQuery}
+                  onProductSearchQueryChange={onProductSearchQueryChange}
+                  productSearchPostal={productSearchPostal}
+                  onProductSearchPostalChange={onProductSearchPostalChange}
+                  onProductSearchPostalBlur={onProductSearchPostalBlur}
+                  productSearchRetailer={productSearchRetailer}
+                  onProductSearchRetailerChange={onProductSearchRetailerChange}
+                  productSearchPostalTouched={productSearchPostalTouched}
+                  productSearchPostalValidation={productSearchPostalValidation}
+                  productSearchCanSubmit={productSearchCanSubmit}
+                  productSearchState={productSearchState}
+                  productSearchScopeLabel={productSearchScopeLabel}
+                  productSearchOffers={productSearchOffers}
+                  productSearchError={productSearchError}
+                  productSearchProvenance={productSearchProvenance}
+                  onSearch={onRunProductSearch}
+                  onSelectOffer={onSelectProductOffer}
+                />
+              )}
+            </div>
+          </div>
+        </section>
 
         {existingLot && !readOnly && onResolvePurchase && (
-          <div className="border-t border-white/10 pt-4">
+          <div className="border-t border-white/10 pt-5">
             <p className="text-xs text-white/40">End this purchase record</p>
             {purchaseDraftDirty && (
               <p className="mt-1 text-xs text-white/45">
