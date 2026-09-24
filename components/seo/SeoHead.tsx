@@ -10,6 +10,7 @@
 import Head from 'next/head';
 import type { SeoMeta, SeoForRouteResult } from '@/lib/seo/getSeo';
 import type { BrowserAssets } from '@/lib/contentTypes';
+import { PAGES_ROUTER_FAVICON } from '@/lib/config/favicons';
 
 interface SeoHeadProps {
   seo: SeoMeta;
@@ -28,9 +29,7 @@ export function SeoHead({ seo, assets }: SeoHeadProps) {
       <link rel="canonical" href={seo.canonical} />
 
       {/* Browser Assets (Phase 1 / Step 2) */}
-      {assets?.favicon && (
-        <link rel="icon" href={assets.favicon} />
-      )}
+      <link rel="icon" href={PAGES_ROUTER_FAVICON} />
       {assets?.appleTouchIcon && (
         <link rel="apple-touch-icon" href={assets.appleTouchIcon} />
       )}
