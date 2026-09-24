@@ -113,4 +113,16 @@ describe('Packet 5 Pantry purchase modal convergence', () => {
     );
     expect(purchaseEditor).not.toContain('ItemManagementSection');
   });
+
+  it('uses lg-prefixed desktop purchase workspace typography without rewriting mobile shell', () => {
+    expect(purchaseEditor).toContain('lg:font-semibold');
+    expect(purchaseEditor).toContain('lg:text-[44px]');
+    expect(purchaseEditor).toContain('lg:leading-[44px]');
+    expect(purchaseEditor).toContain('lg:mt-5');
+    expect(purchaseEditor).toContain('lg:space-y-3');
+    expect(purchaseEditor).toContain('lg:text-[1.275rem]');
+    expect(purchaseEditor).toContain('lg:mt-3');
+    expect(purchaseEditor).toContain('PANTRY_PURCHASE_DATE_GRID_CLASS');
+    expect(purchaseEditor).toContain('PANTRY_PURCHASE_AMOUNT_GRID_CLASS');
+  });
 });

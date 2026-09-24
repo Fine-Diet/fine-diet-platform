@@ -8,9 +8,10 @@ const read = (relativePath: string) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
 describe('Packet 11E contracts after Packet 3 Lists migration', () => {
-  it('keeps Lists and Hauls as distinct canonical Food destinations', () => {
+  it('keeps List and Haul as distinct canonical Food destinations under Shopping', () => {
     const food = APP_DRAWER_HUBS.find((hub) => hub.id === 'food');
-    expect(food?.items).toEqual(
+    const shopping = food?.items?.find((item) => item.id === 'food-shopping');
+    expect(shopping?.children).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'food-lists', href: APP_ROUTES.foodLists }),
         expect.objectContaining({ id: 'food-hauls', href: APP_ROUTES.foodHauls }),

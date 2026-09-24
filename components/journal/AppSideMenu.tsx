@@ -7,7 +7,9 @@ import { APP_SIDEBAR_WITH_NOTICE_OFFSET_CLASS } from '@/components/app/AppNotifi
 import {
   APP_DRAWER_HUBS,
   APP_DRAWER_UTILITIES,
+  FOOD_DRAWER_SHOPPING_SUBGROUP_ID,
   getActiveDrawerHubId,
+  isFoodDrawerShoppingChildPath,
   type DrawerChildItem,
   type DrawerHub,
 } from '@/lib/navigation/appDrawerNavigation';
@@ -62,10 +64,26 @@ export function AppSideMenu({
   // Which expandable hubs are open. The active hub auto-expands; this resets on
   // route change so the current section is expanded on both mobile and desktop.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [expandedSubgroups, setExpandedSubgroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setExpanded(activeHubId ? { [activeHubId]: true } : {});
+    if (activeHubId === 'food') {
+      setExpandedSubgroups((prev) => ({
+        ...prev,
+        [FOOD_DRAWER_SHOPPING_SUBGROUP_ID]: prev[FOOD_DRAWER_SHOPPING_SUBGROUP_ID] ?? true,
+      }));
+    }
   }, [activeHubId]);
+
+  useEffect(() => {
+    if (isFoodDrawerShoppingChildPath(router.pathname)) {
+      setExpandedSubgroups((prev) => ({
+        ...prev,
+        [FOOD_DRAWER_SHOPPING_SUBGROUP_ID]: true,
+      }));
+    }
+  }, [router.pathname]);
 
   // Close on Escape (overlay mode).
   useEffect(() => {
@@ -86,11 +104,105 @@ export function AppSideMenu({
   }, [open, onClose, router.events]);
 
   function toggleHub(id: string) {
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+    setExpanded((prev) => {
+      const nextOpen = !prev[id];
+      if (id === 'food' && nextOpen) {
+        setExpandedSubgroups((subPrev) => ({
+          ...subPrev,
+          [FOOD_DRAWER_SHOPPING_SUBGROUP_ID]: subPrev[FOOD_DRAWER_SHOPPING_SUBGROUP_ID] ?? true,
+        }));
+      }
+      return { ...prev, [id]: nextOpen };
+    });
+  }
+
+  function toggleSubgroup(id: string) {
+    setExpandedSubgroups((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
   function isChildActive(item: DrawerChildItem): boolean {
-    return !item.disabled && router.asPath === item.href;
+    if (item.disabled || !item.href) return false;
+    const asPath = router.asPath.split('#')[0];
+    if (asPath === item.href) return true;
+    const pathOnly = asPath.split('?')[0];
+    const hrefPath = item.href.split('?')[0].split('#')[0];
+    if (pathOnly === hrefPath) return true;
+    if (!item.href.includes('?') && pathOnly.startsWith(`${hrefPath}/`)) return true;
+    return false;
+  }
+
+  function renderChildLink(item: DrawerChildItem, indentClass: string) {
+    const childActive = isChildActive(item);
+    const isComingSoon = item.status === 'coming-soon';
+    if (item.disabled) {
+      return (
+        <div
+          aria-disabled="true"
+          className={`flex items-center py-4 pr-5 text-base text-brand-50/30 antialiased ${indentClass}`}
+        >
+          {isComingSoon && <SoonBadge />}
+          <span className="min-w-0 truncate">{item.label}</span>
+        </div>
+      );
+    }
+    return (
+      <Link
+        href={item.href!}
+        onClick={onClose}
+        aria-current={childActive ? 'page' : undefined}
+        className={`flex items-center py-4 pr-5 text-base antialiased transition-colors ${indentClass} ${
+          childActive
+            ? 'font-semibold text-white'
+            : 'text-brand-50/60 hover:bg-white/[0.04] hover:text-white'
+        }`}
+      >
+        {isComingSoon && <SoonBadge />}
+        <span className="min-w-0 truncate">{item.label}</span>
+      </Link>
+    );
+  }
+
+  function renderDrawerChild(item: DrawerChildItem) {
+    if (item.children?.length) {
+      const subgroupOpen = !!expandedSubgroups[item.id];
+      const nestedActive = item.children.some((child) => isChildActive(child));
+      return (
+        <div key={item.id}>
+          <button
+            type="button"
+            onClick={() => toggleSubgroup(item.id)}
+            aria-expanded={subgroupOpen}
+            className={`flex w-full items-center justify-between py-4 pl-8 pr-5 text-left text-base antialiased transition-colors ${
+              nestedActive ? 'text-white' : 'text-brand-50/60 hover:bg-white/[0.04] hover:text-white'
+            }`}
+          >
+            <span className="min-w-0 truncate">{item.label}</span>
+            <span
+              className={`ml-2 shrink-0 transition-transform duration-200 ${
+                subgroupOpen ? 'rotate-180 text-white/95' : 'text-white/70'
+              }`}
+            >
+              {CHEVRON_DOWN}
+            </span>
+          </button>
+          {subgroupOpen && (
+            <div className="divide-y divide-white/10">
+              {item.children.map((child) => (
+                <Fragment key={child.id}>
+                  {renderChildLink(child, 'pl-[52px]')}
+                </Fragment>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <Fragment key={item.id}>
+        {renderChildLink(item, 'pl-8')}
+      </Fragment>
+    );
   }
 
   function renderLinkRow(hub: DrawerHub) {
@@ -134,32 +246,7 @@ export function AppSideMenu({
         {isExpanded && hub.items && (
           <div className="divide-y divide-white/10 bg-neutral-800 pb-1.5 pt-0.5">
             {hub.items.map((item, index) => {
-              const childActive = isChildActive(item);
-              const isComingSoon = item.status === 'coming-soon';
               const startsGroup = item.group && hub.items?.[index - 1]?.group !== item.group;
-              const row = item.disabled ? (
-                <div
-                  aria-disabled="true"
-                  className="flex items-center py-4 pl-8 pr-5 text-base text-brand-50/30 antialiased"
-                >
-                  {isComingSoon && <SoonBadge />}
-                  <span className="min-w-0 truncate">{item.label}</span>
-                </div>
-              ) : (
-                <Link
-                  href={item.href}
-                  onClick={onClose}
-                  aria-current={childActive ? 'page' : undefined}
-                  className={`flex items-center py-4 pl-8 pr-5 text-base antialiased transition-colors ${
-                    childActive
-                      ? 'font-semibold text-white'
-                      : 'text-brand-50/60 hover:bg-white/[0.04] hover:text-white'
-                  }`}
-                >
-                  {isComingSoon && <SoonBadge />}
-                  <span className="min-w-0 truncate">{item.label}</span>
-                </Link>
-              );
               return (
                 <Fragment key={item.id}>
                   {startsGroup && (
@@ -167,7 +254,7 @@ export function AppSideMenu({
                       {item.group === 'manage' ? 'Manage' : 'Library'}
                     </p>
                   )}
-                  {row}
+                  {renderDrawerChild(item)}
                 </Fragment>
               );
             })}
