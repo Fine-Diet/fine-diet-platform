@@ -276,7 +276,7 @@ export async function updatePantryAcquisitionLot(args: {
     .eq('person_id', args.personId)
     .eq('resolution_status', 'open')
     .select('*')
-    .single();
+    .maybeSingle();
   if (error) {
     const message = error.message ?? '';
     if (message.includes('TERMINAL_LOT_IMMUTABLE')) {
@@ -284,6 +284,9 @@ export async function updatePantryAcquisitionLot(args: {
     }
     if (message.includes('LIFECYCLE_UPDATE_FORBIDDEN')) {
       throw new Error('Pantry acquisition lot lifecycle cannot be changed through purchase edit.');
+    }
+    if (message.includes('expected exactly one row')) {
+      throw new Error('Pantry acquisition lot not found or no longer open for edit.');
     }
     throw new Error(`Failed to update pantry acquisition lot: ${message}`);
   }

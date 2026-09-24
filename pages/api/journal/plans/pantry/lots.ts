@@ -79,13 +79,13 @@ function lotPatch(body: Record<string, unknown>): PantryAcquisitionLotUpdate {
 
 function errorStatus(err: unknown): number {
   const message = err instanceof Error ? err.message : '';
-  if (message.includes('not found')) return 404;
   if (
     message.includes('cannot be edited')
     || message.includes('already resolved')
     || message.includes('no longer open')
     || message.includes('lifecycle cannot')
   ) return 409;
+  if (message.includes('not found')) return 404;
   if (
     message.includes('must be')
     || message.includes('required')

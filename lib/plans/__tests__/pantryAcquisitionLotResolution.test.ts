@@ -92,6 +92,28 @@ describe('resolvePantryAcquisitionLot', () => {
     expect(lot.quantity_remaining).toBe(0);
   });
 
+  it('maps zero-row open-filtered updates to a controlled no-longer-open conflict', async () => {
+    installFake({
+      pantry_acquisition_lots: [{
+        id: 'lot-1',
+        pantry_item_id: 'pantry-1',
+        person_id: PERSON,
+        acquired_on: '2026-09-01',
+        quantity_acquired: 2,
+        quantity_remaining: 2,
+        unit: 'lb',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      }],
+    });
+
+    await expect(updatePantryAcquisitionLot({
+      personId: PERSON,
+      lotId: 'lot-1',
+      patch: { quantityRemaining: 1 },
+    })).rejects.toThrow('no longer open for edit');
+  });
+
   it('blocks editing terminal lots', async () => {
     installFake({
       pantry_acquisition_lots: [{

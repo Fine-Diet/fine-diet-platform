@@ -10,6 +10,7 @@ import type {
 } from '@/lib/plans/pantryProductSearchTypes';
 import type { PantryAcquisitionLot } from '@/lib/plans/types';
 
+import { pantryPurchaseEditorIsDirty } from './pantryLotSave';
 import { isPantryLotTerminal } from './pantryPolicy';
 import { expectedShelfLifeDetailsProps } from './pantryExpectedShelfLifeDetails';
 import { PantryProductLookupPanel } from './PantryProductLookupPanel';
@@ -100,6 +101,8 @@ export function PantryPurchaseEditor({
   const readOnly = existingLot != null && isPantryLotTerminal(existingLot);
   const remainingQuantity = Number(lotForm.quantityRemaining);
   const canDiscardRemaining = Number.isFinite(remainingQuantity) && remainingQuantity > 0;
+  const purchaseDraftDirty = existingLot != null
+    && pantryPurchaseEditorIsDirty(existingLot, lotForm);
   const hasExactExpiration = Boolean(lotForm.expiresOn.trim());
   const shelfLifeDetailsProps = expectedShelfLifeDetailsProps(
     lotForm.expiresOn,
@@ -355,10 +358,15 @@ export function PantryPurchaseEditor({
         {existingLot && !readOnly && onResolvePurchase && (
           <div className="border-t border-white/10 pt-4">
             <p className="text-xs text-white/40">End this purchase record</p>
+            {purchaseDraftDirty && (
+              <p className="mt-1 text-xs text-white/45">
+                Save changes before resolving this purchase.
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={lotBusy || resolvingPurchase}
+                disabled={lotBusy || resolvingPurchase || purchaseDraftDirty}
                 onClick={() => onResolvePurchase('completed')}
                 className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/70 hover:border-white/35 disabled:opacity-40"
               >
@@ -367,7 +375,7 @@ export function PantryPurchaseEditor({
               {canDiscardRemaining && (
                 <button
                   type="button"
-                  disabled={lotBusy || resolvingPurchase}
+                  disabled={lotBusy || resolvingPurchase || purchaseDraftDirty}
                   onClick={() => onResolvePurchase('disposed')}
                   className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/70 hover:border-white/35 disabled:opacity-40"
                 >

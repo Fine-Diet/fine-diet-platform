@@ -22,6 +22,57 @@ function optionalNumber(value: string): number | null {
   return value.trim() ? Number(value) : null;
 }
 
+export function pantryLotDraftFromLot(lot: PantryAcquisitionLot): PantryLotDraft {
+  return {
+    acquiredOn: lot.acquired_on,
+    expiresOn: lot.expires_on ?? '',
+    expectedShelfLifeDays: lot.expected_shelf_life_days == null
+      ? ''
+      : String(lot.expected_shelf_life_days),
+    quantityAcquired: String(lot.quantity_acquired),
+    quantityRemaining: String(lot.quantity_remaining),
+    unit: lot.unit ?? '',
+    productTitle: lot.product_title ?? '',
+    brandName: lot.brand_name ?? '',
+    packageSize: lot.package_size == null ? '' : String(lot.package_size),
+    packageUnit: lot.package_unit ?? '',
+    packageCount: lot.package_count == null ? '' : String(lot.package_count),
+    retailer: lot.retailer ?? '',
+    priceAmount: lot.price_amount == null ? '' : String(lot.price_amount),
+    currency: lot.currency ?? 'USD',
+  };
+}
+
+function normalizePantryLotDraft(draft: PantryLotDraft): PantryLotDraft {
+  return {
+    acquiredOn: draft.acquiredOn.trim(),
+    expiresOn: draft.expiresOn.trim(),
+    expectedShelfLifeDays: draft.expectedShelfLifeDays.trim(),
+    quantityAcquired: draft.quantityAcquired.trim(),
+    quantityRemaining: draft.quantityRemaining.trim(),
+    unit: draft.unit.trim(),
+    productTitle: draft.productTitle.trim(),
+    brandName: draft.brandName.trim(),
+    packageSize: draft.packageSize.trim(),
+    packageUnit: draft.packageUnit.trim(),
+    packageCount: draft.packageCount.trim(),
+    retailer: draft.retailer.trim(),
+    priceAmount: draft.priceAmount.trim(),
+    currency: draft.currency.trim().toUpperCase() || 'USD',
+  };
+}
+
+export function pantryPurchaseEditorIsDirty(
+  existingLot: PantryAcquisitionLot,
+  draft: PantryLotDraft,
+): boolean {
+  const baseline = normalizePantryLotDraft(pantryLotDraftFromLot(existingLot));
+  const current = normalizePantryLotDraft(draft);
+  return (Object.keys(baseline) as Array<keyof PantryLotDraft>).some(
+    (key) => baseline[key] !== current[key],
+  );
+}
+
 export function lotInputFromPantryLotDraft(draft: PantryLotDraft): PantryAcquisitionLotInput {
   return {
     acquired_on: draft.acquiredOn,

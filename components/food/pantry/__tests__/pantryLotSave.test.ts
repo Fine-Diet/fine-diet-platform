@@ -1,6 +1,9 @@
 import type { PantryAcquisitionLot } from '@/lib/plans/types';
 
-import { validatePantryLotSave } from '../pantryLotSave';
+import {
+  pantryPurchaseEditorIsDirty,
+  validatePantryLotSave,
+} from '../pantryLotSave';
 
 function mockLot(
   overrides: Partial<PantryAcquisitionLot> & Pick<PantryAcquisitionLot, 'quantity_acquired' | 'quantity_remaining'>,
@@ -79,6 +82,16 @@ describe('validatePantryLotSave', () => {
       expect(result.error).toContain('cannot be less');
       expect(result.error).toContain('2');
     }
+  });
+
+  it('detects unsaved purchase editor drafts before lifecycle resolution', () => {
+    const lot = mockLot({ quantity_acquired: 5, quantity_remaining: 5 });
+    const clean = { ...baseDraft, quantityAcquired: '5', quantityRemaining: '5' };
+    expect(pantryPurchaseEditorIsDirty(lot, clean)).toBe(false);
+    expect(pantryPurchaseEditorIsDirty(lot, {
+      ...clean,
+      quantityRemaining: '2',
+    })).toBe(true);
   });
 
   it('keeps draft currency when price is present on edit', () => {
