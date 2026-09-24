@@ -11,7 +11,7 @@ import {
 } from '@/components/food/lists/ListsItemEditor';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
-import { AppDialog } from '@/components/ui/AppDialog';
+import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
 import { GroceryPricePanel } from '@/components/grocery/GroceryPricingUi';
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
@@ -992,28 +992,13 @@ export default function ListsManager() {
         </div>
       </SignedInPageScroll>
 
-      <AppDialog
+      <ItemManagementDialog
         open={newListOpen}
         onClose={() => !creatingList && setNewListOpen(false)}
         labelledBy="new-list-title"
-        panelClassName="border border-white/10 bg-[#211a14] shadow-2xl"
-      >
-        <div className="p-5">
-          <h2 id="new-list-title" className="text-xl font-semibold text-white">New List</h2>
-          <label className="mt-5 block">
-            <span className="text-xs text-white/55">List name</span>
-            <input
-              autoFocus
-              value={newListTitle}
-              onChange={(event) => setNewListTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void createList();
-              }}
-              className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none focus:border-white/40"
-            />
-          </label>
-          {newListError && <p className="mt-2 text-sm text-red-200" role="alert">{newListError}</p>}
-          <div className="mt-5 flex justify-end gap-2">
+        busy={creatingList}
+        footer={(
+          <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setNewListOpen(false)} className="px-4 py-2 text-sm text-white/55">Cancel</button>
             <button
               type="button"
@@ -1024,8 +1009,24 @@ export default function ListsManager() {
               {creatingList ? 'Creating…' : 'Create List'}
             </button>
           </div>
-        </div>
-      </AppDialog>
+        )}
+      >
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Lists</p>
+        <h2 id="new-list-title" className="mt-1 text-2xl font-semibold text-white">New List</h2>
+        <label className="mt-6 block">
+          <span className="text-xs text-white/50">List name</span>
+          <input
+            autoFocus
+            value={newListTitle}
+            onChange={(event) => setNewListTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void createList();
+            }}
+            className="mt-1.5 min-h-11 w-full rounded-full border border-white/20 bg-transparent px-4 text-base text-white outline-none focus:border-white/60 sm:text-xl"
+          />
+        </label>
+        {newListError && <p className="mt-3 text-sm text-red-200" role="alert">{newListError}</p>}
+      </ItemManagementDialog>
 
       {editItem && (
         <ListsItemEditor
@@ -1069,27 +1070,41 @@ export default function ListsManager() {
         />
       )}
 
-      <AppDialog
+      <ItemManagementDialog
         open={haulOpen}
         onClose={() => !startingHaul && setHaulOpen(false)}
         labelledBy="build-haul-title"
-        panelClassName="border border-white/10 bg-[#211a14] shadow-2xl"
+        busy={startingHaul}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setHaulOpen(false)} className="px-4 py-2 text-sm text-white/55">Cancel</button>
+            <button
+              type="button"
+              onClick={() => void buildHaul()}
+              disabled={startingHaul || !shoppingDate}
+              className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40"
+            >
+              {startingHaul ? 'Building…' : 'Build a Haul'}
+            </button>
+          </div>
+        )}
       >
-        <div className="p-5">
-          <h2 id="build-haul-title" className="text-xl font-semibold text-white">Build a Haul</h2>
-          <p className="mt-1 text-sm leading-relaxed text-white/45">
-            This creates a dated snapshot. Your source List and its items stay intact.
-          </p>
-          <label className="mt-5 block">
-            <span className="text-xs text-white/55">Shopping date</span>
-            <input type="date" value={shoppingDate} onChange={(event) => setShoppingDate(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-[#16110d] px-3 py-2 text-white outline-none" />
-          </label>
-          {haulError && <p className="mt-2 text-sm text-red-200" role="alert">{haulError}</p>}
-          <button type="button" onClick={() => void buildHaul()} disabled={startingHaul || !shoppingDate} className="mt-5 w-full rounded-full bg-brand-50 px-5 py-2.5 text-sm font-semibold text-[#16110d] disabled:opacity-40">
-            {startingHaul ? 'Building…' : 'Build a Haul'}
-          </button>
-        </div>
-      </AppDialog>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Lists</p>
+        <h2 id="build-haul-title" className="mt-1 text-2xl font-semibold text-white">Build a Haul</h2>
+        <p className="mt-2 text-sm leading-relaxed text-white/45">
+          Create a dated snapshot from this List. The source List and its items stay intact.
+        </p>
+        <label className="mt-6 block">
+          <span className="text-xs text-white/50">Shopping date</span>
+          <input
+            type="date"
+            value={shoppingDate}
+            onChange={(event) => setShoppingDate(event.target.value)}
+            className="mt-1.5 min-h-11 w-full rounded-full border border-white/20 bg-transparent px-4 text-base text-white outline-none focus:border-white/60 sm:text-xl"
+          />
+        </label>
+        {haulError && <p className="mt-3 text-sm text-red-200" role="alert">{haulError}</p>}
+      </ItemManagementDialog>
 
       {pricePanelItem && selectedListId && (
         <GroceryPricePanel
