@@ -22,13 +22,15 @@ export type DrawerItemStatus = 'current' | 'partial' | 'coming-soon';
 export interface DrawerChildItem {
   id: string;
   label: string;
-  /** Safe, navigable target. Closest existing route for partial/coming-soon. */
-  href: string;
+  /** Safe, navigable target. Omitted for non-navigating subgroup headers. */
+  href?: string;
   status: DrawerItemStatus;
   /** Optional durable IA parent rendered as a non-navigating group label. */
   group?: 'manage' | 'library';
   /** Visible taxonomy item with no route until its real surface exists. */
   disabled?: boolean;
+  /** Nested links under a non-navigating subgroup row (e.g. Food → Shopping). */
+  children?: DrawerChildItem[];
 }
 
 export interface DrawerHub {
@@ -57,6 +59,9 @@ const {
   profile,
   home,
 } = APP_ROUTES;
+
+/** Food drawer subgroup id for Shopping → Haul / List. */
+export const FOOD_DRAWER_SHOPPING_SUBGROUP_ID = 'food-shopping';
 
 /** Primary hubs, in display order, shown at the top of the drawer. */
 export const APP_DRAWER_HUBS: DrawerHub[] = [
@@ -145,21 +150,18 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
     matchPrefix: food,
     status: 'current',
     items: [
-      { id: 'food-home', label: 'Food Home', href: food, status: 'current' },
+      { id: 'food-home', label: 'Home', href: food, status: 'current' },
       { id: 'food-pantry', label: 'Pantry', href: foodPantry, status: 'current' },
-      { id: 'food-meals', label: 'Meals & Recipes', href: foodMeals, status: 'current' },
-      { id: 'food-lists', label: 'Lists', href: foodLists, status: 'current' },
-      { id: 'food-hauls', label: 'Hauls', href: foodHauls, status: 'current' },
-      { id: 'food-meals-add', label: 'Add Meal', href: `${foodMeals}?action=add`, status: 'current' },
-      { id: 'food-import-recipe', label: 'Import Recipe', href: APP_ROUTES.planImportNew, status: 'current' },
-      { id: 'food-pantry-add', label: 'Add Pantry Item', href: `${foodPantry}?action=add`, status: 'current' },
-      { id: 'food-label-scan', label: 'Scan Nutrition Label', href: `${foodMeals}?tool=label-scan`, status: 'coming-soon' },
-      { id: 'food-photo-estimate', label: 'Scan Meal / Photo Portion Estimate', href: `${logNew}?tool=scan-meal`, status: 'coming-soon' },
-      { id: 'food-portion-calculator', label: 'Portion Calculator', href: `${foodMeals}?tool=portion-calculator`, status: 'coming-soon' },
-      { id: 'food-low-staples', label: 'Low Staples', href: `${foodPantry}?section=low-staples`, status: 'coming-soon' },
-      { id: 'food-staples', label: 'Staples List', href: `${foodPantry}?section=staples`, status: 'coming-soon' },
-      { id: 'food-readiness', label: 'Pantry Readiness', href: `${foodPantry}?section=readiness`, status: 'coming-soon' },
-      { id: 'food-shopping-gaps', label: 'Shopping Gaps', href: `${foodPantry}?section=shopping-gaps`, status: 'coming-soon' },
+      {
+        id: FOOD_DRAWER_SHOPPING_SUBGROUP_ID,
+        label: 'Shopping',
+        status: 'current',
+        children: [
+          { id: 'food-hauls', label: 'Haul', href: foodHauls, status: 'current' },
+          { id: 'food-lists', label: 'List', href: foodLists, status: 'current' },
+        ],
+      },
+      { id: 'food-meals', label: 'Recipes', href: foodMeals, status: 'current' },
     ],
   },
 ];
@@ -181,6 +183,21 @@ export const APP_DRAWER_UTILITIES: DrawerHub[] = [
 ];
 
 const ALL_DRAWER_ENTRIES = [...APP_DRAWER_HUBS, ...APP_DRAWER_UTILITIES];
+
+/** True when the pathname is under canonical Haul or List Food routes. */
+export function isFoodDrawerShoppingChildPath(pathname: string): boolean {
+  const path = pathname.split('?')[0].split('#')[0];
+  return (
+    path === foodHauls
+    || path.startsWith(`${foodHauls}/`)
+    || path === foodLists
+    || path.startsWith(`${foodLists}/`)
+  );
+}
+
+export function getFoodDrawerHub() {
+  return APP_DRAWER_HUBS.find((hub) => hub.id === 'food');
+}
 
 /**
  * Derive the active drawer hub id from the current pathname. Matches the most

@@ -19,7 +19,9 @@ describe('Packet 5 Pantry feed convergence', () => {
   it('keeps joined Add/Search geometry with inline search input', () => {
     expect(manager).toContain('Add Pantry Item');
     expect(manager).toContain('aria-label="Search Pantry"');
-    expect(manager).toContain('py-2.5 pl-10 pr-10 text-xl text-white');
+    expect(manager).toContain('py-2.5 pl-10 pr-10 text-base text-white');
+    expect(manager).toContain('sm:text-xl');
+    expect(manager).toContain('text-base font-semibold text-[#16110d] sm:flex-none sm:min-w-48 sm:text-xl');
     expect(manager).not.toContain('setSearchOpen');
   });
 

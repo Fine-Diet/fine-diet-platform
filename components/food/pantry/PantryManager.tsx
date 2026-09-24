@@ -814,7 +814,7 @@ export default function PantryManager() {
               <button
                 type="button"
                 onClick={openAdd}
-                className="flex flex-1 min-h-11 items-center justify-center gap-2 rounded-t-xl bg-brand-50 px-6 py-4 text-xl font-semibold text-[#16110d] sm:flex-none sm:min-w-48 sm:text-xl"
+                className="flex flex-1 min-h-11 items-center justify-center gap-2 rounded-t-xl bg-brand-50 px-6 py-4 text-base font-semibold text-[#16110d] sm:flex-none sm:min-w-48 sm:text-xl"
               >
                 <Plus className="h-4 w-4" />
                 Add Pantry Item
@@ -826,7 +826,7 @@ export default function PantryManager() {
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search Pantry"
                   aria-label="Search Pantry"
-                  className="w-full bg-transparent py-2.5 pl-10 pr-10 text-xl text-white outline-none placeholder:text-white/35"
+                  className="w-full bg-transparent py-2.5 pl-10 pr-10 text-base text-white outline-none placeholder:text-white/35 sm:text-xl"
                 />
                 <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                 {query && (

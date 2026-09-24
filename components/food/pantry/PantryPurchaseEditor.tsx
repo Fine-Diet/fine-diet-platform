@@ -186,16 +186,16 @@ export function PantryPurchaseEditor({
         </>
       )}
     >
-      <p className="text-base text-white/45">{eyebrow}</p>
+      <p className="text-base text-white/45 lg:font-semibold">{eyebrow}</p>
       <h2
         id="purchase-editor-title"
-        className="mt-2 text-[2.35rem] font-medium leading-tight text-white sm:text-[2.5rem]"
+        className="mt-2 text-[2.35rem] font-medium leading-tight text-white sm:text-[2.5rem] lg:mt-4 lg:text-[44px] lg:font-normal lg:leading-[44px]"
       >
         {itemName}
       </h2>
 
-      <div className="mt-10 space-y-10">
-        <section className="space-y-5">
+      <div className="mt-10 space-y-10 lg:mt-5 lg:space-y-7">
+        <section className="space-y-5 lg:space-y-3">
           <div className={PANTRY_PURCHASE_DATE_GRID_CLASS}>
             <label>
               <span className={labelClass}>Purchased on</span>
@@ -286,10 +286,10 @@ export function PantryPurchaseEditor({
         </section>
 
         <section>
-          <h3 className="text-2xl font-medium text-white">
+          <h3 className="text-2xl font-medium text-white lg:text-[1.275rem] lg:font-normal">
             Product &amp; purchase details
           </h3>
-          <div className="mt-5 overflow-hidden rounded-2xl border border-white/15">
+          <div className="mt-5 overflow-hidden rounded-2xl border border-white/15 lg:mt-3">
             <PurchaseDetailsSummary
               variant="embedded"
               details={summaryDetails}

@@ -26,13 +26,14 @@ describe('Packet 3 Food IA and Lists manager', () => {
     );
   });
 
-  it('presents Lists as the canonical Food drawer destination', () => {
+  it('presents List as the canonical Food drawer destination under Shopping', () => {
     const food = APP_DRAWER_HUBS.find((hub) => hub.id === 'food');
-    expect(food?.items).toEqual(
+    const shopping = food?.items?.find((item) => item.id === 'food-shopping');
+    expect(shopping?.children).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'food-lists',
-          label: 'Lists',
+          label: 'List',
           href: '/app/food/lists',
         }),
       ]),
