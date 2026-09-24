@@ -179,20 +179,39 @@ function isEvidenceWithinHorizon(
   return delta >= 0 && delta <= horizonDays;
 }
 
+export interface EligibleComparableLotSummary {
+  remainingTotal: number;
+  acquiredTotal: number;
+  unitLabel: string;
+}
+
+export function eligibleComparableLotSummary(
+  lots: PantryAcquisitionLot[],
+  itemUnit: string | null,
+  todayYmd: string,
+): EligibleComparableLotSummary | null {
+  const normalizedItemUnit = normalizeComparableUnit(itemUnit);
+  if (!normalizedItemUnit) return null;
+  const eligible = eligibleUsableAcquisitionLots(lots, todayYmd);
+  if (eligible.length === 0) return null;
+  const matching = eligible.filter(
+    (lot) => normalizeComparableUnit(lot.unit) === normalizedItemUnit,
+  );
+  if (matching.length === 0 || matching.length !== eligible.length) return null;
+  const acquiredTotal = matching.reduce((sum, lot) => sum + lot.quantity_acquired, 0);
+  if (acquiredTotal <= 0) return null;
+  const remainingTotal = matching.reduce((sum, lot) => sum + lot.quantity_remaining, 0);
+  const unitLabel = itemUnit?.trim() || matching[0].unit?.trim() || '';
+  return { remainingTotal, acquiredTotal, unitLabel };
+}
+
+/** @deprecated Prefer eligibleComparableLotSummary for paired numerator/denominator. */
 export function comparableAcquiredDenominator(
   lots: PantryAcquisitionLot[],
   itemUnit: string | null,
   todayYmd: string,
 ): number | null {
-  const normalizedItemUnit = normalizeComparableUnit(itemUnit);
-  if (!normalizedItemUnit) return null;
-  const eligible = eligibleUsableAcquisitionLots(lots, todayYmd);
-  const matching = eligible.filter(
-    (lot) => normalizeComparableUnit(lot.unit) === normalizedItemUnit,
-  );
-  if (matching.length === 0) return null;
-  if (matching.length !== eligible.length) return null;
-  return matching.reduce((sum, lot) => sum + lot.quantity_acquired, 0);
+  return eligibleComparableLotSummary(lots, itemUnit, todayYmd)?.acquiredTotal ?? null;
 }
 
 export function isPantryItemLowStock(
@@ -201,10 +220,9 @@ export function isPantryItemLowStock(
   todayYmd: string,
 ): boolean {
   if (item.quantity === 0) return true;
-  if (item.quantity == null) return false;
-  const denominator = comparableAcquiredDenominator(lots, item.unit, todayYmd);
-  if (denominator == null || denominator <= 0) return false;
-  return item.quantity / denominator <= LOW_STOCK_RATIO;
+  const summary = eligibleComparableLotSummary(lots, item.unit, todayYmd);
+  if (!summary) return false;
+  return summary.remainingTotal / summary.acquiredTotal <= LOW_STOCK_RATIO;
 }
 
 export function pantryInventoryReading(
@@ -213,17 +231,13 @@ export function pantryInventoryReading(
   todayYmd: string,
 ): string {
   const unit = item.unit?.trim() || null;
+  const summary = eligibleComparableLotSummary(lots, item.unit, todayYmd);
+  if (summary) {
+    const unitLabel = summary.unitLabel || unit || '';
+    return `${summary.remainingTotal} / ${summary.acquiredTotal} ${unitLabel} remaining`.trim();
+  }
   if (item.quantity == null) {
     return unit ? `Amount saved · ${unit}` : 'Amount saved';
-  }
-  const denominator = comparableAcquiredDenominator(lots, item.unit, todayYmd);
-  if (
-    denominator != null
-    && denominator > 0
-    && item.quantity <= denominator
-  ) {
-    const unitLabel = unit ?? '';
-    return `${item.quantity} / ${denominator} ${unitLabel} remaining`.trim();
   }
   return unit ? `${item.quantity} ${unit}` : String(item.quantity);
 }
@@ -347,9 +361,9 @@ function attentionSortKey(
   const dateKey = unresolved?.expires_on
     ?? urgent?.date
     ?? '9999-12-31';
-  const denominator = comparableAcquiredDenominator(lots, item.unit, todayYmd);
-  const ratio = denominator && item.quantity != null && denominator > 0
-    ? item.quantity / denominator
+  const summary = eligibleComparableLotSummary(lots, item.unit, todayYmd);
+  const ratio = summary && summary.acquiredTotal > 0
+    ? summary.remainingTotal / summary.acquiredTotal
     : 1;
   return [priority[status.kind], dateKey, status.kind, ratio, item.name];
 }

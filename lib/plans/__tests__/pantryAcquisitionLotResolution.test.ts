@@ -1,3 +1,6 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
 import { createFakeSupabase, type Row } from './testSupabaseFake';
 
 const PERSON = 'person-1';
@@ -16,6 +19,11 @@ import {
   updatePantryAcquisitionLot,
 } from '../pantryAcquisitionLotService';
 
+const migrationSql = readFileSync(
+  join(process.cwd(), 'scripts/sql/addPantryAcquisitionLotResolution.sql'),
+  'utf8',
+);
+
 function installFake(initial: Record<string, Row[]>) {
   const fake = createFakeSupabase(initial);
   mockFrom.mockImplementation((table: string) => fake.from(table));
@@ -24,6 +32,29 @@ function installFake(initial: Record<string, Row[]>) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+});
+
+describe('addPantryAcquisitionLotResolution.sql contract', () => {
+  it('locks owner-scoped RPC, lifecycle invariants, and terminal update guard', () => {
+    expect(migrationSql).toContain('resolve_pantry_acquisition_lot');
+    expect(migrationSql).toMatch(/person_id\s*=\s*p_person_id/);
+    expect(migrationSql).toContain('FOR UPDATE');
+    expect(migrationSql).toContain("resolution_status = 'completed'");
+    expect(migrationSql).toContain('quantity_remaining = 0');
+    expect(migrationSql).toContain('disposed_quantity = v_row.quantity_remaining');
+    expect(migrationSql).toContain("THEN 'expired'");
+    expect(migrationSql).toContain("ELSE 'manual'");
+    expect(migrationSql).toContain('REVOKE ALL ON FUNCTION public.resolve_pantry_acquisition_lot');
+    expect(migrationSql).toContain('FROM anon');
+    expect(migrationSql).toContain('FROM authenticated');
+    expect(migrationSql).toContain('GRANT EXECUTE ON FUNCTION public.resolve_pantry_acquisition_lot');
+    expect(migrationSql).toContain('TO service_role');
+    expect(migrationSql).toContain('guard_pantry_acquisition_lot_update');
+    expect(migrationSql).toContain('TERMINAL_LOT_IMMUTABLE');
+    expect(migrationSql).toContain('LIFECYCLE_UPDATE_FORBIDDEN');
+    expect(migrationSql).toContain("set_config('app.pantry_lot_lifecycle', '1', true)");
+    expect(migrationSql).toContain('pantry_acquisition_lots_guard_update');
+  });
 });
 
 describe('resolvePantryAcquisitionLot', () => {

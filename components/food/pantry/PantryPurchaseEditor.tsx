@@ -56,6 +56,8 @@ export interface PantryPurchaseEditorProps {
   onRunProductSearch: () => void;
   onSelectProductOffer: (offer: PantryProductSearchOffer) => void;
   onRemovePurchase?: () => void;
+  onResolvePurchase?: (outcome: 'completed' | 'disposed') => void;
+  resolvingPurchase?: boolean;
 }
 
 export function PantryPurchaseEditor({
@@ -91,9 +93,13 @@ export function PantryPurchaseEditor({
   onRunProductSearch,
   onSelectProductOffer,
   onRemovePurchase,
+  onResolvePurchase,
+  resolvingPurchase = false,
 }: PantryPurchaseEditorProps) {
   const eyebrow = existingLot ? 'Edit purchase' : 'Add purchase';
   const readOnly = existingLot != null && isPantryLotTerminal(existingLot);
+  const remainingQuantity = Number(lotForm.quantityRemaining);
+  const canDiscardRemaining = Number.isFinite(remainingQuantity) && remainingQuantity > 0;
   const hasExactExpiration = Boolean(lotForm.expiresOn.trim());
   const shelfLifeDetailsProps = expectedShelfLifeDetailsProps(
     lotForm.expiresOn,
@@ -345,6 +351,32 @@ export function PantryPurchaseEditor({
             />
           )}
         </ItemManagementSection>
+
+        {existingLot && !readOnly && onResolvePurchase && (
+          <div className="border-t border-white/10 pt-4">
+            <p className="text-xs text-white/40">End this purchase record</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={lotBusy || resolvingPurchase}
+                onClick={() => onResolvePurchase('completed')}
+                className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/70 hover:border-white/35 disabled:opacity-40"
+              >
+                Mark completed / used
+              </button>
+              {canDiscardRemaining && (
+                <button
+                  type="button"
+                  disabled={lotBusy || resolvingPurchase}
+                  onClick={() => onResolvePurchase('disposed')}
+                  className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/70 hover:border-white/35 disabled:opacity-40"
+                >
+                  Discard remaining
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </ItemManagementDialog>
   );

@@ -195,24 +195,52 @@ describe('Pantry v2 deterministic policy', () => {
       lot('b', { pantry_item_key: 'food-1::lb', quantity_acquired: 2, quantity_remaining: 2, unit: 'oz' }),
     ];
     expect(comparableAcquiredDenominator(lots, 'lb', todayYmd)).toBeNull();
-    const uniformLots = [lot('only', { pantry_item_key: 'food-1::lb', quantity_acquired: 4, quantity_remaining: 4, unit: 'lb' })];
-    expect(isPantryItemLowStock({ ...item, quantity: 1 }, uniformLots, todayYmd)).toBe(true);
+    const uniformLots = [lot('only', { pantry_item_key: 'food-1::lb', quantity_acquired: 4, quantity_remaining: 1, unit: 'lb' })];
+    expect(isPantryItemLowStock(item, uniformLots, todayYmd)).toBe(true);
     expect(LOW_STOCK_RATIO).toBe(0.25);
   });
 
-  it('reads inventory with comparable purchase denominator and safe fallback', () => {
+  it('reads inventory from eligible purchase-history totals, not Pantry aggregate', () => {
+    const todayYmd = '2026-09-18';
+    const item: PantryOnHandItem = {
+      key: 'food-1::oz',
+      food_object_id: 'food-1',
+      name: 'Sauce',
+      quantity: 5,
+      unit: 'oz',
+      updated_at: '2026-09-01',
+    };
+    const lots = [
+      lot('usable', {
+        pantry_item_key: 'food-1::oz',
+        quantity_acquired: 5,
+        quantity_remaining: 2,
+        unit: 'oz',
+        expires_on: '2026-09-25',
+      }),
+      lot('expired', {
+        pantry_item_key: 'food-1::oz',
+        quantity_acquired: 5,
+        quantity_remaining: 3,
+        unit: 'oz',
+        expires_on: '2026-09-10',
+      }),
+    ];
+    expect(pantryInventoryReading(item, lots, todayYmd)).toBe('2 / 5 oz remaining');
+    expect(parentPantryStatus(item, lots, todayYmd).kind).toBe('expired_unresolved');
+  });
+
+  it('falls back to plain on-hand when eligible history is incomplete', () => {
     const todayYmd = '2026-09-18';
     const item: PantryOnHandItem = {
       key: 'food-1::lb',
       food_object_id: 'food-1',
       name: 'Chicken',
-      quantity: 1,
+      quantity: 5,
       unit: 'lb',
       updated_at: '2026-09-01',
     };
-    const lots = [lot('only', { pantry_item_key: 'food-1::lb', quantity_acquired: 4, quantity_remaining: 4, unit: 'lb' })];
-    expect(pantryInventoryReading(item, lots, todayYmd)).toBe('1 / 4 lb remaining');
-    expect(pantryInventoryReading({ ...item, quantity: 5 }, lots, todayYmd)).toBe('5 lb');
+    expect(pantryInventoryReading(item, [], todayYmd)).toBe('5 lb');
   });
 
   it('uses Use Soon for expected shelf-life inside the 7-day horizon', () => {

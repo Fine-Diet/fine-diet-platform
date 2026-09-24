@@ -66,6 +66,36 @@ ALTER TABLE public.pantry_acquisition_lots
 COMMENT ON COLUMN public.pantry_acquisition_lots.resolution_status IS
   'open | completed | disposed — terminal states are immutable in the Pantry UI.';
 
+CREATE OR REPLACE FUNCTION public.guard_pantry_acquisition_lot_update()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF OLD.resolution_status IN ('completed', 'disposed') THEN
+    RAISE EXCEPTION 'TERMINAL_LOT_IMMUTABLE';
+  END IF;
+
+  IF (
+    NEW.resolution_status IS DISTINCT FROM OLD.resolution_status
+    OR NEW.resolved_at IS DISTINCT FROM OLD.resolved_at
+    OR NEW.disposed_quantity IS DISTINCT FROM OLD.disposed_quantity
+    OR NEW.disposition_reason IS DISTINCT FROM OLD.disposition_reason
+  ) AND COALESCE(current_setting('app.pantry_lot_lifecycle', true), '') <> '1' THEN
+    RAISE EXCEPTION 'LIFECYCLE_UPDATE_FORBIDDEN';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS pantry_acquisition_lots_guard_update
+  ON public.pantry_acquisition_lots;
+CREATE TRIGGER pantry_acquisition_lots_guard_update
+  BEFORE UPDATE ON public.pantry_acquisition_lots
+  FOR EACH ROW
+  EXECUTE FUNCTION public.guard_pantry_acquisition_lot_update();
+
 CREATE OR REPLACE FUNCTION public.resolve_pantry_acquisition_lot(
   p_person_id UUID,
   p_lot_id UUID,
@@ -80,6 +110,8 @@ BEGIN
   IF p_outcome NOT IN ('completed', 'disposed') THEN
     RAISE EXCEPTION 'INVALID_OUTCOME';
   END IF;
+
+  PERFORM set_config('app.pantry_lot_lifecycle', '1', true);
 
   SELECT * INTO v_row
   FROM public.pantry_acquisition_lots

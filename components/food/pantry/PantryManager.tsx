@@ -533,6 +533,26 @@ export default function PantryManager() {
     }
   }
 
+  async function resolveLotFromEditor(outcome: 'completed' | 'disposed') {
+    if (!lotContext?.lot) return;
+    setResolvingLotId(lotContext.lot.id);
+    setLotError(null);
+    try {
+      const updated = await planService.resolvePantryAcquisitionLot(
+        lotContext.lot.id,
+        outcome,
+      );
+      setLots((current) => current.map((lot) => (
+        lot.id === updated.id ? { ...updated, pantry_item_key: lotContext.pantryKey } : lot
+      )));
+      setLotContext(null);
+    } catch (err) {
+      setLotError(err instanceof Error ? err.message : 'Unable to resolve purchase.');
+    } finally {
+      setResolvingLotId(null);
+    }
+  }
+
   function resetProductSearch() {
     setPurchaseDetailsMode('summary');
     setProductSearchQuery('');
@@ -1190,6 +1210,14 @@ export default function PantryManager() {
         onRemovePurchase={
           lotContext?.lot ? () => void deletePurchaseLot() : undefined
         }
+        onResolvePurchase={
+          lotContext?.lot
+            ? (outcome) => void resolveLotFromEditor(outcome)
+            : undefined
+        }
+        resolvingPurchase={Boolean(
+          lotContext?.lot && resolvingLotId === lotContext.lot.id,
+        )}
       />
 
       <JournalFooterNav />

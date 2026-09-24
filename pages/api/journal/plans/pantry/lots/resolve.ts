@@ -16,7 +16,11 @@ function errorStatus(err: unknown): number {
   if (message.includes('not found')) return 404;
   if (
     message.includes('already resolved')
-    || message.includes('No remaining')
+    || message.includes('cannot be edited')
+    || message.includes('lifecycle cannot')
+  ) return 409;
+  if (
+    message.includes('No remaining')
     || message.includes('Invalid')
   ) return 400;
   return 500;

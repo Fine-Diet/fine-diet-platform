@@ -274,10 +274,21 @@ export async function updatePantryAcquisitionLot(args: {
     .update(writeToRow(merged))
     .eq('id', args.lotId)
     .eq('person_id', args.personId)
+    .eq('resolution_status', 'open')
     .select('*')
     .single();
-  if (error || !data) {
-    throw new Error(`Failed to update pantry acquisition lot: ${error?.message ?? 'not found'}`);
+  if (error) {
+    const message = error.message ?? '';
+    if (message.includes('TERMINAL_LOT_IMMUTABLE')) {
+      throw new Error('Resolved pantry acquisition lots cannot be edited.');
+    }
+    if (message.includes('LIFECYCLE_UPDATE_FORBIDDEN')) {
+      throw new Error('Pantry acquisition lot lifecycle cannot be changed through purchase edit.');
+    }
+    throw new Error(`Failed to update pantry acquisition lot: ${message}`);
+  }
+  if (!data) {
+    throw new Error('Pantry acquisition lot not found or no longer open for edit.');
   }
   return rowToLot(data as Record<string, unknown>);
 }
@@ -305,6 +316,12 @@ export async function resolvePantryAcquisitionLot(args: {
     }
     if (message.includes('INVALID_OUTCOME')) {
       throw new Error('Invalid pantry acquisition lot resolution outcome.');
+    }
+    if (message.includes('TERMINAL_LOT_IMMUTABLE')) {
+      throw new Error('Pantry acquisition lot is already resolved.');
+    }
+    if (message.includes('LIFECYCLE_UPDATE_FORBIDDEN')) {
+      throw new Error('Pantry acquisition lot lifecycle cannot be changed through purchase edit.');
     }
     throw new Error(message);
   }
