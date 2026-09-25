@@ -73,6 +73,10 @@ export const PANTRY_PURCHASE_PRODUCT_TITLE_GRID_CLASS =
 export const PANTRY_PURCHASE_RETAILER_PRICE_GRID_CLASS = 'grid min-w-0 grid-cols-3 gap-3';
 export const PANTRY_PRODUCT_DETAIL_TAB_CLASS = 'flex-1 rounded-t-xl py-3 text-center text-base';
 
+/** Figma purchase title: 36/40 mobile, 40/44 tablet, 44/44 desktop. */
+export const PANTRY_PURCHASE_TITLE_CLASS =
+  'mt-2 text-[36px] font-medium leading-10 text-white sm:text-[40px] sm:leading-[44px] lg:text-[44px] lg:font-normal lg:leading-[44px]';
+
 export function PantryPurchaseEditor({
   open,
   itemName,
@@ -137,7 +141,7 @@ export function PantryPurchaseEditor({
       onClose={onClose}
       labelledBy="purchase-editor-title"
       busy={lotBusy}
-      shell="workspace"
+      shell="pantry-workspace"
       footer={(
         <>
           {lotError && (
@@ -181,7 +185,7 @@ export function PantryPurchaseEditor({
       <p className="text-base text-white/45 lg:font-semibold">{eyebrow}</p>
       <h2
         id="purchase-editor-title"
-        className="mt-2 text-[36px] font-medium leading-10 text-white lg:text-[44px] lg:font-normal lg:leading-[44px]"
+        className={PANTRY_PURCHASE_TITLE_CLASS}
       >
         {itemName}
       </h2>
