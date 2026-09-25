@@ -39,11 +39,15 @@ describe('ItemManagementDialog default shell', () => {
     expect(pantry).toContain('shell="pantry-workspace"');
     expect(source).toContain("shell === 'pantry-workspace'");
     expect(source).toContain('PANTRY_WORKSPACE_PANEL_CLASS');
+    expect(source).toContain('PANTRY_WORKSPACE_OVERLAY_CLASS');
     expect(source).toContain('PANTRY_WORKSPACE_BODY_CLASS');
     expect(source).toContain('px-[30px]');
+    expect(source).toContain('bg-transparent p-0 shadow-none');
     expect(source).toContain('lg:w-[800px]');
     expect(source).toContain('lg:max-w-[800px]');
-    expect(source).toContain('lg:top-[var(--app-chrome-offset,2.25rem)]');
-    expect(source).toContain('lg:bg-neutral-900/90');
+    expect(source).toContain('bg-neutral-900/90 backdrop-blur-md');
+    expect(source).not.toMatch(
+      /PANTRY_WORKSPACE_PANEL_CLASS[\s\S]*bg-\[#211a14\]/,
+    );
   });
 });

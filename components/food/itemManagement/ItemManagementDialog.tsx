@@ -42,16 +42,22 @@ const WORKSPACE_FOOTER_CLASS = cn(
 const PANTRY_WORKSPACE_BODY_CLASS =
   'min-h-0 flex-1 overflow-y-auto px-[30px] pb-4 pt-5 sm:px-11 lg:overflow-visible lg:px-0 lg:pb-0 lg:pt-0';
 
+const PANTRY_WORKSPACE_OVERLAY_CLASS = cn(
+  'items-start justify-center overflow-y-auto p-0',
+  'bg-neutral-900/90 backdrop-blur-md',
+  'top-[var(--app-chrome-offset,2.25rem)] bottom-0 max-lg:top-0',
+);
+
 const PANTRY_WORKSPACE_PANEL_CLASS = cn(
-  'flex max-h-[min(90dvh,880px)] w-full max-w-none flex-col rounded-none border-0 bg-[#211a14] p-0 shadow-none',
-  'lg:max-h-none lg:w-[800px] lg:max-w-[800px] lg:overflow-visible lg:bg-transparent',
+  'flex max-h-[min(90dvh,880px)] w-full max-w-none flex-col rounded-none border-0 bg-transparent p-0 shadow-none',
+  'lg:max-h-none lg:w-[800px] lg:max-w-[800px] lg:overflow-visible',
   'lg:pb-16 lg:pt-12',
 );
 
 const PANTRY_WORKSPACE_FOOTER_CLASS = cn(
-  DEFAULT_FOOTER_CLASS,
-  'px-[30px] py-5 sm:px-11',
-  'lg:static lg:mt-10 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0',
+  'sticky bottom-0 border-t border-white/[0.08] px-[30px] py-5 sm:px-11',
+  'bg-neutral-900/90 backdrop-blur-md',
+  'lg:static lg:mt-10 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none',
 );
 
 export interface ItemManagementDialogProps {
@@ -96,9 +102,13 @@ export function ItemManagementDialog({
         labelledBy={labelledBy}
         overlayClassName={cn(
           SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS,
-          'lg:items-start lg:justify-center lg:overflow-y-auto lg:p-0',
-          'lg:bg-neutral-900/90 lg:backdrop-blur-md',
-          'lg:top-[var(--app-chrome-offset,2.25rem)] lg:bottom-0',
+          isPantryWorkspace
+            ? PANTRY_WORKSPACE_OVERLAY_CLASS
+            : cn(
+              'lg:items-start lg:justify-center lg:overflow-y-auto lg:p-0',
+              'lg:bg-neutral-900/90 lg:backdrop-blur-md',
+              'lg:top-[var(--app-chrome-offset,2.25rem)] lg:bottom-0',
+            ),
         )}
         panelClassName={panelClassName}
       >

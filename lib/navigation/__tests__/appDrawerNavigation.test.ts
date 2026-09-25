@@ -84,6 +84,9 @@ describe('AppSideMenu Shopping subgroup presentation', () => {
     expect(menu).toContain('FOOD_DRAWER_SHOPPING_SUBGROUP_ID');
     expect(menu).toContain('isFoodDrawerShoppingChildPath');
     expect(menu).toContain('border-b-[0.5px] border-white/50');
+    expect(menu).toContain('listsHaulsDivider');
+    expect(menu).toContain("child.id === 'food-lists'");
+    expect(menu).not.toContain('border-b border-white/10" aria-hidden');
     expect(menu).toContain('shopping-child');
     expect(menu).toContain('bg-white/10 text-white/72');
     expect(menu).toContain('text-white/88');

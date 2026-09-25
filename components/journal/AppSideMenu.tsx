@@ -135,6 +135,7 @@ export function AppSideMenu({
     item: DrawerChildItem,
     indentClass: string,
     variant: 'default' | 'shopping-child' = 'default',
+    options?: { listsHaulsDivider?: boolean },
   ) {
     const childActive = isChildActive(item);
     const isComingSoon = item.status === 'coming-soon';
@@ -164,7 +165,9 @@ export function AppSideMenu({
         href={item.href!}
         onClick={onClose}
         aria-current={childActive ? 'page' : undefined}
-        className={`flex items-center py-4 pr-5 text-base antialiased transition-colors ${indentClass} ${variantClass}`}
+        className={`flex items-center py-4 pr-5 text-base antialiased transition-colors ${indentClass} ${variantClass} ${
+          options?.listsHaulsDivider ? 'border-b-[0.5px] border-white/50' : ''
+        }`}
       >
         {isComingSoon && <SoonBadge />}
         <span className="min-w-0 truncate">{item.label}</span>
@@ -204,15 +207,15 @@ export function AppSideMenu({
           </button>
           {subgroupOpen && (
             <div>
-              {item.children.map((child, childIndex) => (
+              {item.children.map((child) => (
                 <Fragment key={child.id}>
                   {renderChildLink(
                     child,
                     'pl-[52px]',
                     shoppingSubgroup ? 'shopping-child' : 'default',
-                  )}
-                  {childIndex < item.children!.length - 1 && (
-                    <div className="border-b border-white/10" aria-hidden />
+                    shoppingSubgroup && child.id === 'food-lists'
+                      ? { listsHaulsDivider: true }
+                      : undefined,
                   )}
                 </Fragment>
               ))}
