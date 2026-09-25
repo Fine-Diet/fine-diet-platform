@@ -10,7 +10,6 @@ import type {
 } from '@/lib/plans/pantryProductSearchTypes';
 import type { PantryAcquisitionLot } from '@/lib/plans/types';
 
-import { pantryPurchaseEditorIsDirty } from './pantryLotSave';
 import { isPantryLotTerminal } from './pantryPolicy';
 import { expectedShelfLifeDetailsProps } from './pantryExpectedShelfLifeDetails';
 import { PantryProductLookupPanel } from './PantryProductLookupPanel';
@@ -61,19 +60,22 @@ export interface PantryPurchaseEditorProps {
   onRunProductSearch: () => void;
   onSelectProductOffer: (offer: PantryProductSearchOffer) => void;
   onRemovePurchase?: () => void;
-  onResolvePurchase?: (outcome: 'completed' | 'disposed') => void;
-  resolvingPurchase?: boolean;
 }
 
 const labelClass = 'text-[13px] text-white/50';
 
-export const PANTRY_PURCHASE_DATE_GRID_CLASS = 'grid min-w-0 grid-cols-2 gap-3';
+export const PANTRY_PURCHASE_DATE_GRID_CLASS =
+  'grid min-w-0 grid-cols-2 gap-3 lg:gap-7';
 export const PANTRY_PURCHASE_AMOUNT_GRID_CLASS =
-  'grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3';
+  'grid min-w-0 grid-cols-2 gap-3 lg:gap-7';
 export const PANTRY_PURCHASE_PRODUCT_TITLE_GRID_CLASS =
   'grid min-w-0 grid-cols-3 gap-3 max-[360px]:grid-cols-1';
 export const PANTRY_PURCHASE_RETAILER_PRICE_GRID_CLASS = 'grid min-w-0 grid-cols-3 gap-3';
 export const PANTRY_PRODUCT_DETAIL_TAB_CLASS = 'flex-1 rounded-t-xl py-3 text-center text-base';
+
+/** Figma purchase title: 36/40 mobile, 40/44 tablet, 44/44 desktop. */
+export const PANTRY_PURCHASE_TITLE_CLASS =
+  'mt-2 text-[36px] font-medium leading-10 text-white sm:text-[40px] sm:leading-[44px] lg:text-[44px] lg:font-normal lg:leading-[44px]';
 
 export function PantryPurchaseEditor({
   open,
@@ -107,16 +109,10 @@ export function PantryPurchaseEditor({
   onRunProductSearch,
   onSelectProductOffer,
   onRemovePurchase,
-  onResolvePurchase,
-  resolvingPurchase = false,
 }: PantryPurchaseEditorProps) {
   const pillInput = PANTRY_PURCHASE_PILL_INPUT_CLASS;
   const eyebrow = existingLot ? 'Edit purchase' : 'Add purchase';
   const readOnly = existingLot != null && isPantryLotTerminal(existingLot);
-  const remainingQuantity = Number(lotForm.quantityRemaining);
-  const canDiscardRemaining = Number.isFinite(remainingQuantity) && remainingQuantity > 0;
-  const purchaseDraftDirty = existingLot != null
-    && pantryPurchaseEditorIsDirty(existingLot, lotForm);
   const hasExactExpiration = Boolean(lotForm.expiresOn.trim());
   const shelfLifeDetailsProps = expectedShelfLifeDetailsProps(
     lotForm.expiresOn,
@@ -145,7 +141,7 @@ export function PantryPurchaseEditor({
       onClose={onClose}
       labelledBy="purchase-editor-title"
       busy={lotBusy}
-      shell="workspace"
+      shell="pantry-workspace"
       footer={(
         <>
           {lotError && (
@@ -189,13 +185,13 @@ export function PantryPurchaseEditor({
       <p className="text-base text-white/45 lg:font-semibold">{eyebrow}</p>
       <h2
         id="purchase-editor-title"
-        className="mt-2 text-[2.35rem] font-medium leading-tight text-white sm:text-[2.5rem] lg:mt-4 lg:text-[44px] lg:font-normal lg:leading-[44px]"
+        className={PANTRY_PURCHASE_TITLE_CLASS}
       >
         {itemName}
       </h2>
 
-      <div className="mt-10 space-y-10 lg:mt-5 lg:space-y-7">
-        <section className="space-y-5 lg:space-y-3">
+      <div className="mt-5 space-y-6">
+        <section className="space-y-4">
           <div className={PANTRY_PURCHASE_DATE_GRID_CLASS}>
             <label>
               <span className={labelClass}>Purchased on</span>
@@ -233,19 +229,6 @@ export function PantryPurchaseEditor({
               />
             </label>
             <label>
-              <span className={labelClass}>Remaining</span>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={lotForm.quantityRemaining}
-                onChange={(event) => onUpdateLotForm({ quantityRemaining: event.target.value })}
-                disabled={readOnly}
-                placeholder={PANTRY_PURCHASE_FIELD_PLACEHOLDERS.remaining}
-                className={pillInput}
-              />
-            </label>
-            <label className="col-span-2 sm:col-span-1">
               <span className={labelClass}>Unit</span>
               <input
                 value={lotForm.unit}
@@ -285,11 +268,11 @@ export function PantryPurchaseEditor({
           </details>
         </section>
 
-        <section>
+        <section className="mt-6">
           <h3 className="text-2xl font-medium text-white lg:text-[1.275rem] lg:font-normal">
             Product &amp; purchase details
           </h3>
-          <div className="mt-5 overflow-hidden rounded-2xl border border-white/15 lg:mt-3">
+          <div className="mt-3 overflow-hidden rounded-2xl border border-white/15">
             <PurchaseDetailsSummary
               variant="embedded"
               details={summaryDetails}
@@ -330,7 +313,7 @@ export function PantryPurchaseEditor({
             </div>
             <div className="bg-white/[0.03] px-4 py-5 sm:px-5">
               {purchaseDetailsMode === 'manual' || readOnly ? (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div className={PANTRY_PURCHASE_PRODUCT_TITLE_GRID_CLASS}>
                     <label className="col-span-2 max-[360px]:col-span-1">
                       <span className={labelClass}>Product title</span>
@@ -422,37 +405,6 @@ export function PantryPurchaseEditor({
             </div>
           </div>
         </section>
-
-        {existingLot && !readOnly && onResolvePurchase && (
-          <div className="border-t border-white/10 pt-5">
-            <p className="text-xs text-white/40">End this purchase record</p>
-            {purchaseDraftDirty && (
-              <p className="mt-1 text-xs text-white/45">
-                Save changes before resolving this purchase.
-              </p>
-            )}
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={lotBusy || resolvingPurchase || purchaseDraftDirty}
-                onClick={() => onResolvePurchase('completed')}
-                className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/70 hover:border-white/35 disabled:opacity-40"
-              >
-                Mark completed / used
-              </button>
-              {canDiscardRemaining && (
-                <button
-                  type="button"
-                  disabled={lotBusy || resolvingPurchase || purchaseDraftDirty}
-                  onClick={() => onResolvePurchase('disposed')}
-                  className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/70 hover:border-white/35 disabled:opacity-40"
-                >
-                  Discard remaining
-                </button>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </ItemManagementDialog>
   );

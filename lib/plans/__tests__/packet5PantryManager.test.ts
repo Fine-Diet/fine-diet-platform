@@ -38,12 +38,10 @@ describe('Packet 5 Pantry feed convergence', () => {
     expect(manager).toContain('planService.listPantryAcquisitionLots()');
     expect(manager).toContain('planService.updatePantryOnHandItem');
     expect(manager).toContain('planService.resolvePantryAcquisitionLot');
-    expect(purchaseEditor).toContain('>Remaining<');
-    expect(purchaseEditor).toContain('Mark completed / used');
-    expect(purchaseEditor).toContain('Discard remaining');
-    expect(purchaseEditor).toContain('End this purchase record');
-    expect(purchaseEditor).toContain('Save changes before resolving this purchase');
-    expect(purchaseEditor).toContain('pantryPurchaseEditorIsDirty');
+    expect(purchaseEditor).not.toContain('>Remaining<');
+    expect(purchaseEditor).not.toContain('Mark completed / used');
+    expect(purchaseEditor).not.toContain('Discard remaining');
+    expect(purchaseEditor).not.toContain('End this purchase record');
     expect(manager).not.toContain('End this purchase record');
     expect(purchaseEditor).not.toContain(
       'Purchase details do not change your total on-hand amount.',

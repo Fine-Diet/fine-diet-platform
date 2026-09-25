@@ -13,29 +13,39 @@ describe('Packet 5 Pantry purchase modal convergence', () => {
   const lookup = read('components/food/pantry/PantryProductLookupPanel.tsx');
   const manager = read('components/food/pantry/PantryManager.tsx');
 
-  it('keeps Lists/Hauls on default ItemManagementDialog shell', () => {
-    expect(dialog).toContain("shell = 'default'");
-    expect(listsEditor).toContain('<ItemManagementDialog');
-    expect(listsEditor).not.toContain('shell=');
-    expect(haulEditor).toContain('<ItemManagementDialog');
-    expect(haulEditor).not.toContain('shell=');
+  it('keeps Lists/Hauls on shared workspace shell separate from Pantry workspace', () => {
+    expect(listsEditor).toContain('shell="workspace"');
+    expect(haulEditor).toContain('shell="workspace"');
+    expect(purchaseEditor).toContain('shell="pantry-workspace"');
+    expect(purchaseEditor).not.toContain('shell="workspace"');
+    expect(dialog).toContain("pantry-workspace");
+    expect(dialog).toContain('WORKSPACE_PANEL_CLASS');
+    expect(dialog).toContain('PANTRY_WORKSPACE_PANEL_CLASS');
   });
 
-  it('opts Pantry purchase editor into workspace shell geometry', () => {
-    expect(purchaseEditor).toContain('shell="workspace"');
+  it('opts Pantry purchase editor into pantry-workspace shell geometry', () => {
     expect(dialog).toContain('SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS');
+    expect(dialog).toContain('lg:w-[800px]');
     expect(dialog).toContain('lg:max-w-[800px]');
+    expect(dialog).toContain('PANTRY_WORKSPACE_PANEL_CLASS');
+    expect(dialog).toContain('px-[30px]');
+    expect(dialog).toContain('sm:px-11');
+    expect(dialog).toContain('max-w-none');
     expect(dialog).toContain('app-chrome-offset');
     expect(dialog).toContain('DEFAULT_PANEL_CLASS');
+    expect(dialog).toContain("shell = 'default'");
   });
 
-  it('locks purchase field grid and Remaining label', () => {
+  it('locks purchase field grids without visible Remaining or lifecycle controls', () => {
     expect(purchaseEditor).toContain('PANTRY_PURCHASE_DATE_GRID_CLASS');
-    expect(purchaseEditor).toContain('grid-cols-2');
+    expect(purchaseEditor).toContain('lg:gap-7');
     expect(purchaseEditor).toContain('PANTRY_PURCHASE_AMOUNT_GRID_CLASS');
     expect(purchaseEditor).toContain('Amount acquired');
-    expect(purchaseEditor).toContain('col-span-2 sm:col-span-1');
-    expect(purchaseEditor).toContain('>Remaining<');
+    expect(purchaseEditor).not.toContain('>Remaining<');
+    expect(purchaseEditor).not.toContain('End this purchase record');
+    expect(purchaseEditor).not.toContain('Mark completed / used');
+    expect(purchaseEditor).not.toContain('Discard remaining');
+    expect(purchaseEditor).not.toContain('onResolvePurchase');
     expect(purchaseEditor).toContain('rounded-full');
   });
 
@@ -47,7 +57,7 @@ describe('Packet 5 Pantry purchase modal convergence', () => {
     expect(purchaseEditor).toContain('densePhoneLayout');
     expect(lookup).toContain('grid min-w-0 grid-cols-3 gap-3');
     expect(lookup).toContain('col-span-2');
-    expect(dialog).toContain('WORKSPACE_MOBILE_FOOTER_CLASS');
+    expect(dialog).toContain('PANTRY_WORKSPACE_FOOTER_CLASS');
   });
 
   it('uses inline expected shelf life disclosure copy', () => {
@@ -114,14 +124,18 @@ describe('Packet 5 Pantry purchase modal convergence', () => {
     expect(purchaseEditor).not.toContain('ItemManagementSection');
   });
 
-  it('uses lg-prefixed desktop purchase workspace typography without rewriting mobile shell', () => {
-    expect(purchaseEditor).toContain('lg:font-semibold');
+  it('uses responsive purchase title scale 36/40 → 40/44 → 44/44', () => {
+    expect(purchaseEditor).toContain('PANTRY_PURCHASE_TITLE_CLASS');
+    expect(purchaseEditor).toContain('text-[36px]');
+    expect(purchaseEditor).toContain('leading-10');
+    expect(purchaseEditor).toContain('sm:text-[40px]');
+    expect(purchaseEditor).toContain('sm:leading-[44px]');
     expect(purchaseEditor).toContain('lg:text-[44px]');
     expect(purchaseEditor).toContain('lg:leading-[44px]');
-    expect(purchaseEditor).toContain('lg:mt-5');
-    expect(purchaseEditor).toContain('lg:space-y-3');
+    expect(purchaseEditor).toContain('lg:font-semibold');
+    expect(purchaseEditor).toContain('mt-5 space-y-6');
     expect(purchaseEditor).toContain('lg:text-[1.275rem]');
-    expect(purchaseEditor).toContain('lg:mt-3');
+    expect(purchaseEditor).toContain('mt-3 overflow-hidden');
     expect(purchaseEditor).toContain('PANTRY_PURCHASE_DATE_GRID_CLASS');
     expect(purchaseEditor).toContain('PANTRY_PURCHASE_AMOUNT_GRID_CLASS');
   });
