@@ -22,12 +22,15 @@ describe('ItemManagementDialog default shell', () => {
     expect(source).toContain("shell === 'workspace'");
     expect(source).toContain('DEFAULT_PANEL_CLASS');
     expect(source).toContain('bg-[#211a14]');
-    expect(source).toContain('WORKSPACE_MOBILE_FOOTER_CLASS');
-    expect(source).toContain('max-lg:border-x-0 max-lg:border-b-0');
+    expect(source).toContain('WORKSPACE_FOOTER_CLASS');
+    expect(source).toContain('WORKSPACE_PANEL_CLASS');
+    expect(source).toContain('px-[30px]');
+    expect(source).toContain('lg:w-[800px]');
     expect(source).toContain('lg:max-w-[800px]');
     expect(source).toContain('lg:top-[var(--app-chrome-offset,2.25rem)]');
     expect(source).toContain('lg:static lg:mt-10');
-    expect(source).toContain('lg:rounded-none lg:border-0 lg:bg-transparent');
+    expect(source).toContain('rounded-none border-0');
+    expect(source).toContain('lg:bg-transparent');
     expect(source).toContain('lg:bg-neutral-900/90');
   });
 });

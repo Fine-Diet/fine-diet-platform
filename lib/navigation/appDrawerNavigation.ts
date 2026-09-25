@@ -157,8 +157,8 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
         label: 'Shopping',
         status: 'current',
         children: [
-          { id: 'food-hauls', label: 'Haul', href: foodHauls, status: 'current' },
-          { id: 'food-lists', label: 'List', href: foodLists, status: 'current' },
+          { id: 'food-lists', label: 'Lists', href: foodLists, status: 'current' },
+          { id: 'food-hauls', label: 'Hauls', href: foodHauls, status: 'current' },
         ],
       },
       { id: 'food-meals', label: 'Recipes', href: foodMeals, status: 'current' },

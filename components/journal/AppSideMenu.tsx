@@ -131,7 +131,11 @@ export function AppSideMenu({
     return false;
   }
 
-  function renderChildLink(item: DrawerChildItem, indentClass: string) {
+  function renderChildLink(
+    item: DrawerChildItem,
+    indentClass: string,
+    variant: 'default' | 'shopping-child' = 'default',
+  ) {
     const childActive = isChildActive(item);
     const isComingSoon = item.status === 'coming-soon';
     if (item.disabled) {
@@ -145,16 +149,22 @@ export function AppSideMenu({
         </div>
       );
     }
+
+    const variantClass =
+      variant === 'shopping-child'
+        ? childActive
+          ? 'bg-white/10 font-semibold text-white'
+          : 'bg-white/10 text-white/72 hover:text-white/90'
+        : childActive
+          ? 'font-semibold text-white'
+          : 'text-white/88 hover:bg-white/[0.04] hover:text-white';
+
     return (
       <Link
         href={item.href!}
         onClick={onClose}
         aria-current={childActive ? 'page' : undefined}
-        className={`flex items-center py-4 pr-5 text-base antialiased transition-colors ${indentClass} ${
-          childActive
-            ? 'font-semibold text-white'
-            : 'text-brand-50/60 hover:bg-white/[0.04] hover:text-white'
-        }`}
+        className={`flex items-center py-4 pr-5 text-base antialiased transition-colors ${indentClass} ${variantClass}`}
       >
         {isComingSoon && <SoonBadge />}
         <span className="min-w-0 truncate">{item.label}</span>
@@ -166,6 +176,7 @@ export function AppSideMenu({
     if (item.children?.length) {
       const subgroupOpen = !!expandedSubgroups[item.id];
       const nestedActive = item.children.some((child) => isChildActive(child));
+      const shoppingSubgroup = item.id === FOOD_DRAWER_SHOPPING_SUBGROUP_ID;
       return (
         <div key={item.id}>
           <button
@@ -173,7 +184,13 @@ export function AppSideMenu({
             onClick={() => toggleSubgroup(item.id)}
             aria-expanded={subgroupOpen}
             className={`flex w-full items-center justify-between py-4 pl-8 pr-5 text-left text-base antialiased transition-colors ${
-              nestedActive ? 'text-white' : 'text-brand-50/60 hover:bg-white/[0.04] hover:text-white'
+              shoppingSubgroup
+                ? subgroupOpen
+                  ? 'border-b-[0.5px] border-white/50 bg-transparent text-white/88'
+                  : 'bg-transparent text-white/88 hover:bg-white/[0.04] hover:text-white'
+                : nestedActive
+                  ? 'text-white'
+                  : 'text-white/88 hover:bg-white/[0.04] hover:text-white'
             }`}
           >
             <span className="min-w-0 truncate">{item.label}</span>
@@ -186,10 +203,17 @@ export function AppSideMenu({
             </span>
           </button>
           {subgroupOpen && (
-            <div className="divide-y divide-white/10">
-              {item.children.map((child) => (
+            <div>
+              {item.children.map((child, childIndex) => (
                 <Fragment key={child.id}>
-                  {renderChildLink(child, 'pl-[52px]')}
+                  {renderChildLink(
+                    child,
+                    'pl-[52px]',
+                    shoppingSubgroup ? 'shopping-child' : 'default',
+                  )}
+                  {childIndex < item.children!.length - 1 && (
+                    <div className="border-b border-white/10" aria-hidden />
+                  )}
                 </Fragment>
               ))}
             </div>
