@@ -166,7 +166,7 @@ export function AppSideMenu({
         onClick={onClose}
         aria-current={childActive ? 'page' : undefined}
         className={`flex items-center py-4 pr-5 text-base antialiased transition-colors ${indentClass} ${variantClass} ${
-          options?.listsHaulsDivider ? 'border-b-[0.5px] border-white/50' : ''
+          options?.listsHaulsDivider ? 'border-b-[0.5px] border-white/10' : ''
         }`}
       >
         {isComingSoon && <SoonBadge />}
@@ -189,7 +189,7 @@ export function AppSideMenu({
             className={`flex w-full items-center justify-between py-4 pl-8 pr-5 text-left text-base antialiased transition-colors ${
               shoppingSubgroup
                 ? subgroupOpen
-                  ? 'border-b-[0.5px] border-white/50 bg-transparent text-white/88'
+                  ? 'border-b-[0.5px] border-white/10 bg-transparent text-white/88'
                   : 'bg-transparent text-white/88 hover:bg-white/[0.04] hover:text-white'
                 : nestedActive
                   ? 'text-white'
