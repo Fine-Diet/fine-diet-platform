@@ -119,6 +119,7 @@ describe('Packet 3 Food IA and Lists manager', () => {
     expect(manager).toContain('shell="create-resource"');
     expect(manager).toContain('defaultNamedGroceryListTitle');
     expect(manager).toContain("primaryLabel={creatingList ? 'Saving…' : 'Save'}");
+    expect(manager).toContain('border-b border-white/20');
     expect(manager).not.toContain('grocery_haul_source_lists');
     expect(manager).not.toContain('pantry_acquisition_lots');
   });

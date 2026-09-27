@@ -1024,7 +1024,7 @@ export default function ListsManager() {
             onKeyDown={(event) => {
               if (event.key === 'Enter') void createList();
             }}
-            className="mt-1.5 min-h-11 w-full rounded-full border border-white/20 bg-transparent px-4 text-base text-white outline-none focus:border-white/60 sm:text-xl"
+            className="mt-1.5 min-h-11 w-full rounded-none border-0 border-b border-white/20 bg-transparent px-0 text-base text-white outline-none focus:border-white/60 sm:text-xl"
           />
         </label>
         {newListError && <p className="mt-3 text-sm text-red-200" role="alert">{newListError}</p>}

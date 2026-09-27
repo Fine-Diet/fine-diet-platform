@@ -64,7 +64,11 @@ describe('ItemManagementDialog default shell', () => {
     expect(lists).toContain('shell="create-resource"');
     expect(lists).toContain("primaryLabel={creatingList ? 'Saving…' : 'Save'}");
     expect(lists).toContain('id="new-list-title"');
+    expect(source).toContain('CREATE_RESOURCE_PANEL_CLASS');
+    expect(source).toContain('overflow-visible rounded-none');
+    expect(source).toContain('sm:rounded-none');
     expect(lists).not.toContain('List name');
+    expect(lists).toContain('border-b border-white/20');
     expect(startHaul).toContain('shell="create-resource"');
     expect(read('components/food/hauls/HaulExecutionReadinessDialog.tsx')).toContain(
       'shell="create-resource"',

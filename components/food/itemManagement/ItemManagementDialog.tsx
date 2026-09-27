@@ -76,12 +76,14 @@ const CREATE_RESOURCE_OVERLAY_CLASS = cn(
 );
 
 const CREATE_RESOURCE_PANEL_CLASS = cn(
-  'relative z-10 flex max-h-[min(90dvh,880px)] w-full max-w-none flex-col rounded-none border-0 bg-[#251F18]/95 p-0 shadow-none',
+  'relative z-10 flex w-full max-w-none flex-col overflow-visible rounded-none border-0 bg-[#251F18]/95 p-0 shadow-none',
+  'max-h-none sm:rounded-none',
+  'max-lg:max-h-[min(90dvh,880px)]',
   'lg:max-h-none lg:my-auto lg:w-full lg:max-w-[550px] lg:bg-transparent',
 );
 
 const CREATE_RESOURCE_BODY_CLASS = cn(
-  'min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-5',
+  'min-h-0 flex-1 overflow-x-visible overflow-y-auto px-5 pb-4 pt-6',
   'lg:overflow-visible lg:px-0 lg:pb-0 lg:pt-0',
 );
 
