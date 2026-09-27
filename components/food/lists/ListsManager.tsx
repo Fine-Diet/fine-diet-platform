@@ -1006,7 +1006,7 @@ export default function ListsManager() {
         shell="create-resource"
         footer={(
           <CreateResourceDialogFooter
-            primaryLabel={creatingList ? 'Creating…' : 'Create List'}
+            primaryLabel={creatingList ? 'Saving…' : 'Save'}
             onPrimary={() => void createList()}
             primaryDisabled={!newListTitle.trim()}
             primaryBusy={creatingList}
@@ -1015,9 +1015,8 @@ export default function ListsManager() {
           />
         )}
       >
-        <h2 id="new-list-title" className="text-2xl font-semibold text-white">New List</h2>
-        <label className="mt-4 block">
-          <span className="text-xs text-white/50">List name</span>
+        <label className="block">
+          <span id="new-list-title" className="text-xs text-white/50">New List</span>
           <input
             autoFocus
             value={newListTitle}

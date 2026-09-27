@@ -69,12 +69,14 @@ const CREATE_RESOURCE_OVERLAY_CLASS = cn(
   'items-start justify-center overflow-y-auto p-0',
   'bg-neutral-900/90 backdrop-blur-md',
   'top-[var(--app-chrome-offset,2.25rem)] bottom-0 max-lg:top-0',
-  'lg:bg-black/[0.62] lg:backdrop-blur-[10px]',
+  'lg:bg-black/[0.62] lg:backdrop-blur-none',
+  'lg:before:pointer-events-none lg:before:absolute lg:before:inset-0',
+  'lg:before:bg-[#251F18]/[0.92] lg:before:backdrop-blur-[10px]',
   'lg:top-[var(--app-chrome-offset,2.25rem)] lg:bottom-0',
 );
 
 const CREATE_RESOURCE_PANEL_CLASS = cn(
-  'flex max-h-[min(90dvh,880px)] w-full max-w-none flex-col rounded-none border-0 bg-[#251F18]/95 p-0 shadow-none',
+  'relative z-10 flex max-h-[min(90dvh,880px)] w-full max-w-none flex-col rounded-none border-0 bg-[#251F18]/95 p-0 shadow-none',
   'lg:max-h-none lg:my-auto lg:w-full lg:max-w-[550px] lg:bg-transparent',
 );
 

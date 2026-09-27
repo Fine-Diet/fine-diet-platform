@@ -105,8 +105,8 @@ export function StartHaulDialog({
         Create a new Haul
       </h2>
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-        <label className="block min-w-0 flex-1">
+      <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-3">
+        <label className="block w-full shrink-0 lg:w-[98px]">
           <span className="text-xs text-white/50">Shopping date</span>
           <input
             type="date"
@@ -115,12 +115,12 @@ export function StartHaulDialog({
               setShoppingDate(event.target.value);
               setCreationToken(null);
             }}
-            className="mt-1.5 min-h-11 w-full rounded-full border border-white/20 bg-transparent px-4 text-base text-white outline-none focus:border-white/60 sm:text-xl"
+            className="mt-1.5 min-h-11 w-full rounded-full border border-white/20 bg-transparent px-2 text-base text-white outline-none focus:border-white/60 lg:px-2 lg:text-sm"
           />
         </label>
         <label className="block min-w-0 flex-1">
           <span className="sr-only">Search Lists</span>
-          <div className="relative mt-0 sm:mt-[1.375rem]">
+          <div className="relative lg:mt-[1.375rem]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
             <input
               type="search"

@@ -59,7 +59,12 @@ describe('ItemManagementDialog default shell', () => {
     expect(source).toContain('CREATE_RESOURCE_OVERLAY_CLASS');
     expect(source).toContain('lg:max-w-[550px]');
     expect(source).toContain('lg:bg-black/[0.62]');
+    expect(source).toContain('lg:before:bg-[#251F18]/[0.92]');
+    expect(source).toContain('lg:before:backdrop-blur-[10px]');
     expect(lists).toContain('shell="create-resource"');
+    expect(lists).toContain("primaryLabel={creatingList ? 'Saving…' : 'Save'}");
+    expect(lists).toContain('id="new-list-title"');
+    expect(lists).not.toContain('List name');
     expect(startHaul).toContain('shell="create-resource"');
     expect(read('components/food/hauls/HaulExecutionReadinessDialog.tsx')).toContain(
       'shell="create-resource"',

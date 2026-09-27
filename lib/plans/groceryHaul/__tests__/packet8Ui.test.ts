@@ -24,6 +24,7 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(dialog).toContain('shell="create-resource"');
     expect(dialog).toContain('HaulSourceListPicker');
     expect(dialog).toContain('persistentListSummaries');
+    expect(dialog).toContain('lg:w-[98px]');
     expect(dialog).not.toContain('title:');
   });
 
