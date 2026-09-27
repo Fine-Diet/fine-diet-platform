@@ -68,7 +68,7 @@ describe('ItemManagementDialog default shell', () => {
     expect(source).toContain('overflow-visible rounded-none');
     expect(source).toContain('sm:rounded-none');
     expect(lists).not.toContain('List name');
-    expect(lists).toContain('border-b border-white/20');
+    expect(lists).toContain('border-b border-white/50');
     expect(startHaul).toContain('shell="create-resource"');
     expect(read('components/food/hauls/HaulExecutionReadinessDialog.tsx')).toContain(
       'shell="create-resource"',
