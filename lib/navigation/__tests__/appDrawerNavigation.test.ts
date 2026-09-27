@@ -34,20 +34,20 @@ describe('Food drawer taxonomy (Figma convergence)', () => {
     );
   });
 
-  it('nests Haul and List under a non-navigating Shopping subgroup', () => {
+  it('nests Lists and Hauls under a non-navigating Shopping subgroup', () => {
     const shopping = food?.items?.find((item) => item.id === FOOD_DRAWER_SHOPPING_SUBGROUP_ID);
     expect(shopping?.label).toBe('Shopping');
     expect(shopping?.href).toBeUndefined();
     expect(shopping?.children).toEqual([
       expect.objectContaining({
-        id: 'food-hauls',
-        label: 'Haul',
-        href: APP_ROUTES.foodHauls,
+        id: 'food-lists',
+        label: 'Lists',
+        href: APP_ROUTES.foodLists,
       }),
       expect.objectContaining({
-        id: 'food-lists',
-        label: 'List',
-        href: APP_ROUTES.foodLists,
+        id: 'food-hauls',
+        label: 'Hauls',
+        href: APP_ROUTES.foodHauls,
       }),
     ]);
   });
@@ -60,8 +60,8 @@ describe('Food drawer taxonomy (Figma convergence)', () => {
     expect(labels).not.toContain('Add Meal');
     expect(labels).not.toContain('Food Home');
     expect(labels).not.toContain('Meals & Recipes');
-    expect(labels).not.toContain('Hauls');
-    expect(labels).not.toContain('Lists');
+    expect(labels).not.toContain('Haul');
+    expect(labels).not.toContain('List');
     expect(APP_DRAWER_HUBS.find((hub) => hub.id === 'food')?.items?.length).toBe(4);
   });
 
@@ -77,11 +77,18 @@ describe('Food drawer taxonomy (Figma convergence)', () => {
 describe('AppSideMenu Shopping subgroup presentation', () => {
   const menu = read('components/journal/AppSideMenu.tsx');
 
-  it('renders Shopping as an accessible expandable subgroup with deeper Haul/List inset', () => {
+  it('renders Shopping as an accessible expandable subgroup with deeper Lists/Hauls inset', () => {
     expect(menu).toContain('aria-expanded={subgroupOpen}');
     expect(menu).toContain('toggleSubgroup');
     expect(menu).toContain('pl-[52px]');
     expect(menu).toContain('FOOD_DRAWER_SHOPPING_SUBGROUP_ID');
     expect(menu).toContain('isFoodDrawerShoppingChildPath');
+    expect(menu).toContain('border-b-[0.5px] border-white/50');
+    expect(menu).toContain('listsHaulsDivider');
+    expect(menu).toContain("child.id === 'food-lists'");
+    expect(menu).not.toContain('border-b border-white/10" aria-hidden');
+    expect(menu).toContain('shopping-child');
+    expect(menu).toContain('bg-white/10 text-white/72');
+    expect(menu).toContain('text-white/88');
   });
 });

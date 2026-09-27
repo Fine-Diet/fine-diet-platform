@@ -1217,14 +1217,6 @@ export default function PantryManager() {
         onRemovePurchase={
           lotContext?.lot ? () => void deletePurchaseLot() : undefined
         }
-        onResolvePurchase={
-          lotContext?.lot
-            ? (outcome) => void resolveLotFromEditor(outcome)
-            : undefined
-        }
-        resolvingPurchase={Boolean(
-          lotContext?.lot && resolvingLotId === lotContext.lot.id,
-        )}
       />
 
       <JournalFooterNav />

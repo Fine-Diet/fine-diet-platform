@@ -17,17 +17,37 @@ describe('ItemManagementDialog default shell', () => {
     );
   });
 
-  it('keeps workspace shell mobile sheet classes and lg-only workspace overrides', () => {
+  it('keeps Lists/Hauls workspace on card shell below lg', () => {
     const source = read('components/food/itemManagement/ItemManagementDialog.tsx');
+    const lists = read('components/food/lists/ListsItemEditor.tsx');
+    const haul = read('components/food/hauls/HaulItemEditor.tsx');
+    expect(lists).toContain('shell="workspace"');
+    expect(haul).toContain('shell="workspace"');
     expect(source).toContain("shell === 'workspace'");
+    expect(source).toContain('WORKSPACE_PANEL_CLASS');
     expect(source).toContain('DEFAULT_PANEL_CLASS');
-    expect(source).toContain('bg-[#211a14]');
-    expect(source).toContain('WORKSPACE_MOBILE_FOOTER_CLASS');
-    expect(source).toContain('max-lg:border-x-0 max-lg:border-b-0');
+    expect(source).toContain('WORKSPACE_BODY_CLASS');
+    expect(source).toContain('lg:px-8');
+    expect(source).toMatch(
+      /const WORKSPACE_PANEL_CLASS = cn\(\s*DEFAULT_PANEL_CLASS/,
+    );
+  });
+
+  it('isolates Pantry pantry-workspace geometry from Lists/Hauls workspace', () => {
+    const source = read('components/food/itemManagement/ItemManagementDialog.tsx');
+    const pantry = read('components/food/pantry/PantryPurchaseEditor.tsx');
+    expect(pantry).toContain('shell="pantry-workspace"');
+    expect(source).toContain("shell === 'pantry-workspace'");
+    expect(source).toContain('PANTRY_WORKSPACE_PANEL_CLASS');
+    expect(source).toContain('PANTRY_WORKSPACE_OVERLAY_CLASS');
+    expect(source).toContain('PANTRY_WORKSPACE_BODY_CLASS');
+    expect(source).toContain('px-[30px]');
+    expect(source).toContain('bg-transparent p-0 shadow-none');
+    expect(source).toContain('lg:w-[800px]');
     expect(source).toContain('lg:max-w-[800px]');
-    expect(source).toContain('lg:top-[var(--app-chrome-offset,2.25rem)]');
-    expect(source).toContain('lg:static lg:mt-10');
-    expect(source).toContain('lg:rounded-none lg:border-0 lg:bg-transparent');
-    expect(source).toContain('lg:bg-neutral-900/90');
+    expect(source).toContain('bg-neutral-900/90 backdrop-blur-md');
+    expect(source).not.toMatch(
+      /PANTRY_WORKSPACE_PANEL_CLASS[\s\S]*bg-\[#211a14\]/,
+    );
   });
 });
