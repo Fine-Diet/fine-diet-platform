@@ -33,7 +33,7 @@ describe('Packet 3 Food IA and Lists manager', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'food-lists',
-          label: 'List',
+          label: 'Lists',
           href: '/app/food/lists',
         }),
       ]),
@@ -116,7 +116,8 @@ describe('Packet 3 Food IA and Lists manager', () => {
     expect(manager).toContain('Create a haul to combine items from one or more lists.');
     expect(manager).toContain('Build a Haul');
     expect(manager).toContain('planService.startGroceryHaulFromList(selectedListId');
-    expect(manager).toContain('Your source List and its items stay intact.');
+    expect(manager).toContain('shell="create-resource"');
+    expect(manager).toContain('defaultNamedGroceryListTitle');
     expect(manager).not.toContain('grocery_haul_source_lists');
     expect(manager).not.toContain('pantry_acquisition_lots');
   });

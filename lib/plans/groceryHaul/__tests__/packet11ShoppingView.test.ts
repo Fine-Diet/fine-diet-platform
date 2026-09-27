@@ -100,8 +100,9 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(dialog).toContain('readiness.blockers');
     expect(dialog).toContain('At least one item must have a final quantity above zero');
     expect(dialog).toContain('Return to preparation');
-    expect(dialog).toContain('readiness.can_start &&');
+    expect(dialog).toContain('readiness.can_start ?');
     expect(dialog).toContain('Continue to Shopping View');
+    expect(dialog).toContain('shell="create-resource"');
     expect(builder).toContain('planService.startGroceryHaulExecution(haulId)');
     expect(builder.indexOf("status: 'active'")).toBe(-1);
   });
@@ -111,7 +112,7 @@ describe('Packet 11 visual Shopping View + execution UI', () => {
     expect(dialog).toContain('readiness.warnings');
     expect(dialog).toContain('readiness.deferred_findings');
     expect(dialog).toContain('Not evaluated');
-    expect(dialog).toContain('do not automatically block shopping');
+    expect(dialog).toContain('Review anything that needs attention. You can still continue.');
     expect(dialog).toContain("evaluation === 'not_evaluated'");
     expect(findingItemLabel(
       { code: 'missing_price', severity: 'warning', haul_item_id: 'haul-item-1', message: 'Price is missing.' },

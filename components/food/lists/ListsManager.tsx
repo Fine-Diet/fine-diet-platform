@@ -12,6 +12,7 @@ import {
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
+import { CreateResourceDialogFooter } from '@/components/food/itemManagement/CreateResourceDialogFooter';
 import { GroceryPricePanel } from '@/components/grocery/GroceryPricingUi';
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
@@ -26,6 +27,7 @@ import { formatGroceryListNeedQuantityLabel } from '@/lib/plans/groceryListNeedQ
 import { formatGroceryCurrency } from '@/lib/plans/groceryPricingFormat';
 import { listPriceToHaulObservation } from '@/lib/plans/groceryListPriceObservationDisplay';
 import { resolveGroceryHaulCreateEligibility } from '@/lib/plans/groceryHaul/eligibility';
+import { defaultNamedGroceryListTitle } from '@/lib/plans/groceryListDefaultTitle';
 import { evaluateGroceryListReadiness } from '@/lib/plans/groceryListReadiness/policy';
 import type {
   GeneratedGroceryList,
@@ -794,7 +796,11 @@ export default function ListsManager() {
               </div>
               <button
                 type="button"
-                onClick={() => setNewListOpen(true)}
+                onClick={() => {
+                  setNewListError(null);
+                  setNewListTitle(defaultNamedGroceryListTitle());
+                  setNewListOpen(true);
+                }}
                 className="flex min-h-11 shrink-0 items-center justify-center rounded-t-xl bg-brand-50 px-6 py-2 text-xl font-semibold text-[#16110d] hover:bg-white"
               >
                 + New List
@@ -997,23 +1003,20 @@ export default function ListsManager() {
         onClose={() => !creatingList && setNewListOpen(false)}
         labelledBy="new-list-title"
         busy={creatingList}
+        shell="create-resource"
         footer={(
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setNewListOpen(false)} className="px-4 py-2 text-sm text-white/55">Cancel</button>
-            <button
-              type="button"
-              onClick={() => void createList()}
-              disabled={creatingList || !newListTitle.trim()}
-              className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40"
-            >
-              {creatingList ? 'Creating…' : 'Create List'}
-            </button>
-          </div>
+          <CreateResourceDialogFooter
+            primaryLabel={creatingList ? 'Creating…' : 'Create List'}
+            onPrimary={() => void createList()}
+            primaryDisabled={!newListTitle.trim()}
+            primaryBusy={creatingList}
+            onSecondary={() => setNewListOpen(false)}
+            secondaryDisabled={creatingList}
+          />
         )}
       >
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Lists</p>
-        <h2 id="new-list-title" className="mt-1 text-2xl font-semibold text-white">New List</h2>
-        <label className="mt-6 block">
+        <h2 id="new-list-title" className="text-2xl font-semibold text-white">New List</h2>
+        <label className="mt-4 block">
           <span className="text-xs text-white/50">List name</span>
           <input
             autoFocus
@@ -1075,26 +1078,20 @@ export default function ListsManager() {
         onClose={() => !startingHaul && setHaulOpen(false)}
         labelledBy="build-haul-title"
         busy={startingHaul}
+        shell="create-resource"
         footer={(
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setHaulOpen(false)} className="px-4 py-2 text-sm text-white/55">Cancel</button>
-            <button
-              type="button"
-              onClick={() => void buildHaul()}
-              disabled={startingHaul || !shoppingDate}
-              className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40"
-            >
-              {startingHaul ? 'Building…' : 'Build a Haul'}
-            </button>
-          </div>
+          <CreateResourceDialogFooter
+            primaryLabel={startingHaul ? 'Building…' : 'Build a Haul'}
+            onPrimary={() => void buildHaul()}
+            primaryDisabled={!shoppingDate}
+            primaryBusy={startingHaul}
+            onSecondary={() => setHaulOpen(false)}
+            secondaryDisabled={startingHaul}
+          />
         )}
       >
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Lists</p>
-        <h2 id="build-haul-title" className="mt-1 text-2xl font-semibold text-white">Build a Haul</h2>
-        <p className="mt-2 text-sm leading-relaxed text-white/45">
-          Create a dated snapshot from this List. The source List and its items stay intact.
-        </p>
-        <label className="mt-6 block">
+        <h2 id="build-haul-title" className="text-2xl font-semibold text-white">Build a Haul</h2>
+        <label className="mt-4 block">
           <span className="text-xs text-white/50">Shopping date</span>
           <input
             type="date"

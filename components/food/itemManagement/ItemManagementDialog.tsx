@@ -6,7 +6,11 @@ import { SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS } from '@/components/layout/SignedI
 import { AppDialog } from '@/components/ui/AppDialog';
 import { cn } from '@/lib/utils';
 
-export type ItemManagementDialogShell = 'default' | 'workspace' | 'pantry-workspace';
+export type ItemManagementDialogShell =
+  | 'default'
+  | 'workspace'
+  | 'pantry-workspace'
+  | 'create-resource';
 
 const DEFAULT_PANEL_CLASS =
   'flex max-h-[min(90dvh,880px)] max-w-[760px] flex-col border border-white/10 bg-[#211a14] p-0 shadow-2xl rounded-t-[28px] sm:rounded-[28px]';
@@ -60,6 +64,30 @@ const PANTRY_WORKSPACE_FOOTER_CLASS = cn(
   'lg:static lg:mt-10 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none',
 );
 
+/** Food create/transition modals (New List, Haul creation, readiness). */
+const CREATE_RESOURCE_OVERLAY_CLASS = cn(
+  'items-start justify-center overflow-y-auto p-0',
+  'bg-neutral-900/90 backdrop-blur-md',
+  'top-[var(--app-chrome-offset,2.25rem)] bottom-0 max-lg:top-0',
+  'lg:bg-black/[0.62] lg:backdrop-blur-[10px]',
+  'lg:top-[var(--app-chrome-offset,2.25rem)] lg:bottom-0',
+);
+
+const CREATE_RESOURCE_PANEL_CLASS = cn(
+  'flex max-h-[min(90dvh,880px)] w-full max-w-none flex-col rounded-none border-0 bg-[#251F18]/95 p-0 shadow-none',
+  'lg:max-h-none lg:my-auto lg:w-full lg:max-w-[550px] lg:bg-transparent',
+);
+
+const CREATE_RESOURCE_BODY_CLASS = cn(
+  'min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-5',
+  'lg:overflow-visible lg:px-0 lg:pb-0 lg:pt-0',
+);
+
+const CREATE_RESOURCE_FOOTER_CLASS = cn(
+  'sticky bottom-0 border-t border-white/[0.08] bg-[#251F18]/95 px-5 py-4',
+  'lg:static lg:mt-8 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0',
+);
+
 export interface ItemManagementDialogProps {
   open: boolean;
   onClose: () => void;
@@ -83,6 +111,23 @@ export function ItemManagementDialog({
   footer,
   shell = 'default',
 }: ItemManagementDialogProps) {
+  if (shell === 'create-resource') {
+    return (
+      <AppDialog
+        open={open}
+        onClose={() => !busy && onClose()}
+        labelledBy={labelledBy}
+        overlayClassName={cn(SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS, CREATE_RESOURCE_OVERLAY_CLASS)}
+        panelClassName={CREATE_RESOURCE_PANEL_CLASS}
+      >
+        <div className="flex min-h-0 flex-1 flex-col lg:min-h-full">
+          <div className={CREATE_RESOURCE_BODY_CLASS}>{children}</div>
+          <div className={CREATE_RESOURCE_FOOTER_CLASS}>{footer}</div>
+        </div>
+      </AppDialog>
+    );
+  }
+
   if (shell === 'workspace' || shell === 'pantry-workspace') {
     const isPantryWorkspace = shell === 'pantry-workspace';
     const panelClassName = isPantryWorkspace

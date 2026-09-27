@@ -50,4 +50,19 @@ describe('ItemManagementDialog default shell', () => {
       /PANTRY_WORKSPACE_PANEL_CLASS[\s\S]*bg-\[#211a14\]/,
     );
   });
+
+  it('adds create-resource shell for Food creation and transition modals', () => {
+    const source = read('components/food/itemManagement/ItemManagementDialog.tsx');
+    const lists = read('components/food/lists/ListsManager.tsx');
+    const startHaul = read('components/food/hauls/StartHaulDialog.tsx');
+    expect(source).toContain("'create-resource'");
+    expect(source).toContain('CREATE_RESOURCE_OVERLAY_CLASS');
+    expect(source).toContain('lg:max-w-[550px]');
+    expect(source).toContain('lg:bg-black/[0.62]');
+    expect(lists).toContain('shell="create-resource"');
+    expect(startHaul).toContain('shell="create-resource"');
+    expect(read('components/food/hauls/HaulExecutionReadinessDialog.tsx')).toContain(
+      'shell="create-resource"',
+    );
+  });
 });
