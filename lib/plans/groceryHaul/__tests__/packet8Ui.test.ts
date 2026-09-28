@@ -103,6 +103,7 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(builder).toContain('lg:w-[578px]');
     expect(builder).toContain('lg:w-[163px]');
     expect(builder).toContain('lg:w-[151px]');
+    expect(builder).not.toContain('lg:ml-auto');
     expect(builder).toContain('summarizeHaulStoreItems');
     expect(builder).toContain('unpriced');
     expect(builder).toContain('Add lists (');

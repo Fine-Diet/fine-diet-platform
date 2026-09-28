@@ -435,7 +435,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                   Add lists ({detail.source_lists.length})
                 </button>
               )}
-              <div className={`flex h-11 shrink-0 items-stretch ${activePrepareView ? 'ml-auto' : 'lg:ml-auto'} lg:w-[314px]`}>
+              <div className={`flex h-11 shrink-0 items-stretch ${activePrepareView ? 'ml-auto' : ''} lg:w-[314px]`}>
                 <div className="flex h-11 w-full items-stretch lg:w-[163px]">
                   <span className="inline-flex min-w-0 flex-1 items-center border border-white/25 px-3 text-xs font-semibold text-white/70">
                     {distinctStoreCount} Stores
