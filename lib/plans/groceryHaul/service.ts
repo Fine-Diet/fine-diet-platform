@@ -538,6 +538,7 @@ export type GroceryHaulItemPreparationPatch = {
   packageSize?: number | null;
   packageUnit?: string | null;
   packageCount?: number | null;
+  haulStoreId?: string | null;
   retailer?: string | null;
   storeLocation?: string | null;
   postalCode?: string | null;
@@ -640,6 +641,7 @@ export async function updateGroceryHaulItemPreparation(args: {
     args.patch.packageSize,
     args.patch.packageUnit,
     args.patch.packageCount,
+    args.patch.haulStoreId,
     args.patch.retailer,
     args.patch.storeLocation,
     args.patch.postalCode,
@@ -659,6 +661,27 @@ export async function updateGroceryHaulItemPreparation(args: {
   }
 
   const patch: Record<string, unknown> = {};
+
+  if (args.patch.haulStoreId !== undefined) {
+    if (args.patch.haulStoreId === null) {
+      patch.haul_store_id = null;
+      patch.retailer = null;
+      patch.store_location = null;
+      patch.postal_code = null;
+    } else {
+      const { loadOwnedHaulStore, haulStoreFieldsForItemAssignment } = await import('./haulStoreRoster');
+      const store = await loadOwnedHaulStore({
+        personId: args.personId,
+        haulId: args.haulId,
+        storeId: args.patch.haulStoreId,
+      });
+      const fields = haulStoreFieldsForItemAssignment(store);
+      patch.haul_store_id = store.id;
+      patch.retailer = fields.retailer;
+      patch.store_location = fields.store_location;
+      patch.postal_code = fields.postal_code;
+    }
+  }
 
   if (args.patch.sourcePriceObservationId !== undefined) {
     if (args.patch.sourcePriceObservationId === null) {
@@ -739,6 +762,12 @@ export async function updateGroceryHaulItemPreparation(args: {
     ['postalCode', 'postal_code'],
   ];
   for (const [inputKey, column] of textFields) {
+    if (
+      args.patch.haulStoreId !== undefined
+      && (inputKey === 'retailer' || inputKey === 'storeLocation' || inputKey === 'postalCode')
+    ) {
+      continue;
+    }
     const value = args.patch[inputKey];
     if (typeof value === 'string' || value === null) patch[column] = nullableText(value);
   }
@@ -1094,6 +1123,9 @@ export async function getGroceryHaulDetail(
     .order('created_at', { ascending: true });
   if (itemsErr) throw new Error(`Failed to load grocery haul items: ${itemsErr.message}`);
 
+  const { loadGroceryHaulStoresForDetail } = await import('./haulStoreRoster');
+  const mappedStores = await loadGroceryHaulStoresForDetail({ personId, haulId });
+
   const mappedHaul = mapHaul(haul as Record<string, unknown>);
   const mappedItems = ((items ?? []) as Array<Record<string, unknown>>).map(mapHaulItem);
   return {
@@ -1106,6 +1138,7 @@ export async function getGroceryHaulDetail(
       title: listTitles.get(String(membership.grocery_list_id)) ?? null,
     })),
     items: mappedItems,
+    stores: mappedStores,
     estimate: computeGroceryHaulPreparationEstimate(mappedHaul.currency, mappedItems),
   };
 }
@@ -1505,3 +1538,14 @@ export async function updateGroceryHaulExecutionItem(args: {
     : null;
   return mapExecutionItem(data as Record<string, unknown>, null, currentPreparation);
 }
+
+export {
+  addGroceryHaulStore,
+  removeGroceryHaulStore,
+  searchGroceryHaulStores,
+} from './haulStoreRoster';
+export type {
+  GroceryHaulStoreAddInput,
+  GroceryHaulStoreAddResult,
+  GroceryHaulStoreRemoveResult,
+} from './haulStoreRoster';

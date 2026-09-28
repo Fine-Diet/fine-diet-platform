@@ -44,6 +44,8 @@ import type {
   GroceryHaulExecutionReadiness,
   GroceryHaulExecutionStartResult,
   GroceryHaulItem,
+  GroceryHaulStore,
+  GroceryHaulStoreSearchResponse,
   GroceryItem,
   GroceryItemStatus,
   GroceryShoppingOverride,
@@ -1298,6 +1300,7 @@ export const planService = {
       package_size?: number | null;
       package_unit?: string | null;
       package_count?: number | null;
+      haul_store_id?: string | null;
       retailer?: string | null;
       store_location?: string | null;
       postal_code?: string | null;
@@ -1311,6 +1314,37 @@ export const planService = {
       { method: 'PATCH', body: JSON.stringify(patch) },
     );
     return res.item;
+  },
+
+  async searchGroceryHaulStores(
+    haulId: string,
+    input: { query: string; location_context?: string },
+  ): Promise<GroceryHaulStoreSearchResponse> {
+    return await request<GroceryHaulStoreSearchResponse>(
+      `/api/journal/food/hauls/${haulId}/stores/search`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  },
+
+  async addGroceryHaulStore(
+    haulId: string,
+    input: Record<string, unknown>,
+  ): Promise<{ store: GroceryHaulStore; outcome: 'created' | 'reused' }> {
+    return await request<{ store: GroceryHaulStore; outcome: 'created' | 'reused' }>(
+      `/api/journal/food/hauls/${haulId}/stores`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  },
+
+  async removeGroceryHaulStore(
+    haulId: string,
+    storeId: string,
+  ): Promise<{ store_id: string; outcome: 'removed'; affected_item_count: number }> {
+    const res = await request<{ result: { store_id: string; outcome: 'removed'; affected_item_count: number } }>(
+      `/api/journal/food/hauls/${haulId}/stores/${storeId}`,
+      { method: 'DELETE' },
+    );
+    return res.result;
   },
 
   async addGroceryListsToHaul(

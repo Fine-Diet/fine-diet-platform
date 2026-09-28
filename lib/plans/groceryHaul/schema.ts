@@ -34,6 +34,9 @@ export const HAUL_BUILDER_PERSISTENCE_SQL_PATH =
   'scripts/sql/addHaulBuilderPersistence.sql';
 export const HAUL_BUILDER_PERSISTENCE_VERIFY_SQL_PATH =
   'scripts/sql/verifyHaulBuilderPersistence.sql';
+export const GROCERY_HAUL_STORE_ROSTER_SQL_PATH =
+  'scripts/sql/addGroceryHaulStoreRoster.sql';
+export const GROCERY_HAUL_REMOVE_STORE_RPC_NAME = 'remove_grocery_haul_store';
 export const SHOPPING_VIEW_EXECUTION_SQL_PATH =
   'scripts/sql/addShoppingViewExecution.sql';
 export const SHOPPING_VIEW_EXECUTION_VERIFY_SQL_PATH =

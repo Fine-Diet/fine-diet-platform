@@ -89,10 +89,12 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     const builder = read('components/food/hauls/HaulBuilder.tsx');
     const library = read('components/food/hauls/HaulsLibrary.tsx');
     expect(builder).toContain('Shopping Summary');
-    expect(builder).toContain('countDistinctAssignedStores');
-    expect(builder).toContain('distinctStoreCount');
+    expect(builder).toContain('rosterStoreCount');
+    expect(builder).toContain('detail?.stores.length');
+    expect(builder).toContain('HaulStoreManagementDialog');
+    expect(builder).toContain('canManageStores');
+    expect(builder).not.toContain('Adding stores from the builder is not available yet');
     expect(builder).toContain('Invite to Haul is planned for a later phase');
-    expect(builder).toContain('Adding stores from the builder is not available yet');
     expect(builder).toContain('Haul Estimate ·');
     expect(builder).toContain('computeGroceryHaulPreparationEstimate(');
     expect(builder).not.toContain('item.final_quantity * item.price_amount');

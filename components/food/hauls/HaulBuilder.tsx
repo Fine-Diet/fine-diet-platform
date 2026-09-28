@@ -29,9 +29,9 @@ import type { GroceryListReadinessDecision } from '@/lib/plans/groceryListReadin
 import { HaulExecutionReadinessDialog } from './HaulExecutionReadinessDialog';
 import { HaulItemEditor } from './HaulItemEditor';
 import { HaulSourceListPicker } from './HaulSourceListPicker';
+import { HaulStoreManagementDialog } from './HaulStoreManagementDialog';
 import {
   computeGroceryHaulPreparationEstimate,
-  countDistinctAssignedStores,
 } from '@/lib/plans/groceryHaul/estimate';
 import { buildEligibleHaulSourceCandidates } from '@/lib/plans/groceryHaul/sourceListSelection';
 import {
@@ -119,6 +119,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   const [editingItem, setEditingItem] = useState<GroceryHaulItem | null>(null);
   const [chooseProductFirst, setChooseProductFirst] = useState(false);
   const [addListsOpen, setAddListsOpen] = useState(false);
+  const [storesOpen, setStoresOpen] = useState(false);
   const [addListQuery, setAddListQuery] = useState('');
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [addingLists, setAddingLists] = useState(false);
@@ -239,10 +240,9 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
     return grouped;
   }, [detail?.items]);
 
-  const distinctStoreCount = useMemo(
-    () => countDistinctAssignedStores(detail?.items ?? []),
-    [detail?.items],
-  );
+  const rosterStoreCount = detail?.stores.length ?? 0;
+  const rosterStoreLabel = rosterStoreCount === 1 ? '1 Store' : `${rosterStoreCount} Stores`;
+  const canManageStores = detail?.haul.status === 'planned' && !activePrepareView;
 
   const memberIds = useMemo(
     () => new Set(detail?.source_lists.map((source) => source.grocery_list_id) ?? []),
@@ -438,13 +438,14 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               <div className={`flex h-11 shrink-0 items-stretch ${activePrepareView ? 'ml-auto' : ''} lg:w-[314px]`}>
                 <div className="flex h-11 w-full items-stretch lg:w-[163px]">
                   <span className="inline-flex min-w-0 flex-1 items-center border border-white/25 px-3 text-xs font-semibold text-white/70">
-                    {distinctStoreCount} Stores
+                    {rosterStoreLabel}
                   </span>
                   <button
                     type="button"
-                    disabled
-                    title="Adding stores from the builder is not available yet."
-                    className="inline-flex h-11 w-10 shrink-0 items-center justify-center border border-l-0 border-white/25 text-sm font-semibold text-white/35 disabled:cursor-not-allowed"
+                    disabled={!canManageStores}
+                    title={canManageStores ? 'Manage Haul stores' : 'Stores can only be edited on Draft Hauls.'}
+                    onClick={() => setStoresOpen(true)}
+                    className="inline-flex h-11 w-10 shrink-0 items-center justify-center border border-l-0 border-white/25 text-sm font-semibold text-white/80 disabled:cursor-not-allowed disabled:text-white/35"
                   >
                     +
                   </button>
@@ -734,9 +735,19 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
       </SignedInPageScroll>
       <JournalFooterNav />
 
+      <HaulStoreManagementDialog
+        open={storesOpen}
+        haulId={haulId}
+        stores={detail?.stores ?? []}
+        items={detail?.items ?? []}
+        onClose={() => setStoresOpen(false)}
+        onChanged={reloadDetail}
+      />
+
       <HaulItemEditor
         haulId={haulId}
         haulCurrency={detail?.haul.currency ?? 'USD'}
+        rosterStores={detail?.stores ?? []}
         item={editingItem}
         openInProductSearch={chooseProductFirst}
         onClose={() => {

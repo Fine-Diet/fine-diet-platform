@@ -9,6 +9,7 @@ export interface HaulPurchasingDraft {
   packageSize: string;
   packageUnit: string;
   packageCount: string;
+  haulStoreId: string | null;
   retailer: string;
   storeLocation: string;
   postalCode: string;
@@ -25,6 +26,7 @@ export function haulDraftFromItem(item: GroceryHaulItem): HaulPurchasingDraft {
     packageSize: item.package_size == null ? '' : String(item.package_size),
     packageUnit: item.package_unit ?? '',
     packageCount: item.package_count == null ? '' : String(item.package_count),
+    haulStoreId: item.haul_store_id,
     retailer: item.retailer ?? '',
     storeLocation: item.store_location ?? '',
     postalCode: item.postal_code ?? '',
@@ -41,6 +43,7 @@ const CONTEXT_KEYS: Array<keyof HaulPurchasingDraft> = [
   'packageSize',
   'packageUnit',
   'packageCount',
+  'haulStoreId',
   'retailer',
   'storeLocation',
   'postalCode',
@@ -51,6 +54,7 @@ function normalizedDraftValue(
   draft: HaulPurchasingDraft,
 ): string | null {
   if (key === 'selectedFoodObjectId') return draft.selectedFoodObjectId;
+  if (key === 'haulStoreId') return draft.haulStoreId;
   const raw = String(draft[key] ?? '').trim();
   return raw || null;
 }
@@ -74,6 +78,8 @@ function normalizedItemValue(
       return item.package_unit?.trim() || null;
     case 'packageCount':
       return item.package_count == null ? null : String(item.package_count);
+    case 'haulStoreId':
+      return item.haul_store_id;
     case 'retailer':
       return item.retailer?.trim() || null;
     case 'storeLocation':

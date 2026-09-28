@@ -98,6 +98,7 @@ function installFake(status = 'planned') {
     grocery_list_price_observations: [
       { id: 'price-1', grocery_item_id: 'list-item-1', line_total: 9 },
     ],
+    grocery_haul_stores: [],
   };
   const fake = createFakeSupabase(initial);
   mockFrom.mockImplementation((table: string) => fake.from(table));
@@ -162,12 +163,13 @@ describe('Packet 6 Haul preparation service', () => {
       final_quantity: 2,
       product_title: 'Rolled oats',
     });
+    expect(detail.stores).toEqual([]);
     expect(detail.estimate).toMatchObject({
       estimated_total: 6,
       execution_item_count: 1,
       priced_item_count: 1,
     });
-    expect(mockFrom).toHaveBeenCalledTimes(4);
+    expect(mockFrom).toHaveBeenCalledTimes(5);
   });
 
   it('changes final quantity independently and never mutates List truth', async () => {

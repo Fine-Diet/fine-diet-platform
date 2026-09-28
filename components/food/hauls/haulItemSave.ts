@@ -52,6 +52,8 @@ export function buildHaulItemPreparationPatch(
   }
 
   const patch: Record<string, unknown> = {};
+  const skipManualStoreFields =
+    draft.haulStoreId !== item.haul_store_id && draft.haulStoreId != null;
   const assignText = (
     key:
       | 'product_title'
@@ -72,12 +74,18 @@ export function buildHaulItemPreparationPatch(
   assignText('brand_name', draft.brandName, item.brand_name);
   assignText('purchase_unit', draft.purchaseUnit, item.purchase_unit);
   assignText('package_unit', draft.packageUnit, item.package_unit);
-  assignText('retailer', draft.retailer, item.retailer);
-  assignText('store_location', draft.storeLocation, item.store_location);
-  assignText('postal_code', draft.postalCode, item.postal_code);
+  if (!skipManualStoreFields) {
+    assignText('retailer', draft.retailer, item.retailer);
+    assignText('store_location', draft.storeLocation, item.store_location);
+    assignText('postal_code', draft.postalCode, item.postal_code);
+  }
 
   if (draft.selectedFoodObjectId !== item.selected_food_object_id) {
     patch.selected_food_object_id = draft.selectedFoodObjectId;
+  }
+
+  if (draft.haulStoreId !== item.haul_store_id) {
+    patch.haul_store_id = draft.haulStoreId;
   }
 
   const nextPackageSize = optionalNumber(draft.packageSize);
