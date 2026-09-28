@@ -44,6 +44,7 @@ type SerpApiLocalResult = {
 
 type SerpApiMapsResponse = {
   local_results?: SerpApiLocalResult[];
+  place_results?: SerpApiLocalResult;
   error?: string;
 };
 
@@ -139,16 +140,15 @@ export async function searchHaulStorePlaces(args: {
     return { results: [], provider_disabled: true, provider_error: null };
   }
 
+  // Free-form context refines the query; Maps `location` requires a map
+  // scope (z/m), which the optional city/ZIP/address field does not specify.
+  const location = args.locationContext?.trim();
   const params = new URLSearchParams({
     engine: HAUL_STORE_SERPAPI_ENGINE,
     api_key: apiKey,
-    q: query,
+    q: location ? `${query} ${location}` : query,
     type: 'search',
   });
-  const location = args.locationContext?.trim();
-  if (location) {
-    params.set('location', location);
-  }
 
   const url = `https://serpapi.com/search.json?${params.toString()}`;
   assertSafeOutboundUrl(url, 'serpapi_haul_store_search_url');
@@ -167,7 +167,12 @@ export async function searchHaulStorePlaces(args: {
     if (payload.error) {
       return { results: [], provider_disabled: false, provider_error: payload.error };
     }
-    const results = (payload.local_results ?? [])
+    // Specific ZIP/address searches can resolve directly to one place rather
+    // than a local-results list. Both shapes use the same stable place ID.
+    const candidates = payload.local_results?.length
+      ? payload.local_results
+      : payload.place_results ? [payload.place_results] : [];
+    const results = candidates
       .map(normalizeLocalResult)
       .filter((row): row is HaulStoreSearchCandidate => row != null);
     return { results, provider_disabled: false, provider_error: null };

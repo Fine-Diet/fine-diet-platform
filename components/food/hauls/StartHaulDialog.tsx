@@ -106,7 +106,7 @@ export function StartHaulDialog({
       </h2>
 
       <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-3">
-        <label className="block w-full shrink-0 lg:w-[98px]">
+        <label className="block w-full shrink-0 lg:w-auto lg:min-w-[9rem]">
           <span className="text-xs text-white/50">Shopping date</span>
           <input
             type="date"

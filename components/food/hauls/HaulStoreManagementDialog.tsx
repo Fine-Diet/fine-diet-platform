@@ -10,7 +10,7 @@ import type { GroceryHaulItem, GroceryHaulStore, GroceryHaulStoreSearchCandidate
 import { haulStoreDisplayLabel, haulStoreLocationLine } from '@/lib/plans/groceryHaul/haulStoreIdentity';
 
 const INPUT_CLASS =
-  'mt-1.5 w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/60';
+  'mt-1.5 min-w-0 w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/60';
 
 interface HaulStoreManagementDialogProps {
   open: boolean;
@@ -70,12 +70,16 @@ export function HaulStoreManagementDialog({
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     const query = searchQuery.trim();
+    setSearchResults([]);
+    setProviderDisabled(false);
+    setSearchError(null);
     if (query.length < 2) {
-      setSearchResults([]);
-      setSearchError(null);
+      setSearchBusy(false);
       return;
     }
+    setSearchBusy(true);
     const handle = window.setTimeout(async () => {
       setSearchBusy(true);
       setSearchError(null);
@@ -84,19 +88,24 @@ export function HaulStoreManagementDialog({
           query,
           location_context: locationContext.trim() || undefined,
         });
+        if (cancelled) return;
         setSearchResults(result.results);
         setProviderDisabled(result.provider_disabled);
         if (result.provider_error) {
           setSearchError(result.provider_error);
         }
       } catch (err) {
+        if (cancelled) return;
         setSearchResults([]);
         setSearchError(err instanceof Error ? err.message : 'Store search failed.');
       } finally {
-        setSearchBusy(false);
+        if (!cancelled) setSearchBusy(false);
       }
     }, 400);
-    return () => window.clearTimeout(handle);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
   }, [open, haulId, searchQuery, locationContext]);
 
   const removeAffectedCount = useMemo(
@@ -198,7 +207,7 @@ export function HaulStoreManagementDialog({
                 const assigned = assignmentCount(items, store.id);
                 return (
                   <li key={store.id} className="flex items-start justify-between gap-4 py-4 first:pt-0">
-                    <div className="min-w-0">
+                    <div className="min-w-0 break-words">
                       <p className="text-sm font-medium text-white">{haulStoreDisplayLabel(store)}</p>
                       <p className="mt-1 text-xs text-white/45">{haulStoreLocationLine(store)}</p>
                       {assigned > 0 && (
@@ -211,7 +220,7 @@ export function HaulStoreManagementDialog({
                       type="button"
                       disabled={busy}
                       onClick={() => setPendingRemove(store)}
-                      className="shrink-0 text-xs font-semibold text-white/55 hover:text-white/80 disabled:opacity-40"
+                      className="min-h-11 shrink-0 px-2 text-xs font-semibold text-white/55 hover:text-white/80 disabled:opacity-40"
                     >
                       Remove
                     </button>
@@ -274,7 +283,7 @@ export function HaulStoreManagementDialog({
               value={locationContext}
               onChange={(event) => setLocationContext(event.target.value)}
               className={INPUT_CLASS}
-              placeholder="City, state, or postal code"
+              placeholder="City, state, ZIP, or address"
             />
           </label>
           {searchBusy && <p className="mt-3 text-sm text-white/45">Searching…</p>}
@@ -286,7 +295,7 @@ export function HaulStoreManagementDialog({
             <ul className="mt-4 divide-y divide-white/10 border-y border-white/10">
               {searchResults.map((candidate) => (
                 <li key={candidate.provider_place_id} className="flex items-start justify-between gap-4 py-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 break-words">
                     <p className="text-sm text-white">{candidate.retailer}</p>
                     <p className="mt-1 text-xs text-white/45">
                       {candidate.store_location ?? haulStoreLocationLine(candidate)}
@@ -296,7 +305,7 @@ export function HaulStoreManagementDialog({
                     type="button"
                     disabled={busy}
                     onClick={() => void addFromSearch(candidate)}
-                    className="shrink-0 text-xs font-semibold text-brand-50 hover:text-brand-50/80 disabled:opacity-40"
+                    className="min-h-11 min-w-11 shrink-0 text-xs font-semibold text-brand-50 hover:text-brand-50/80 disabled:opacity-40"
                   >
                     Add
                   </button>

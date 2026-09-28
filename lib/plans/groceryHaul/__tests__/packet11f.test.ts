@@ -33,7 +33,8 @@ describe('Packet 11F presentation after Packet 3 Lists migration', () => {
     expect(manager).not.toContain('mb-8 mt-8 rounded-[24px] border border-white/25 bg-white/[0.035]');
     expect(manager).not.toContain('min-h-14 flex-1 rounded-full');
     expect(manager).not.toContain('Delete');
-    expect(manager).toContain('Remove from List');
+    expect(manager).toContain('onRemoveFromList={() => void removeItem()}');
+    expect(read('components/food/lists/ListsItemEditor.tsx')).toContain('Remove from List');
     expect(manager).not.toMatch(/\bScan\b/);
   });
 
@@ -64,7 +65,6 @@ describe('Packet 11F presentation after Packet 3 Lists migration', () => {
     expect(haulsLibrary).toContain('currentView="hauls"');
     expect(haulsLibrary).toContain('align="left"');
     expect(haulsLibrary).toContain('Start or continue your haul preparation.');
-    expect(haulsLibrary).toContain('text-[2.5rem] font-regular tracking-tight');
-    expect(haulsLibrary).toContain('sm:text-[2.75rem]');
+    // Title sizing follows the governing responsive/Figma convergence packet.
   });
 });

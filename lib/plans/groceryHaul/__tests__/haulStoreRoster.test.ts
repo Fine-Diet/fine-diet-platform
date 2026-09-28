@@ -156,6 +156,51 @@ describe('Haul store roster service', () => {
 });
 
 describe('Haul store search provider', () => {
+  it('normalizes an exact-location place result using the same searched-store identity', async () => {
+    setHaulStoreSerpApiFetchOverride(async () => ({
+      place_results: {
+        title: 'Walmart Neighborhood Market',
+        place_id: 'walmart-peoria',
+        data_id: 'maps-peoria',
+        address: '4404 S Peoria Ave, Tulsa, OK 74105',
+      },
+    }));
+    const result = await searchHaulStorePlaces({ query: 'Walmart', locationContext: '74105' });
+    expect(result.results).toEqual([expect.objectContaining({
+      provider_place_id: 'walmart-peoria', provider_data_id: 'maps-peoria',
+      retailer: 'Walmart Neighborhood Market', postal_code: '74105',
+    })]);
+  });
+
+  it.each(['Tulsa, OK', '74105', '4407 S Peoria Ave, Tulsa'])(
+    'refines the Maps query with free-form context %s without inventing a radius',
+    async (locationContext) => {
+      const fetch = jest.fn(async () => ({ local_results: [] }));
+      setHaulStoreSerpApiFetchOverride(fetch);
+      await searchHaulStorePlaces({ query: ' Walmart ', locationContext: ` ${locationContext} ` });
+      const url = new URL((fetch.mock.calls[0] as unknown as [string])[0]);
+      expect(url.searchParams.get('q')).toBe(`Walmart ${locationContext}`);
+      for (const parameter of ['location', 'z', 'm']) {
+        expect(url.searchParams.has(parameter)).toBe(false);
+      }
+    },
+  );
+
+  it.each([undefined, '', '   '])('preserves an address embedded in the query with optional context %s', async (locationContext) => {
+    const fetch = jest.fn(async () => ({ local_results: [] }));
+    setHaulStoreSerpApiFetchOverride(fetch);
+    const query = 'Walmart store at 4407 S Peoria Ave, Tulsa';
+    await searchHaulStorePlaces({ query, locationContext });
+    expect(new URL((fetch.mock.calls[0] as unknown as [string])[0]).searchParams.get('q')).toBe(query);
+  });
+
+  it('returns provider failures for the manual fallback', async () => {
+    setHaulStoreSerpApiFetchOverride(async () => { throw new Error('Store search unavailable'); });
+    await expect(searchHaulStorePlaces({ query: 'Walmart', locationContext: '74105' })).resolves.toEqual({
+      results: [], provider_disabled: false, provider_error: 'Store search unavailable',
+    });
+  });
+
   it('normalizes local results without leaking api key material', async () => {
     setHaulStoreSerpApiFetchOverride(async () => ({
       local_results: [{

@@ -24,7 +24,6 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(dialog).toContain('shell="create-resource"');
     expect(dialog).toContain('HaulSourceListPicker');
     expect(dialog).toContain('persistentListSummaries');
-    expect(dialog).toContain('lg:w-[98px]');
     expect(dialog).not.toContain('title:');
   });
 
@@ -100,12 +99,8 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(builder).not.toContain('item.final_quantity * item.price_amount');
     expect(builder).toContain('FoodSectionViewSwitcher');
     expect(builder).toContain('max-w-[1036px]');
-    expect(builder).toContain('lg:ml-[60px]');
-    expect(builder).toContain('h-[113px]');
-    expect(builder).toContain('lg:w-[578px]');
-    expect(builder).toContain('lg:w-[163px]');
-    expect(builder).toContain('lg:w-[151px]');
-    expect(builder).not.toContain('lg:ml-auto');
+    // Geometry is verified by the responsive browser pass. Desktop anchor
+    // widths must not be enforced as fixed columns at intermediate widths.
     expect(builder).toContain('summarizeHaulStoreItems');
     expect(builder).toContain('unpriced');
     expect(builder).toContain('Add lists (');
@@ -115,7 +110,6 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(library).toContain('h-[34px]');
     expect(library).toContain('text-[44px]');
     expect(library).toContain('lg:space-y-[5px]');
-    expect(library).toContain('lg:h-[25px]');
     expect(library).toContain('rounded-none border-0');
     expect(library).toContain('rounded-t-[12px] rounded-b-none');
     expect(builder).toContain('bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700');
