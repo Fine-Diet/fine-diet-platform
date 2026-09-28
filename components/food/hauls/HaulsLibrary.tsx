@@ -35,20 +35,20 @@ function HaulCollectionTable({ hauls }: { hauls: GroceryHaulCollectionItem[] }) 
   return (
     <section aria-labelledby="recent-hauls-heading">
       <h2 id="recent-hauls-heading" className="sr-only">Recent Hauls</h2>
-      <div className="hidden h-9 grid-cols-[16%_46%_22%_1fr] items-center gap-4 text-[10px] font-semibold text-white lg:grid">
+      <div className="mt-1 hidden h-9 grid-cols-[16%_46%_22%_1fr] items-center gap-4 text-[10px] font-semibold text-white lg:grid">
         <span>Date</span>
         <span>Store</span>
         <span>Spend</span>
         <span>Status</span>
       </div>
-      <ul className="mt-1 lg:space-y-[30px]">
+      <ul className="mt-1 max-lg:divide-y max-lg:divide-white/10 lg:space-y-[5px]">
         {hauls.map((haul) => {
           const spend = formatHaulCollectionSpend(haul);
           return (
             <li key={haul.id}>
               <Link
                 href={haulHrefForStatus(haul.id, haul.status)}
-                className="grid gap-2 py-1 transition-colors hover:bg-white/[0.035] max-lg:px-1 max-lg:py-4 lg:min-h-[25px] lg:grid-cols-[16%_46%_22%_1fr] lg:items-center lg:gap-4"
+                className="grid gap-2 transition-colors hover:bg-white/[0.035] max-lg:px-1 max-lg:py-4 lg:h-[25px] lg:grid-cols-[16%_46%_22%_1fr] lg:items-center lg:gap-4 lg:py-0"
               >
                 <div>
                   <p className="text-sm text-white/50">{formatHaulDate(haul.shopping_date)}</p>
@@ -132,18 +132,20 @@ export default function HaulsLibrary() {
     <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
       <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
         <div className="mx-auto w-full max-w-[950px]">
-          <header>
-            <FoodSectionViewSwitcher
-              currentView="hauls"
-              align="left"
-              anchorBackgroundClass="bg-[#17130f]"
-            />
-            <h1 className="mt-[38px] max-w-[900px] text-[44px] font-regular leading-[53px] tracking-tight text-brand-50">
+          <header className="flex flex-col">
+            <div className="h-[34px] shrink-0">
+              <FoodSectionViewSwitcher
+                currentView="hauls"
+                align="left"
+                anchorBackgroundClass="bg-[#17130f]"
+              />
+            </div>
+            <h1 className="mt-1 max-w-[900px] text-[44px] font-regular leading-[53px] tracking-tight text-brand-50">
               Start or continue your haul preparation.
             </h1>
           </header>
 
-          <div className="mt-[39px] flex h-11 w-full flex-col border-b border-white/25 sm:flex-row sm:items-stretch">
+          <div className="mt-6 flex h-11 w-full flex-col border-b border-white/25 sm:flex-row sm:items-stretch">
             <button
               type="button"
               onClick={() => setStartOpen(true)}

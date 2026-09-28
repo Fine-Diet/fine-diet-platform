@@ -41,6 +41,7 @@ import {
   haulStatusLabel,
   itemStoreLabel,
   sourceDemandLabel,
+  summarizeHaulStoreItems,
 } from './presentation';
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -390,14 +391,9 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
           <HistoricalHaul detail={detail} />
         ) : (
           <div className="mx-auto w-full max-w-[1036px]">
-            <div className="mx-auto w-full max-w-[950px]">
-            <FoodSectionViewSwitcher
-              currentView="hauls"
-              align="left"
-              anchorBackgroundClass="bg-[#17130f]"
-            />
+            <div className="w-full max-w-[950px] lg:ml-[60px]">
             {activePrepareView && (
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
                 <p>Pending items can be edited here. Return in-basket or skipped items to pending in Shopping View first.</p>
                 <Link
                   href={APP_ROUTE_BUILDERS.foodHaulShop(haulId)}
@@ -407,15 +403,22 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                 </Link>
               </div>
             )}
-            <header className="mt-1">
+            <header className="flex h-[113px] flex-col">
               <p className="sr-only">Haul Builder</p>
-              <h1 className="mt-11 max-w-[890px] text-[44px] font-regular leading-[44px] tracking-tight text-brand-50">
+              <div className="h-11 shrink-0">
+                <FoodSectionViewSwitcher
+                  currentView="hauls"
+                  align="left"
+                  anchorBackgroundClass="bg-[#17130f]"
+                />
+              </div>
+              <h1 className="max-w-[890px] text-[44px] font-regular leading-[44px] tracking-tight text-brand-50">
                 Prepare your next shopping trip
               </h1>
             </header>
 
             <section
-              className="mt-0 flex min-h-11 flex-wrap items-stretch border-b border-white/25 lg:h-11 lg:flex-nowrap"
+              className="flex h-11 w-full max-w-[950px] flex-wrap items-stretch border-b border-white/25 lg:flex-nowrap"
               aria-label="Haul builder controls"
             >
               {!activePrepareView && (
@@ -427,28 +430,30 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     setAddListsOpen(true);
                   }}
                   disabled={addableSourceLists.length === 0}
-                  className="flex min-h-11 min-w-0 flex-1 items-center justify-start px-0 text-left text-sm font-medium text-white/80 disabled:cursor-not-allowed disabled:opacity-35 lg:max-w-[578px]"
+                  className="flex h-11 shrink-0 items-center justify-start px-0 text-left text-sm font-medium text-white/80 disabled:cursor-not-allowed disabled:opacity-35 lg:w-[578px]"
                 >
                   Add lists ({detail.source_lists.length})
                 </button>
               )}
-              <div className={`ml-auto flex min-h-11 items-stretch ${activePrepareView ? 'w-full justify-end' : ''}`}>
-                <span className="inline-flex h-11 items-center border border-white/25 px-3 text-xs font-semibold text-white/70">
-                  {distinctStoreCount} Stores
-                </span>
-                <button
-                  type="button"
-                  disabled
-                  title="Adding stores from the builder is not available yet."
-                  className="inline-flex h-11 w-10 items-center justify-center border border-l-0 border-white/25 text-sm font-semibold text-white/35 disabled:cursor-not-allowed"
-                >
-                  +
-                </button>
+              <div className={`flex h-11 shrink-0 items-stretch ${activePrepareView ? 'ml-auto' : 'lg:ml-auto'} lg:w-[314px]`}>
+                <div className="flex h-11 w-full items-stretch lg:w-[163px]">
+                  <span className="inline-flex min-w-0 flex-1 items-center border border-white/25 px-3 text-xs font-semibold text-white/70">
+                    {distinctStoreCount} Stores
+                  </span>
+                  <button
+                    type="button"
+                    disabled
+                    title="Adding stores from the builder is not available yet."
+                    className="inline-flex h-11 w-10 shrink-0 items-center justify-center border border-l-0 border-white/25 text-sm font-semibold text-white/35 disabled:cursor-not-allowed"
+                  >
+                    +
+                  </button>
+                </div>
                 <button
                   type="button"
                   disabled
                   title="Invite to Haul is planned for a later phase."
-                  className="ml-2 inline-flex h-11 items-center rounded-t-[12px] rounded-b-none bg-brand-50 px-4 text-xs font-semibold text-[#16110d] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-11 shrink-0 items-center justify-center rounded-t-[12px] rounded-b-none bg-brand-50 px-4 text-xs font-semibold text-[#16110d] disabled:cursor-not-allowed disabled:opacity-50 lg:w-[151px]"
                 >
                   + Invite to haul
                 </button>
@@ -615,7 +620,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
             </section>
             </div>
 
-            <section className="mt-12 w-full rounded-t-[24px] border border-b-0 border-white/25 bg-transparent px-[65px] pb-8 pt-8 max-lg:px-6 sm:px-[78px]" aria-labelledby="shopping-summary-title">
+            <section className="mt-12 w-full max-w-[1036px] rounded-t-[24px] border border-b-0 border-white/25 bg-transparent py-8 pl-[60px] pr-[26px] max-lg:px-6" aria-labelledby="shopping-summary-title">
               <h2 id="shopping-summary-title" className="text-xl font-semibold text-brand-50">Shopping Summary</h2>
               <label className="mt-4 block text-sm text-white/70">
                 <span className="sr-only">Haul name</span>
@@ -653,7 +658,13 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               </div>
               {detail.estimate.by_store.length > 0 && (
                 <div className="mt-6 space-y-4 border-t border-white/15 pt-5">
-                  {detail.estimate.by_store.map((store) => (
+                  {detail.estimate.by_store.map((store) => {
+                    const counts = summarizeHaulStoreItems(
+                      detail.items,
+                      store.store_key,
+                      detail.estimate.currency,
+                    );
+                    return (
                     <div key={store.store_key} className="border-l border-white/25 pl-4">
                       <p className="text-sm text-white/70">
                         {[store.retailer, store.store_location].filter(Boolean).join(' · ') || 'Store not set'}
@@ -661,10 +672,11 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                         {formatHaulCurrency(store.estimated_subtotal, detail.estimate.currency)}
                       </p>
                       <p className="mt-1 text-xs text-white/45">
-                        {store.priced_item_count} priced
+                        {counts.itemCount} items · {counts.pricedCount} priced · {counts.unpricedCount} unpriced
                       </p>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <p className="mt-6 text-lg font-semibold text-brand-50">
