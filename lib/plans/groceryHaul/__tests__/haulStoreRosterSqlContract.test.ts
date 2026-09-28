@@ -25,7 +25,16 @@ describe('Haul store roster SQL contract', () => {
       'REVOKE ALL PRIVILEGES ON public.grocery_haul_stores FROM anon, authenticated',
     );
     expect(sql).toContain(
+      'GRANT SELECT ON public.grocery_haul_stores TO anon, authenticated',
+    );
+    expect(sql).toContain(
       'GRANT SELECT, INSERT, UPDATE, DELETE ON public.grocery_haul_stores TO service_role',
+    );
+    expect(sql).not.toContain(
+      'GRANT INSERT, UPDATE, DELETE ON public.grocery_haul_stores TO anon',
+    );
+    expect(sql).not.toContain(
+      'GRANT INSERT, UPDATE, DELETE ON public.grocery_haul_stores TO authenticated',
     );
     expect(sql).toContain(
       `REVOKE EXECUTE ON FUNCTION public.${GROCERY_HAUL_REMOVE_STORE_RPC_NAME}(UUID, UUID, UUID) FROM PUBLIC`,
@@ -38,5 +47,8 @@ describe('Haul store roster SQL contract', () => {
   it('guards roster mutation to planned hauls only', () => {
     expect(sql).toContain("RAISE EXCEPTION 'HAUL_STORE_ROSTER_NOT_DRAFT'");
     expect(sql).toContain('guard_grocery_haul_store_roster');
+    expect(sql).toContain('CREATE OR REPLACE FUNCTION public.guard_grocery_haul_store_roster()');
+    expect(sql).toContain('SECURITY INVOKER');
+    expect(sql).toContain('SET search_path = public, pg_temp');
   });
 });

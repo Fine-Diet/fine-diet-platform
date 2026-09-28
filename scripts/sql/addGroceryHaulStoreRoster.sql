@@ -77,6 +77,8 @@ $$;
 CREATE OR REPLACE FUNCTION public.guard_grocery_haul_store_roster()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   haul_status TEXT;
@@ -188,6 +190,7 @@ END;
 $$;
 
 REVOKE ALL PRIVILEGES ON public.grocery_haul_stores FROM anon, authenticated;
+GRANT SELECT ON public.grocery_haul_stores TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.grocery_haul_stores TO service_role;
 
 REVOKE EXECUTE ON FUNCTION public.remove_grocery_haul_store(UUID, UUID, UUID) FROM PUBLIC;
