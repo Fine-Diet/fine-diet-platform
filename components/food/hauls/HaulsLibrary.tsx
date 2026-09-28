@@ -33,40 +33,33 @@ function storeLabel(haul: GroceryHaulCollectionItem): string {
 
 function HaulCollectionTable({ hauls }: { hauls: GroceryHaulCollectionItem[] }) {
   return (
-    <section className="mt-6" aria-labelledby="recent-hauls-heading">
+    <section aria-labelledby="recent-hauls-heading">
       <h2 id="recent-hauls-heading" className="sr-only">Recent Hauls</h2>
-      <div className="hidden grid-cols-[1fr_1.4fr_0.9fr_0.8fr] gap-5 border-b border-white/10 px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40 sm:grid">
+      <div className="hidden h-9 grid-cols-[16%_46%_22%_1fr] items-center gap-4 text-[10px] font-semibold text-white lg:grid">
         <span>Date</span>
         <span>Store</span>
         <span>Spend</span>
         <span>Status</span>
       </div>
-      <ul className="divide-y divide-white/10">
+      <ul className="mt-1 lg:space-y-[30px]">
         {hauls.map((haul) => {
           const spend = formatHaulCollectionSpend(haul);
-          const title = haul.title?.trim();
           return (
             <li key={haul.id}>
               <Link
                 href={haulHrefForStatus(haul.id, haul.status)}
-                className="grid gap-3 px-2 py-5 transition-colors hover:bg-white/[0.035] sm:grid-cols-[1fr_1.4fr_0.9fr_0.8fr] sm:items-center sm:gap-5"
+                className="grid gap-2 py-1 transition-colors hover:bg-white/[0.035] max-lg:px-1 max-lg:py-4 lg:min-h-[25px] lg:grid-cols-[16%_46%_22%_1fr] lg:items-center lg:gap-4"
               >
                 <div>
-                  <p className="text-sm font-semibold text-brand-50">{formatHaulDate(haul.shopping_date)}</p>
-                  {title && title !== `Haul · ${formatHaulDate(haul.shopping_date)}` && (
-                    <p className="mt-1 truncate text-xs text-white/45">{title}</p>
-                  )}
+                  <p className="text-sm text-white/50">{formatHaulDate(haul.shopping_date)}</p>
+                  <p className="mt-1 text-xs text-white/45 lg:hidden">{storeLabel(haul)}</p>
                 </div>
-                <p className="truncate text-sm text-white/70">{storeLabel(haul)}</p>
+                <p className="hidden truncate text-sm text-white/50 lg:block">{storeLabel(haul)}</p>
                 <div>
-                  <p className="text-sm text-white/75">{spend.amount}</p>
-                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/35">
-                    {spend.qualifier}
-                  </p>
+                  <p className="text-sm text-white/50">{spend.amount}</p>
+                  <p className="mt-1 text-[10px] text-white/35 lg:hidden">{spend.qualifier}</p>
                 </div>
-                <span className="w-fit rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55">
-                  {haulStatusLabel(haul.status)}
-                </span>
+                <p className="text-sm text-white/50 max-lg:col-span-2">{haulStatusLabel(haul.status)}</p>
               </Link>
             </li>
           );
@@ -145,36 +138,36 @@ export default function HaulsLibrary() {
               align="left"
               anchorBackgroundClass="bg-[#17130f]"
             />
-            <h1 className="mt-1 max-w-3xl text-[2.5rem] font-regular tracking-tight text-brand-50 sm:text-[2.75rem]">
+            <h1 className="mt-[38px] max-w-[900px] text-[44px] font-regular leading-[53px] tracking-tight text-brand-50">
               Start or continue your haul preparation.
             </h1>
           </header>
 
-          <div className="mt-8 flex flex-col gap-3 border-b border-white/25 pb-3 sm:flex-row sm:items-center sm:gap-4">
+          <div className="mt-[39px] flex h-11 w-full flex-col border-b border-white/25 sm:flex-row sm:items-stretch">
             <button
               type="button"
               onClick={() => setStartOpen(true)}
-              className="min-h-11 rounded-t-xl border border-white/30 px-5 text-sm font-semibold text-brand-50 hover:bg-white/[0.04]"
+              className="h-11 shrink-0 rounded-t-[12px] rounded-b-none border border-b-0 border-white/30 px-4 text-sm font-semibold text-brand-50 hover:bg-white/[0.04] sm:w-[136px]"
             >
               + Create New
             </button>
             <button
               type="button"
               aria-current="page"
-              className="min-h-11 rounded-t-xl border border-brand-50/50 bg-white/[0.06] px-5 text-sm font-semibold text-brand-50"
+              className="h-11 shrink-0 rounded-t-[12px] rounded-b-none bg-brand-50 px-4 text-sm font-semibold text-[#16110d] sm:w-[130px]"
             >
               Recent
             </button>
-            <div className="relative min-w-0 flex-1 sm:ml-auto sm:max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+            <div className="relative flex min-h-11 min-w-0 flex-1 items-center">
               <input
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search Hauls"
                 aria-label="Search Hauls"
-                className="min-h-11 w-full rounded-xl border border-white/15 bg-transparent pl-10 pr-4 text-xl text-white outline-none placeholder:text-white/35 focus:border-white/45"
+                className="h-11 w-full rounded-none border-0 bg-transparent pr-10 pl-0 text-[20px] text-white outline-none placeholder:text-white/35"
               />
+              <Search className="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" aria-hidden />
             </div>
           </div>
 
@@ -189,12 +182,12 @@ export default function HaulsLibrary() {
 
           {loadState === 'loading' && (
             <div className="mt-8 space-y-3">
-              {[0, 1, 2].map((row) => <div key={row} className="h-20 animate-pulse rounded-xl bg-white/[0.04]" />)}
+              {[0, 1, 2].map((row) => <div key={row} className="h-6 animate-pulse bg-white/[0.04]" />)}
             </div>
           )}
 
           {loadState === 'ready' && filtered.length === 0 && (
-            <section className="mt-10 rounded-[24px] border border-white/10 p-7 text-center">
+            <section className="mt-10 border border-white/10 p-7 text-center max-lg:rounded-[24px]">
               <p className="text-lg font-semibold text-brand-50">
                 {hauls.length === 0 ? 'Your Hauls will live here.' : 'No Hauls match that search.'}
               </p>
