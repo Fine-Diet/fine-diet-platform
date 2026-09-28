@@ -200,6 +200,11 @@ function mapHaul(row: Record<string, unknown>): GroceryHaul {
 function mapHaulItem(row: Record<string, unknown>): GroceryHaulItem {
   return {
     ...(row as unknown as GroceryHaulItem),
+    // Rows read before the Invite migration is applied have neither column.
+    origin_type: row.origin_type === 'haul_contributor' ? 'haul_contributor' : 'source_list_snapshot',
+    added_by_person_id: typeof row.added_by_person_id === 'string' ? row.added_by_person_id : null,
+    source_grocery_list_id:
+      typeof row.source_grocery_list_id === 'string' ? row.source_grocery_list_id : null,
     quantity_snapshot: finiteNumber(row.quantity_snapshot),
     final_quantity:
       finiteNumber(row.final_quantity)
@@ -1314,8 +1319,11 @@ export async function getGroceryHaulExecution(
   if (error) throw new Error(`Failed to load grocery haul execution items: ${error.message}`);
 
   const rawRows = (rows ?? []) as Array<Record<string, unknown>>;
+  // Haul-only (contributor) rows have a NULL source List; they have no title to resolve.
   const sourceListIds = Array.from(new Set(
-    rawRows.map((row) => String(row.source_grocery_list_id)),
+    rawRows
+      .map((row) => row.source_grocery_list_id)
+      .filter((value): value is string => typeof value === 'string' && value.length > 0),
   ));
   const sourceTitles = new Map<string, string | null>();
   if (sourceListIds.length > 0) {
@@ -1352,7 +1360,9 @@ export async function getGroceryHaulExecution(
     const haulItem = haulItemsById.get(String(row.haul_item_id));
     return mapExecutionItem(
       row,
-      sourceTitles.get(String(row.source_grocery_list_id)) ?? null,
+      typeof row.source_grocery_list_id === 'string'
+        ? sourceTitles.get(row.source_grocery_list_id) ?? null
+        : null,
       haulItem ? currentPreparationFromHaulItem(haulItem) : null,
     );
   });

@@ -44,6 +44,8 @@ import {
   summarizeHaulStoreItems,
 } from './presentation';
 
+const HAUL_ONLY_ITEM_BUCKET = '__haul_only__';
+
 type LoadState = 'loading' | 'ready' | 'error';
 
 const FOOD_PAGE_BACKGROUND_CLASS =
@@ -233,9 +235,12 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   const itemsBySource = useMemo(() => {
     const grouped = new Map<string, GroceryHaulItem[]>();
     for (const item of detail?.items ?? []) {
-      const bucket = grouped.get(item.source_grocery_list_id) ?? [];
+      // Haul-only (contributor) items have no source List; keep them out of every
+      // source panel until Phase B2 presents them.
+      const key = item.source_grocery_list_id ?? HAUL_ONLY_ITEM_BUCKET;
+      const bucket = grouped.get(key) ?? [];
       bucket.push(item);
-      grouped.set(item.source_grocery_list_id, bucket);
+      grouped.set(key, bucket);
     }
     return grouped;
   }, [detail?.items]);

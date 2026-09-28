@@ -147,7 +147,7 @@ export function HaulItemEditor({
   }, [item, subpanel, productSearchQuery]);
 
   useEffect(() => {
-    if (!item || subpanel !== 'source_quotes' || !item.grocery_item_id) return;
+    if (!item || subpanel !== 'source_quotes' || !item.grocery_item_id || !item.source_grocery_list_id) return;
     let cancelled = false;
     setQuotesLoading(true);
     void planService
