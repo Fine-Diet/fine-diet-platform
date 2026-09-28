@@ -13,6 +13,11 @@
  *    is not proof of mailbox ownership (link-person does not check
  *    email_confirmed_at), so it is never sufficient.
  *  - Supabase Auth admin calls (inviteUserByEmail, getUserById) are server-only.
+ *  - Invitation delivery is transport only and never grants membership. New /
+ *    unlinked emails get a Supabase invite whose redirect is the dedicated
+ *    non-PKCE landing (haulInviteLanding.ts), NEVER /auth/callback. Existing
+ *    accounts NEVER hit inviteUserByEmail (Supabase errors for confirmed users);
+ *    they get a transactional Resend email with the same landing link.
  *
  * NEVER import this file from client/browser code.
  */
@@ -37,6 +42,8 @@ import {
   type HaulInvitationRole,
   type HaulInvitationStatus,
 } from './schema';
+import { buildHaulInviteLandingUrl } from './haulInviteLanding';
+import { sendHaulInviteEmail } from './haulInviteEmail';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,12 +80,21 @@ export interface HaulPendingInvitationForInvitee {
   invited_at: string;
 }
 
-export type HaulInviteEmailStatus =
-  | 'sent'
-  | 'skipped_account_linked'
-  | 'skipped_not_created'
-  | 'already_registered'
-  | 'failed';
+/** Whether an invitation message was handed to a mail provider. */
+export type HaulInviteEmailStatus = 'sent' | 'skipped_not_created' | 'failed';
+
+/**
+ * Which transport carried (or would have carried) the invitation link:
+ *  - supabase_auth_invite: new/unlinked email, Supabase invite -> dedicated landing (non-PKCE)
+ *  - transactional_email:  existing account (or Auth-invite fallback), Resend -> same landing
+ *  - none:                 nothing sent (duplicate/already member) or every transport failed
+ */
+export type HaulInviteDelivery = 'supabase_auth_invite' | 'transactional_email' | 'none';
+
+export interface HaulInviteDeliveryResult {
+  email: HaulInviteEmailStatus;
+  delivery: HaulInviteDelivery;
+}
 
 export interface CreateHaulInvitationResult {
   invitation_id: string;
@@ -88,6 +104,7 @@ export interface CreateHaulInvitationResult {
   invited_account_linked: boolean;
   outcome: 'created' | 'duplicate_pending' | 'already_member';
   email: HaulInviteEmailStatus;
+  delivery: HaulInviteDelivery;
 }
 
 export interface HaulContributorAttribution {
@@ -305,42 +322,98 @@ export async function listHaulInvitationsForOwner(args: {
   return rows.map((row) => mapInvitation(row, names));
 }
 
-export function buildHaulInviteRedirectPath(invitationId: string): string {
-  return `/auth/callback?next=${encodeURIComponent(`/haul-invitations/${invitationId}`)}`;
-}
-
-function inviteRedirectUrl(invitationId: string): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://myfinediet.com';
-  return `${base.replace(/\/+$/, '')}${buildHaulInviteRedirectPath(invitationId)}`;
+function siteBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://myfinediet.com';
 }
 
 /**
- * Best-effort Supabase Auth invitation for an email with no linked account.
- * The invitation row is the source of truth; a failed email never rolls it
- * back (the owner can reinvite). Auth Admin stays server-side.
+ * Supabase Auth invitation for an email with no linked Fine Diet account.
+ * `landingUrl` is the dedicated non-PKCE landing (never /auth/callback).
+ * Returns true only when Supabase accepted the invite; never throws.
  */
-async function sendAuthInvite(email: string, invitationId: string): Promise<HaulInviteEmailStatus> {
+async function sendSupabaseAuthInvite(email: string, landingUrl: string): Promise<boolean> {
   try {
     const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: inviteRedirectUrl(invitationId),
+      redirectTo: landingUrl,
     });
-    if (!error) return 'sent';
-    const message = (error.message ?? '').toLowerCase();
-    if (message.includes('already') && message.includes('regist')) return 'already_registered';
+    if (!error) return true;
     console.error('[haulCollaboration] inviteUserByEmail failed:', error.message);
-    return 'failed';
+    return false;
   } catch (err) {
     console.error('[haulCollaboration] inviteUserByEmail threw:', err);
-    return 'failed';
+    return false;
   }
+}
+
+/** Injectable transports (tests); production uses Supabase Auth + Resend. */
+export interface HaulInviteTransports {
+  sendAuthInvite?: (email: string, landingUrl: string) => Promise<boolean>;
+  sendEmail?: (args: {
+    to: string;
+    inviteUrl: string;
+    ownerName: string | null;
+  }) => Promise<'sent' | 'failed'>;
+}
+
+/**
+ * Deliver the invitation link. Transport only: the invitation row already
+ * exists and is the sole source of truth, so a delivery failure never rolls it
+ * back, and nothing here can create membership.
+ *
+ *  - Existing linked account: transactional email ONLY. inviteUserByEmail is
+ *    never called (Supabase errors when inviting an existing confirmed user).
+ *  - New / unlinked email: Supabase Auth invite -> dedicated landing. If that
+ *    fails for any reason (e.g. the address is registered but not linked),
+ *    fall back to the transactional email with the same landing link.
+ */
+async function deliverHaulInvite(args: {
+  ownerPersonId: string;
+  email: string;
+  invitationId: string;
+  accountLinked: boolean;
+  transports: HaulInviteTransports;
+}): Promise<HaulInviteDeliveryResult> {
+  const failed: HaulInviteDeliveryResult = { email: 'failed', delivery: 'none' };
+  let landingUrl: string;
+  try {
+    landingUrl = buildHaulInviteLandingUrl(siteBaseUrl(), args.invitationId);
+  } catch (err) {
+    console.error('[haulCollaboration] invalid invitation id for landing URL:', err);
+    return failed;
+  }
+
+  const sendTransactional = async (): Promise<HaulInviteDeliveryResult> => {
+    let ownerName: string | null = null;
+    try {
+      ownerName = (await loadPersonNames([args.ownerPersonId])).get(args.ownerPersonId) ?? null;
+    } catch {
+      ownerName = null;
+    }
+    const result = await (args.transports.sendEmail ?? sendHaulInviteEmail)({
+      to: args.email,
+      inviteUrl: landingUrl,
+      ownerName,
+    });
+    return result === 'sent'
+      ? { email: 'sent', delivery: 'transactional_email' }
+      : failed;
+  };
+
+  if (args.accountLinked) return sendTransactional();
+
+  const authInvited = await (args.transports.sendAuthInvite ?? sendSupabaseAuthInvite)(
+    args.email,
+    landingUrl,
+  );
+  if (authInvited) return { email: 'sent', delivery: 'supabase_auth_invite' };
+  return sendTransactional();
 }
 
 export async function createHaulInvitation(args: {
   ownerPersonId: string;
   haulId: string;
   email: unknown;
-  sendAuthInvite?: (email: string, invitationId: string) => Promise<HaulInviteEmailStatus>;
+  transports?: HaulInviteTransports;
 }): Promise<CreateHaulInvitationResult> {
   const email = normalizeInviteEmail(args.email);
   const { data, error } = await supabaseAdmin.rpc(HAUL_INVITE_CREATE_RPC_NAME, {
@@ -361,10 +434,17 @@ export async function createHaulInvitation(args: {
   }
   const accountLinked = record.invited_account_linked === true;
 
-  let emailStatus: HaulInviteEmailStatus;
-  if (outcome !== 'created') emailStatus = 'skipped_not_created';
-  else if (accountLinked) emailStatus = 'skipped_account_linked';
-  else emailStatus = await (args.sendAuthInvite ?? sendAuthInvite)(email, invitationId);
+  // Duplicate pending / already-member: rules unchanged, nothing is (re)sent.
+  const delivery: HaulInviteDeliveryResult =
+    outcome !== 'created'
+      ? { email: 'skipped_not_created', delivery: 'none' }
+      : await deliverHaulInvite({
+          ownerPersonId: args.ownerPersonId,
+          email,
+          invitationId,
+          accountLinked,
+          transports: args.transports ?? {},
+        });
 
   return {
     invitation_id: invitationId,
@@ -373,7 +453,8 @@ export async function createHaulInvitation(args: {
     invited_email: String(record.invited_email_normalized ?? email),
     invited_account_linked: accountLinked,
     outcome,
-    email: emailStatus,
+    email: delivery.email,
+    delivery: delivery.delivery,
   };
 }
 

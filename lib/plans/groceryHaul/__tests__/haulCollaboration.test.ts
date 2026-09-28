@@ -33,7 +33,6 @@ import {
 import {
   acceptHaulInvitation,
   addHaulContributorItem,
-  buildHaulInviteRedirectPath,
   createHaulInvitation,
   getSharedGroceryHaulDetail,
   listHaulInvitationsForOwner,
@@ -53,6 +52,7 @@ import {
   HAUL_INVITE_CREATE_RPC_NAME,
   HAUL_INVITE_REVOKE_RPC_NAME,
 } from '../schema';
+import { buildHaulInviteLandingPath } from '../haulInviteLanding';
 
 const OWNER = 'person-owner';
 const ALICE = 'person-alice';
@@ -197,9 +197,11 @@ describe('createHaulInvitation', () => {
     jest.restoreAllMocks();
   });
 
+  const INV_ID = '5b0a6d0e-2f0b-4d6e-9d3e-0c1f6f1d7a11';
+  const LANDING = `https://myfinediet.com${buildHaulInviteLandingPath(INV_ID)}`;
   const created = (linked: boolean, outcome = 'created') => ({
     data: {
-      invitation_id: 'inv-9',
+      invitation_id: INV_ID,
       haul_id: HAUL,
       status: 'pending',
       invited_email_normalized: 'new@example.com',
@@ -221,55 +223,176 @@ describe('createHaulInvitation', () => {
     });
   });
 
-  it('sends a Supabase Auth invitation only for a newly created invite with no linked account', async () => {
-    install();
-    mockRpc.mockResolvedValue(created(false));
-    mockInviteUserByEmail.mockResolvedValue({ data: {}, error: null });
-    const result = await createHaulInvitation({ ownerPersonId: OWNER, haulId: HAUL, email: 'new@example.com' });
-    expect(result.email).toBe('sent');
-    expect(mockInviteUserByEmail).toHaveBeenCalledTimes(1);
-    const [email, options] = mockInviteUserByEmail.mock.calls[0];
-    expect(email).toBe('new@example.com');
-    expect((options as { redirectTo: string }).redirectTo).toContain(
-      buildHaulInviteRedirectPath('inv-9'),
-    );
-  });
+  describe('invitation delivery transport', () => {
+    const sendEmail = jest.fn();
 
-  it('does not email an existing linked account or a duplicate / existing member', async () => {
-    install();
-    mockRpc.mockResolvedValue(created(true));
-    expect((await createHaulInvitation({ ownerPersonId: OWNER, haulId: HAUL, email: 'a@b.co' })).email).toBe(
-      'skipped_account_linked',
-    );
-    mockRpc.mockResolvedValue(created(false, 'duplicate_pending'));
-    expect((await createHaulInvitation({ ownerPersonId: OWNER, haulId: HAUL, email: 'a@b.co' })).email).toBe(
-      'skipped_not_created',
-    );
-    mockRpc.mockResolvedValue(created(true, 'already_member'));
-    expect((await createHaulInvitation({ ownerPersonId: OWNER, haulId: HAUL, email: 'a@b.co' })).email).toBe(
-      'skipped_not_created',
-    );
-    expect(mockInviteUserByEmail).not.toHaveBeenCalled();
-  });
-
-  it('keeps the invitation when the Auth email fails or the address is already registered', async () => {
-    install();
-    mockRpc.mockResolvedValue(created(false));
-    mockInviteUserByEmail.mockResolvedValueOnce({ data: null, error: { message: 'smtp exploded' } });
-    const failed = await createHaulInvitation({ ownerPersonId: OWNER, haulId: HAUL, email: 'new@example.com' });
-    expect(failed.email).toBe('failed');
-    expect(failed.invitation_id).toBe('inv-9');
-
-    mockInviteUserByEmail.mockResolvedValueOnce({
-      data: null,
-      error: { message: 'A user with this email address has already been registered' },
+    beforeEach(() => {
+      sendEmail.mockReset();
+      sendEmail.mockResolvedValue('sent');
     });
-    const registered = await createHaulInvitation({ ownerPersonId: OWNER, haulId: HAUL, email: 'new@example.com' });
-    expect(registered.email).toBe('already_registered');
 
-    mockInviteUserByEmail.mockRejectedValueOnce(new Error('network down'));
-    const threw = await createHaulInvitation({ ownerPersonId: OWNER, haulId: HAUL, email: 'new@example.com' });
-    expect(threw.email).toBe('failed');
+    it('new/unlinked email: Supabase Auth invite redirects to the dedicated landing, NOT /auth/callback', async () => {
+      install();
+      mockRpc.mockResolvedValue(created(false));
+      mockInviteUserByEmail.mockResolvedValue({ data: {}, error: null });
+      const result = await createHaulInvitation({
+        ownerPersonId: OWNER,
+        haulId: HAUL,
+        email: 'new@example.com',
+        transports: { sendEmail },
+      });
+      expect(result.email).toBe('sent');
+      expect(result.delivery).toBe('supabase_auth_invite');
+      expect(mockInviteUserByEmail).toHaveBeenCalledTimes(1);
+      const [email, options] = mockInviteUserByEmail.mock.calls[0];
+      expect(email).toBe('new@example.com');
+      const redirectTo = (options as { redirectTo: string }).redirectTo;
+      expect(redirectTo).toBe(LANDING);
+      expect(redirectTo).not.toContain('/auth/callback');
+      expect(redirectTo).not.toContain('next=');
+      // The transactional path is not used when the Auth invite succeeds.
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('existing linked account: NEVER calls inviteUserByEmail; sends the transactional email with the landing link', async () => {
+      install();
+      mockRpc.mockResolvedValue(created(true));
+      const result = await createHaulInvitation({
+        ownerPersonId: OWNER,
+        haulId: HAUL,
+        email: 'alice@example.com',
+        transports: { sendEmail },
+      });
+      expect(mockInviteUserByEmail).not.toHaveBeenCalled();
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+      expect(sendEmail).toHaveBeenCalledWith({
+        to: 'alice@example.com',
+        inviteUrl: LANDING,
+        ownerName: 'Olive Owner',
+      });
+      expect(result).toMatchObject({
+        invitation_id: INV_ID,
+        outcome: 'created',
+        invited_account_linked: true,
+        email: 'sent',
+        delivery: 'transactional_email',
+      });
+    });
+
+    it('existing account: the default transport is Resend and the link is the landing, not /auth/callback', async () => {
+      install();
+      mockRpc.mockResolvedValue(created(true));
+      const originalFetch = global.fetch;
+      const originalKey = process.env.RESEND_API_KEY;
+      process.env.RESEND_API_KEY = 're_test_key';
+      const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+      global.fetch = fetchMock as unknown as typeof fetch;
+      try {
+        const result = await createHaulInvitation({
+          ownerPersonId: OWNER,
+          haulId: HAUL,
+          email: 'alice@example.com',
+        });
+        expect(result.delivery).toBe('transactional_email');
+        expect(mockInviteUserByEmail).not.toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe('https://api.resend.com/emails');
+        const payload = JSON.parse((init as { body: string }).body);
+        expect(payload.to).toBe('alice@example.com');
+        expect(payload.html).toContain(LANDING);
+        expect(payload.text).toContain(LANDING);
+        expect(payload.html).not.toContain('/auth/callback');
+      } finally {
+        global.fetch = originalFetch;
+        if (originalKey === undefined) delete process.env.RESEND_API_KEY;
+        else process.env.RESEND_API_KEY = originalKey;
+      }
+    });
+
+    it('sends nothing for a duplicate pending invite or an existing member (rules unchanged)', async () => {
+      install();
+      for (const [linked, outcome] of [
+        [true, 'duplicate_pending'],
+        [false, 'duplicate_pending'],
+        [true, 'already_member'],
+      ] as const) {
+        mockRpc.mockResolvedValue(created(linked, outcome));
+        const result = await createHaulInvitation({
+          ownerPersonId: OWNER,
+          haulId: HAUL,
+          email: 'a@b.co',
+          transports: { sendEmail },
+        });
+        expect(result.email).toBe('skipped_not_created');
+        expect(result.delivery).toBe('none');
+      }
+      expect(mockInviteUserByEmail).not.toHaveBeenCalled();
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the transactional email when the Auth invite fails or the address is registered but unlinked', async () => {
+      install();
+      mockRpc.mockResolvedValue(created(false));
+      for (const failure of [
+        () => mockInviteUserByEmail.mockResolvedValueOnce({ data: null, error: { message: 'smtp exploded' } }),
+        () =>
+          mockInviteUserByEmail.mockResolvedValueOnce({
+            data: null,
+            error: { message: 'A user with this email address has already been registered' },
+          }),
+        () => mockInviteUserByEmail.mockRejectedValueOnce(new Error('network down')),
+      ]) {
+        sendEmail.mockClear();
+        failure();
+        const result = await createHaulInvitation({
+          ownerPersonId: OWNER,
+          haulId: HAUL,
+          email: 'new@example.com',
+          transports: { sendEmail },
+        });
+        expect(result.email).toBe('sent');
+        expect(result.delivery).toBe('transactional_email');
+        expect(sendEmail).toHaveBeenCalledWith(
+          expect.objectContaining({ to: 'new@example.com', inviteUrl: LANDING }),
+        );
+      }
+    });
+
+    it('keeps the invitation row (no rollback) when every transport fails', async () => {
+      install();
+      mockRpc.mockResolvedValue(created(false));
+      mockInviteUserByEmail.mockResolvedValue({ data: null, error: { message: 'down' } });
+      sendEmail.mockResolvedValue('failed');
+      const result = await createHaulInvitation({
+        ownerPersonId: OWNER,
+        haulId: HAUL,
+        email: 'new@example.com',
+        transports: { sendEmail },
+      });
+      expect(result).toMatchObject({
+        invitation_id: INV_ID,
+        outcome: 'created',
+        status: 'pending',
+        email: 'failed',
+        delivery: 'none',
+      });
+      // Only the create RPC ran; delivery failure issued no revoke/delete.
+      expect(mockRpc).toHaveBeenCalledTimes(1);
+    });
+
+    it('delivery is transport only: no membership-granting RPC or write is ever issued by it', async () => {
+      install();
+      mockRpc.mockResolvedValue(created(true));
+      await createHaulInvitation({
+        ownerPersonId: OWNER,
+        haulId: HAUL,
+        email: 'alice@example.com',
+        transports: { sendEmail },
+      });
+      expect(mockRpc.mock.calls.map((c) => c[0])).toEqual([HAUL_INVITE_CREATE_RPC_NAME]);
+      expect(mockRpc.mock.calls.map((c) => c[0])).not.toContain(HAUL_INVITE_ACCEPT_RPC_NAME);
+    });
   });
 
   it('rejects an invalid email before touching the database', async () => {
