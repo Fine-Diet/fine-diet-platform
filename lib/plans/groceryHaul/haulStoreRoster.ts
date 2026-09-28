@@ -168,6 +168,7 @@ export async function addGroceryHaulStore(args: {
     ? buildManualHaulStoreIdentityKey({
         retailer: input.retailer,
         storeLocation: input.store_location,
+        addressLine1: input.address_line1,
         postalCode: input.postal_code,
       })
     : null;
@@ -270,10 +271,16 @@ export async function removeGroceryHaulStore(args: {
 }
 
 export async function searchGroceryHaulStores(args: {
+  personId: string;
+  haulId: string;
   query: string;
   locationContext?: string | null;
 }): Promise<HaulStoreSearchResult> {
-  return searchHaulStorePlaces(args);
+  await loadOwnedDraftHaul(args.personId, args.haulId);
+  return searchHaulStorePlaces({
+    query: args.query,
+    locationContext: args.locationContext,
+  });
 }
 
 export async function loadGroceryHaulStoresForDetail(args: {

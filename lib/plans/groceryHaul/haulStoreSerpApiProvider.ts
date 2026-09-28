@@ -114,7 +114,7 @@ function normalizeLocalResult(result: SerpApiLocalResult): HaulStoreSearchCandid
     city: addressParts.city,
     region: addressParts.region,
     postal_code: addressParts.postal_code,
-    country_code: 'US',
+    country_code: null,
     latitude: result.gps_coordinates?.latitude ?? null,
     longitude: result.gps_coordinates?.longitude ?? null,
   };

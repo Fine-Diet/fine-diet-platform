@@ -110,8 +110,8 @@ CREATE OR REPLACE FUNCTION public.remove_grocery_haul_store(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
+SECURITY INVOKER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   haul_status TEXT;
@@ -186,3 +186,11 @@ BEGIN
   );
 END;
 $$;
+
+REVOKE ALL PRIVILEGES ON public.grocery_haul_stores FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.grocery_haul_stores TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.remove_grocery_haul_store(UUID, UUID, UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.remove_grocery_haul_store(UUID, UUID, UUID) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.remove_grocery_haul_store(UUID, UUID, UUID) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.remove_grocery_haul_store(UUID, UUID, UUID) TO service_role;

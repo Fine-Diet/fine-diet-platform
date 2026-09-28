@@ -23,6 +23,7 @@ import {
 import {
   addGroceryHaulStore,
   removeGroceryHaulStore,
+  searchGroceryHaulStores,
 } from '../haulStoreRoster';
 import { GROCERY_HAUL_REMOVE_STORE_RPC_NAME } from '../schema';
 import {
@@ -76,6 +77,32 @@ describe('Haul store roster service', () => {
     expect(second.store.id).toBe(first.store.id);
   });
 
+  it('keeps same-retailer same-ZIP branches distinct when address_line1 differs', async () => {
+    installDraftHaul();
+    const first = await addGroceryHaulStore({
+      personId: PERSON,
+      haulId: HAUL,
+      input: {
+        source: 'manual',
+        retailer: 'Target',
+        address_line1: '100 Main St',
+        postal_code: '78701',
+      },
+    });
+    const second = await addGroceryHaulStore({
+      personId: PERSON,
+      haulId: HAUL,
+      input: {
+        source: 'manual',
+        retailer: 'Target',
+        address_line1: '200 Oak Ave',
+        postal_code: '78701',
+      },
+    });
+    expect(second.outcome).toBe('created');
+    expect(second.store.id).not.toBe(first.store.id);
+  });
+
   it('rejects roster mutation on non-draft hauls', async () => {
     const fake = installDraftHaul();
     fake.getTable('grocery_hauls')[0].status = 'active';
@@ -113,6 +140,19 @@ describe('Haul store roster service', () => {
       p_store_id: 'store-1',
     });
   });
+
+  it('does not invoke provider search for non-draft hauls', async () => {
+    const fake = installDraftHaul();
+    fake.getTable('grocery_hauls')[0].status = 'active';
+    const fetch = jest.fn();
+    setHaulStoreSerpApiFetchOverride(fetch);
+    await expect(searchGroceryHaulStores({
+      personId: PERSON,
+      haulId: HAUL,
+      query: 'Target',
+    })).rejects.toBeInstanceOf(GroceryHaulConflictError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('Haul store search provider', () => {
@@ -128,6 +168,7 @@ describe('Haul store search provider', () => {
     const result = await searchHaulStorePlaces({ query: 'Sprouts', locationContext: 'Austin, TX' });
     expect(result.results[0]?.provider_place_id).toBe('place-1');
     expect(result.results[0]?.retailer).toBe('Sprouts Farmers Market');
+    expect(result.results[0]?.country_code).toBeNull();
     expect(JSON.stringify(result)).not.toContain('api_key');
   });
 
@@ -147,5 +188,13 @@ describe('manual identity helper', () => {
       storeLocation: 'North   Side',
       postalCode: '78701',
     })).toBe('target|north side|78701');
+  });
+
+  it('uses address_line1 when branch label is blank', () => {
+    expect(buildManualHaulStoreIdentityKey({
+      retailer: 'Target',
+      addressLine1: '100 Main St',
+      postalCode: '78701',
+    })).toBe('target|100 main st|78701');
   });
 });

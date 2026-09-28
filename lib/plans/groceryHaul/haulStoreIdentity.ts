@@ -5,12 +5,15 @@ export function normalizeHaulStoreText(value: string | null | undefined): string
 export function buildManualHaulStoreIdentityKey(args: {
   retailer: string;
   storeLocation?: string | null;
+  addressLine1?: string | null;
   postalCode?: string | null;
 }): string {
   const retailer = normalizeHaulStoreText(args.retailer);
-  const location = normalizeHaulStoreText(args.storeLocation ?? '');
+  const locationLabel = normalizeHaulStoreText(args.storeLocation ?? '');
+  const addressLine = normalizeHaulStoreText(args.addressLine1 ?? '');
+  const locationIdentity = locationLabel || addressLine;
   const postal = normalizeHaulStoreText(args.postalCode ?? '');
-  return [retailer, location, postal].filter(Boolean).join('|');
+  return [retailer, locationIdentity, postal].filter(Boolean).join('|');
 }
 
 export function haulStoreDisplayLabel(store: {
