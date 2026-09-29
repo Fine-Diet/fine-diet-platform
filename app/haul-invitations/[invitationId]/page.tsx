@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabaseBrowser';
-import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   runHaulInviteLanding,
   type HaulInviteLandingOutcome,
@@ -125,14 +125,18 @@ function renderOutcome(outcome: HaulInviteLandingOutcome | null, push: (href: st
           <p className="text-white/70 mb-6">
             {outcome.alreadyAccepted
               ? 'You already accepted this invitation.'
-              : 'You can now add items to this grocery Haul.'}
+              : 'You can add Haul-only items and help prepare this shopping trip.'}
           </p>
           <button
             type="button"
             className="w-full rounded-xl bg-white text-neutral-900 py-3 font-medium"
-            onClick={() => push(APP_ROUTES.home)}
+            onClick={() => push(
+              outcome.haulId
+                ? APP_ROUTE_BUILDERS.foodHaul(outcome.haulId)
+                : APP_ROUTES.home,
+            )}
           >
-            Open Fine Diet
+            {outcome.haulId ? 'Open this Haul' : 'Open Fine Diet'}
           </button>
         </>
       );

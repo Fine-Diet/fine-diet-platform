@@ -93,7 +93,10 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(builder).toContain('HaulStoreManagementDialog');
     expect(builder).toContain('canManageStores');
     expect(builder).not.toContain('Adding stores from the builder is not available yet');
-    expect(builder).toContain('Invite to Haul is planned for a later phase');
+    expect(builder).toContain('+ Invite to haul');
+    expect(builder).toContain('HaulInviteDialog');
+    expect(builder).toContain('canInvite');
+    expect(builder).not.toContain('Invite to Haul is planned for a later phase');
     expect(builder).toContain('Haul Estimate ·');
     expect(builder).toContain('computeGroceryHaulPreparationEstimate(');
     expect(builder).not.toContain('item.final_quantity * item.price_amount');

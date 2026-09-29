@@ -413,6 +413,8 @@ export async function createHaulInvitation(args: {
   ownerPersonId: string;
   haulId: string;
   email: unknown;
+  /** When false, creates/reuses the invitation row but never sends email or Auth invite. */
+  deliver?: boolean;
   transports?: HaulInviteTransports;
 }): Promise<CreateHaulInvitationResult> {
   const email = normalizeInviteEmail(args.email);
@@ -434,9 +436,10 @@ export async function createHaulInvitation(args: {
   }
   const accountLinked = record.invited_account_linked === true;
 
+  const skipDelivery = args.deliver === false;
   // Duplicate pending / already-member: rules unchanged, nothing is (re)sent.
   const delivery: HaulInviteDeliveryResult =
-    outcome !== 'created'
+    outcome !== 'created' || skipDelivery
       ? { email: 'skipped_not_created', delivery: 'none' }
       : await deliverHaulInvite({
           ownerPersonId: args.ownerPersonId,
@@ -453,6 +456,84 @@ export async function createHaulInvitation(args: {
     invited_email: String(record.invited_email_normalized ?? email),
     invited_account_linked: accountLinked,
     outcome,
+    email: delivery.email,
+    delivery: delivery.delivery,
+  };
+}
+
+export interface ResendHaulInvitationResult {
+  invitation_id: string;
+  email: HaulInviteEmailStatus;
+  delivery: HaulInviteDelivery;
+}
+
+/**
+ * Re-deliver an existing pending invitation. Does not call the create RPC and
+ * never inserts a row. Non-pending invitations are left unchanged (no send).
+ */
+export async function resendHaulInvitation(args: {
+  ownerPersonId: string;
+  haulId: string;
+  invitationId: string;
+  transports?: HaulInviteTransports;
+}): Promise<ResendHaulInvitationResult> {
+  const { data: haul, error: haulError } = await supabaseAdmin
+    .from('grocery_hauls')
+    .select('id, status')
+    .eq('id', args.haulId)
+    .eq('person_id', args.ownerPersonId)
+    .maybeSingle();
+  if (haulError) throw new Error(`Failed to load grocery haul: ${haulError.message}`);
+  if (!haul) throw new GroceryHaulNotFoundError('Grocery haul not found.');
+  if (haul.status !== 'planned') {
+    throw new GroceryHaulConflictError('People can only be invited while the Haul is a Draft.');
+  }
+
+  const { data: row, error: invitationError } = await supabaseAdmin
+    .from(HAUL_INVITATIONS_TABLE)
+    .select('id, status, invited_email_normalized, invited_person_id')
+    .eq('id', args.invitationId)
+    .eq('haul_id', args.haulId)
+    .eq('owner_person_id', args.ownerPersonId)
+    .maybeSingle();
+  if (invitationError) {
+    throw new Error(`Failed to load Haul invitation: ${invitationError.message}`);
+  }
+  if (!row) throw new GroceryHaulNotFoundError('Not found.');
+
+  const status = row.status as HaulInvitationStatus;
+  if (status !== 'pending') {
+    return {
+      invitation_id: String(row.id),
+      email: 'skipped_not_created',
+      delivery: 'none',
+    };
+  }
+
+  const email = String(row.invited_email_normalized);
+  // Same rule as create_grocery_haul_invitation: linked means people.auth_user_id,
+  // not merely an existing people row. An unlinked person still needs the Auth invite.
+  const invitedPersonId = str(row.invited_person_id);
+  let accountLinked = false;
+  if (invitedPersonId) {
+    const { data: person, error: personError } = await supabaseAdmin
+      .from('people')
+      .select('auth_user_id')
+      .eq('id', invitedPersonId)
+      .maybeSingle();
+    if (personError) throw new Error(`Failed to load person: ${personError.message}`);
+    accountLinked = person?.auth_user_id != null;
+  }
+  const delivery = await deliverHaulInvite({
+    ownerPersonId: args.ownerPersonId,
+    email,
+    invitationId: String(row.id),
+    accountLinked,
+    transports: args.transports ?? {},
+  });
+
+  return {
+    invitation_id: String(row.id),
     email: delivery.email,
     delivery: delivery.delivery,
   };

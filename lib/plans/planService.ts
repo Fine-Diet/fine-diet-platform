@@ -65,6 +65,12 @@ import type {
   SocialImportDetail,
 } from './socialEvidenceImport/types';
 import type { GroceryListReadinessDecision } from './groceryListReadiness/policy';
+import type {
+  CreateHaulInvitationResult,
+  HaulInvitationRecord,
+  ResendHaulInvitationResult,
+  SharedGroceryHaulDetail,
+} from './groceryHaul/haulCollaborationClientTypes';
 
 export type HeightDisplayUnit = 'in' | 'cm';
 export type WeightDisplayUnit = 'lb' | 'kg';
@@ -1259,6 +1265,87 @@ export const planService = {
     return await request<GroceryHaulDetail>(
       `/api/journal/food/hauls/${haulId}`,
     );
+  },
+
+  async getSharedGroceryHaul(haulId: string): Promise<SharedGroceryHaulDetail> {
+    return await request<SharedGroceryHaulDetail>(
+      `/api/journal/food/hauls/${haulId}/shared`,
+    );
+  },
+
+  async listHaulInvitations(haulId: string): Promise<HaulInvitationRecord[]> {
+    const res = await request<{ invitations: HaulInvitationRecord[] }>(
+      `/api/journal/food/hauls/${haulId}/invitations`,
+    );
+    return res.invitations;
+  },
+
+  async createHaulInvitation(
+    haulId: string,
+    email: string,
+    options?: { deliver?: boolean },
+  ): Promise<CreateHaulInvitationResult> {
+    const res = await request<{ result: CreateHaulInvitationResult }>(
+      `/api/journal/food/hauls/${haulId}/invitations`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          ...(options?.deliver === false ? { deliver: false } : {}),
+        }),
+      },
+    );
+    return res.result;
+  },
+
+  async resendHaulInvitation(
+    haulId: string,
+    invitationId: string,
+  ): Promise<ResendHaulInvitationResult> {
+    const res = await request<{ result: ResendHaulInvitationResult }>(
+      `/api/journal/food/hauls/${haulId}/invitations/${invitationId}`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+    return res.result;
+  },
+
+  async revokeHaulInvitation(haulId: string, invitationId: string) {
+    const res = await request<{ result: { invitation_id: string; outcome: 'revoked' | 'noop' } }>(
+      `/api/journal/food/hauls/${haulId}/invitations/${invitationId}`,
+      { method: 'DELETE' },
+    );
+    return res.result;
+  },
+
+  async addHaulContributorItem(
+    haulId: string,
+    input: { name: string; quantity?: number | null; unit?: string | null },
+  ) {
+    const res = await request<{ item: GroceryHaulItem }>(
+      `/api/journal/food/hauls/${haulId}/contributor-items`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return res.item;
+  },
+
+  async updateHaulContributorItem(
+    haulId: string,
+    itemId: string,
+    patch: { name?: string; quantity?: number; unit?: string | null },
+  ) {
+    const res = await request<{ item: GroceryHaulItem }>(
+      `/api/journal/food/hauls/${haulId}/contributor-items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.item;
+  },
+
+  async removeHaulContributorItem(haulId: string, itemId: string) {
+    const res = await request<{ result: { item_id: string; outcome: 'removed' } }>(
+      `/api/journal/food/hauls/${haulId}/contributor-items/${itemId}`,
+      { method: 'DELETE' },
+    );
+    return res.result;
   },
 
   /**

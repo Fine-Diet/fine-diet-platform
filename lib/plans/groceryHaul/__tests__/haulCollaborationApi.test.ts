@@ -47,6 +47,7 @@ jest.mock('@/lib/plans/groceryHaul/service', () => ({
 const mockCreateInvitation = jest.fn();
 const mockListInvitations = jest.fn();
 const mockRevokeInvitation = jest.fn();
+const mockResendInvitation = jest.fn();
 const mockListPending = jest.fn();
 const mockAccept = jest.fn();
 const mockAddItem = jest.fn();
@@ -58,6 +59,7 @@ jest.mock('@/lib/plans/groceryHaul/haulCollaboration', () => ({
   createHaulInvitation: (...a: unknown[]) => mockCreateInvitation(...a),
   listHaulInvitationsForOwner: (...a: unknown[]) => mockListInvitations(...a),
   revokeHaulInvitation: (...a: unknown[]) => mockRevokeInvitation(...a),
+  resendHaulInvitation: (...a: unknown[]) => mockResendInvitation(...a),
   listPendingHaulInvitationsForPerson: (...a: unknown[]) => mockListPending(...a),
   acceptHaulInvitation: (...a: unknown[]) => mockAccept(...a),
   addHaulContributorItem: (...a: unknown[]) => mockAddItem(...a),
@@ -159,6 +161,23 @@ describe('owner invitation routes', () => {
     });
   });
 
+  it('passes deliver: false for copy-link creates without email delivery', async () => {
+    mockRequireJournalAccess.mockResolvedValue(OWNER_CTX);
+    mockCreateInvitation.mockResolvedValue({ outcome: 'created', invitation_id: 'inv-1' });
+    const res = response();
+    await invitationsHandler(
+      request('POST', { haulId: 'h1' }, { email: 'copy@example.com', deliver: false }),
+      res,
+    );
+    expect(res.statusCode).toBe(201);
+    expect(mockCreateInvitation).toHaveBeenCalledWith({
+      ownerPersonId: 'person-owner',
+      haulId: 'h1',
+      email: 'copy@example.com',
+      deliver: false,
+    });
+  });
+
   it('answers 200 (not 201) when nothing new was created', async () => {
     mockRequireJournalAccess.mockResolvedValue(OWNER_CTX);
     mockCreateInvitation.mockResolvedValue({ outcome: 'duplicate_pending' });
@@ -211,9 +230,27 @@ describe('owner invitation routes', () => {
     });
   });
 
-  it('only allows DELETE on the invitation resource', async () => {
+  it('resends as the session owner without using the create RPC', async () => {
+    mockRequireJournalAccess.mockResolvedValue(OWNER_CTX);
+    mockResendInvitation.mockResolvedValue({
+      invitation_id: 'i1',
+      email: 'sent',
+      delivery: 'transactional_email',
+    });
     const res = response();
     await invitationHandler(request('POST', { haulId: 'h1', invitationId: 'i1' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(mockResendInvitation).toHaveBeenCalledWith({
+      ownerPersonId: 'person-owner',
+      haulId: 'h1',
+      invitationId: 'i1',
+    });
+    expect(mockCreateInvitation).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported methods on the invitation resource', async () => {
+    const res = response();
+    await invitationHandler(request('PATCH', { haulId: 'h1', invitationId: 'i1' }), res);
     expect(res.statusCode).toBe(405);
   });
 });

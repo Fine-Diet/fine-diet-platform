@@ -41,6 +41,7 @@ import {
   normalizeInviteEmail,
   removeHaulContributorItem,
   resolveHaulViewerAccess,
+  resendHaulInvitation,
   revokeHaulInvitation,
   updateHaulContributorItem,
 } from '../haulCollaboration';
@@ -76,18 +77,27 @@ function invitation(overrides: Record<string, unknown>) {
   };
 }
 
-function install(invitations: Array<Record<string, unknown>> = []) {
+function install(
+  invitations: Array<Record<string, unknown>> = [],
+  options: { haulStatus?: string; authUserIds?: Record<string, string | null> } = {},
+) {
   const fake = createFakeSupabase({
     grocery_hauls: [
-      { id: HAUL, person_id: OWNER, title: 'Weekend', shopping_date: '2026-09-10', status: 'planned' },
+      {
+        id: HAUL,
+        person_id: OWNER,
+        title: 'Weekend',
+        shopping_date: '2026-09-10',
+        status: options.haulStatus ?? 'planned',
+      },
       { id: 'haul-other', person_id: STRANGER, title: 'Not yours', shopping_date: '2026-09-11', status: 'planned' },
     ],
     grocery_haul_invitations: invitations,
     people: [
-      { id: OWNER, email: 'owner@example.com', first_name: 'Olive', last_name: 'Owner' },
-      { id: ALICE, email: 'alice@example.com', first_name: 'Alice', last_name: 'A' },
-      { id: BOB, email: 'bob@example.com', first_name: 'Bob', last_name: 'B' },
-      { id: STRANGER, email: 'stranger@example.com', first_name: 'Sam', last_name: 'S' },
+      { id: OWNER, email: 'owner@example.com', first_name: 'Olive', last_name: 'Owner', auth_user_id: options.authUserIds?.[OWNER] ?? null },
+      { id: ALICE, email: 'alice@example.com', first_name: 'Alice', last_name: 'A', auth_user_id: options.authUserIds?.[ALICE] ?? null },
+      { id: BOB, email: 'bob@example.com', first_name: 'Bob', last_name: 'B', auth_user_id: options.authUserIds?.[BOB] ?? null },
+      { id: STRANGER, email: 'stranger@example.com', first_name: 'Sam', last_name: 'S', auth_user_id: options.authUserIds?.[STRANGER] ?? null },
     ],
   });
   mockFrom.mockImplementation((table: string) => fake.from(table));
@@ -221,6 +231,65 @@ describe('createHaulInvitation', () => {
       p_haul_id: HAUL,
       p_email: 'new@example.com',
     });
+  });
+
+  it('deliver: false creates the invitation row without sending email or Auth invite', async () => {
+    install();
+    mockRpc.mockResolvedValue(created(false));
+    const sendEmail = jest.fn();
+    const sendAuthInvite = jest.fn(async () => true);
+    const result = await createHaulInvitation({
+      ownerPersonId: OWNER,
+      haulId: HAUL,
+      email: 'new@example.com',
+      deliver: false,
+      transports: { sendEmail, sendAuthInvite },
+    });
+    expect(result).toMatchObject({
+      outcome: 'created',
+      invitation_id: INV_ID,
+      email: 'skipped_not_created',
+      delivery: 'none',
+    });
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockInviteUserByEmail).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(sendAuthInvite).not.toHaveBeenCalled();
+  });
+
+  it('deliver: false on duplicate_pending returns the existing invitation id without delivery', async () => {
+    install();
+    mockRpc.mockResolvedValue(created(true, 'duplicate_pending'));
+    const sendEmail = jest.fn();
+    const result = await createHaulInvitation({
+      ownerPersonId: OWNER,
+      haulId: HAUL,
+      email: 'alice@example.com',
+      deliver: false,
+      transports: { sendEmail },
+    });
+    expect(result).toMatchObject({
+      outcome: 'duplicate_pending',
+      invitation_id: INV_ID,
+      email: 'skipped_not_created',
+      delivery: 'none',
+    });
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('deliver: false on already_member does not create a new invitation row', async () => {
+    install();
+    mockRpc.mockResolvedValue(created(true, 'already_member'));
+    const result = await createHaulInvitation({
+      ownerPersonId: OWNER,
+      haulId: HAUL,
+      email: 'alice@example.com',
+      deliver: false,
+    });
+    expect(result.outcome).toBe('already_member');
+    expect(result.email).toBe('skipped_not_created');
+    expect(mockRpc).toHaveBeenCalledTimes(1);
   });
 
   describe('invitation delivery transport', () => {
@@ -417,6 +486,119 @@ describe('createHaulInvitation', () => {
       ).rejects.toThrow(errorClass);
     }
     expect(mockInviteUserByEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('resendHaulInvitation', () => {
+  const INV_ID = '5b0a6d0e-2f0b-4d6e-9d3e-0c1f6f1d7a11';
+  const sendEmail = jest.fn();
+
+  beforeEach(() => {
+    sendEmail.mockReset();
+    sendEmail.mockResolvedValue('sent');
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('re-delivers a pending invitation without calling the create RPC', async () => {
+    install([
+      invitation({
+        id: INV_ID,
+        status: 'pending',
+        invited_email_normalized: 'new@example.com',
+        invited_person_id: null,
+        accepted_at: null,
+      }),
+    ]);
+    mockRpc.mockReset();
+    const result = await resendHaulInvitation({
+      ownerPersonId: OWNER,
+      haulId: HAUL,
+      invitationId: INV_ID,
+      transports: { sendEmail, sendAuthInvite: async () => true },
+    });
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(result.email).toBe('sent');
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('uses transactional email only when the person has a linked auth user', async () => {
+    install(
+      [invitation({
+        id: INV_ID,
+        status: 'pending',
+        invited_email_normalized: 'alice@example.com',
+        invited_person_id: ALICE,
+        accepted_at: null,
+      })],
+      { authUserIds: { [ALICE]: 'auth-alice' } },
+    );
+    const sendAuthInvite = jest.fn(async () => true);
+    const result = await resendHaulInvitation({
+      ownerPersonId: OWNER,
+      haulId: HAUL,
+      invitationId: INV_ID,
+      transports: { sendEmail, sendAuthInvite },
+    });
+    expect(result).toMatchObject({ email: 'sent', delivery: 'transactional_email' });
+    expect(sendEmail).toHaveBeenCalled();
+    expect(sendAuthInvite).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Auth invite path for an existing person who is not linked', async () => {
+    install([invitation({
+      id: INV_ID,
+      status: 'pending',
+      invited_email_normalized: 'alice@example.com',
+      invited_person_id: ALICE,
+      accepted_at: null,
+    })]);
+    const sendAuthInvite = jest.fn(async () => true);
+    const result = await resendHaulInvitation({
+      ownerPersonId: OWNER,
+      haulId: HAUL,
+      invitationId: INV_ID,
+      transports: { sendEmail, sendAuthInvite },
+    });
+    expect(result).toMatchObject({ email: 'sent', delivery: 'supabase_auth_invite' });
+    expect(sendAuthInvite).toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('refuses to resend once the Haul is no longer a Draft', async () => {
+    install(
+      [invitation({
+        id: INV_ID,
+        status: 'pending',
+        invited_person_id: null,
+        accepted_at: null,
+      })],
+      { haulStatus: 'active' },
+    );
+    await expect(resendHaulInvitation({
+      ownerPersonId: OWNER,
+      haulId: HAUL,
+      invitationId: INV_ID,
+      transports: { sendEmail },
+    })).rejects.toThrow(GroceryHaulConflictError);
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it('does not send for accepted invitations', async () => {
+    install([invitation({ id: INV_ID, status: 'accepted' })]);
+    const result = await resendHaulInvitation({
+      ownerPersonId: OWNER,
+      haulId: HAUL,
+      invitationId: INV_ID,
+      transports: { sendEmail },
+    });
+    expect(result).toMatchObject({ email: 'skipped_not_created', delivery: 'none' });
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });
 

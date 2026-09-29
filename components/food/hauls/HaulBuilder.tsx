@@ -26,10 +26,20 @@ import type {
   GroceryHaulItem,
 } from '@/lib/plans/types';
 import type { GroceryListReadinessDecision } from '@/lib/plans/groceryListReadiness/policy';
+import { HaulContributorItemDialog } from './HaulContributorItemDialog';
 import { HaulExecutionReadinessDialog } from './HaulExecutionReadinessDialog';
+import { HaulInviteDialog } from './HaulInviteDialog';
 import { HaulItemEditor } from './HaulItemEditor';
 import { HaulSourceListPicker } from './HaulSourceListPicker';
 import { HaulStoreManagementDialog } from './HaulStoreManagementDialog';
+import type { HaulInvitationRecord } from '@/lib/plans/groceryHaul/haulCollaborationClientTypes';
+import {
+  canMutateHaulContributorItem,
+  contributorNamesFromInvitations,
+  haulContributorAttributionLabel,
+  isHaulContributorOriginItem,
+  type HaulBuilderViewerRole,
+} from '@/lib/plans/groceryHaul/haulBuilderCollaboration';
 import {
   computeGroceryHaulPreparationEstimate,
 } from '@/lib/plans/groceryHaul/estimate';
@@ -67,7 +77,36 @@ function metadataFromDetail(detail: GroceryHaulDetail): MetadataDraft {
   };
 }
 
-function HistoricalHaul({ detail }: { detail: GroceryHaulDetail }) {
+function buildContributorNameMap(
+  items: GroceryHaulItem[],
+  invitations: HaulInvitationRecord[],
+  sharedContributors: Array<{ person_id: string; display_name: string | null }>,
+): Map<string, string | null> {
+  const map = contributorNamesFromInvitations(invitations);
+  for (const contributor of sharedContributors) {
+    if (contributor.display_name || !map.has(contributor.person_id)) {
+      map.set(contributor.person_id, contributor.display_name);
+    }
+  }
+  for (const item of items) {
+    if (item.added_by_person_id && !map.has(item.added_by_person_id)) {
+      map.set(item.added_by_person_id, null);
+    }
+  }
+  return map;
+}
+
+function isGroceryHaulNotFound(err: unknown): boolean {
+  return err instanceof Error && /not found/i.test(err.message);
+}
+
+function HistoricalHaul({
+  detail,
+  contributorNames,
+}: {
+  detail: GroceryHaulDetail;
+  contributorNames: Map<string, string | null>;
+}) {
   return (
     <div className="mx-auto w-full max-w-[900px]">
       <Link href={APP_ROUTES.foodHauls} className="text-xs font-semibold text-white/45 hover:text-white/75">
@@ -90,6 +129,11 @@ function HistoricalHaul({ detail }: { detail: GroceryHaulDetail }) {
         {detail.items.map((item) => (
           <div key={item.id} className="py-5">
             <p className="text-base font-semibold text-brand-50">{item.name_snapshot}</p>
+            {haulContributorAttributionLabel(item, contributorNames) && (
+              <p className="mt-1 text-xs text-white/40">
+                {haulContributorAttributionLabel(item, contributorNames)}
+              </p>
+            )}
             <p className="mt-1 text-xs text-white/45">{sourceDemandLabel(item)}</p>
             {item.product_title && <p className="mt-2 text-sm text-white/70">{item.product_title}</p>}
             {itemStoreLabel(item) && <p className="mt-1 text-xs text-white/45">{itemStoreLabel(item)}</p>}
@@ -133,30 +177,64 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   const [executionStateByItemId, setExecutionStateByItemId] = useState(
     () => new Map<string, GroceryHaulExecutionItemState>(),
   );
+  const [viewerRole, setViewerRole] = useState<HaulBuilderViewerRole>('owner');
+  const [viewerPersonId, setViewerPersonId] = useState<string | null>(null);
+  const [contributorNames, setContributorNames] = useState(
+    () => new Map<string, string | null>(),
+  );
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [contributorItemOpen, setContributorItemOpen] = useState(false);
+  const [editingContributorItem, setEditingContributorItem] = useState<GroceryHaulItem | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [nextDetail, overview] = await Promise.all([
-        planService.getGroceryHaul(haulId),
-        planService.getGroceryListsOverview(),
-      ]);
+      let nextDetail: GroceryHaulDetail;
+      let role: HaulBuilderViewerRole = 'owner';
+      let personId: string | null = null;
+      let sharedContributors: Array<{ person_id: string; display_name: string | null }> = [];
+      let invitations: HaulInvitationRecord[] = [];
+
+      try {
+        nextDetail = await planService.getGroceryHaul(haulId);
+        invitations = await planService.listHaulInvitations(haulId).catch(() => []);
+      } catch (err) {
+        if (!isGroceryHaulNotFound(err)) throw err;
+        const shared = await planService.getSharedGroceryHaul(haulId);
+        nextDetail = shared.detail;
+        role = shared.viewer.role === 'owner' ? 'owner' : 'contributor';
+        personId = shared.viewer.person_id;
+        sharedContributors = shared.contributors;
+      }
+
+      setViewerRole(role);
+      setViewerPersonId(personId);
+      setContributorNames(buildContributorNameMap(nextDetail.items, invitations, sharedContributors));
       setDetail(nextDetail);
       const nextMetadata = metadataFromDetail(nextDetail);
       setMetadata(nextMetadata);
       lastSavedMetadata.current = JSON.stringify(nextMetadata);
-      setLists([overview.default_list, ...overview.named_lists].filter(
-        (list): list is GeneratedGroceryList =>
-          Boolean(list && list.status === 'active' && !list.archived_at),
-      ));
-      setPersistentListSummaries(overview.persistent_list_summaries);
-      setDefaultListId(overview.default_list?.id ?? null);
+
+      if (role === 'owner') {
+        const overview = await planService.getGroceryListsOverview();
+        setLists([overview.default_list, ...overview.named_lists].filter(
+          (list): list is GeneratedGroceryList =>
+            Boolean(list && list.status === 'active' && !list.archived_at),
+        ));
+        setPersistentListSummaries(overview.persistent_list_summaries);
+        setDefaultListId(overview.default_list?.id ?? null);
+      } else {
+        setLists([]);
+        setPersistentListSummaries({});
+        setDefaultListId(null);
+      }
+
       setOpenSourceId((current) =>
         current && nextDetail.source_lists.some((source) => source.grocery_list_id === current)
           ? current
           : nextDetail.source_lists[0]?.grocery_list_id ?? null,
       );
-      if (nextDetail.haul.status === 'active') {
+      if (nextDetail.haul.status === 'active' && role === 'owner') {
         const execution = await planService.getGroceryHaulExecution(haulId);
         setExecutionStateByItemId(new Map(
           execution.items.map((item) => [item.haul_item_id, item.state]),
@@ -172,9 +250,17 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   }, [haulId]);
 
   const reloadDetail = useCallback(async () => {
+    if (viewerRole === 'contributor') {
+      const shared = await planService.getSharedGroceryHaul(haulId);
+      setDetail(shared.detail);
+      setContributorNames(buildContributorNameMap(shared.detail.items, [], shared.contributors));
+      return;
+    }
     const nextDetail = await planService.getGroceryHaul(haulId);
+    const invitations = await planService.listHaulInvitations(haulId).catch(() => []);
     setDetail(nextDetail);
-  }, [haulId]);
+    setContributorNames(buildContributorNameMap(nextDetail.items, invitations, []));
+  }, [haulId, viewerRole]);
 
   useEffect(() => {
     setLoadState('loading');
@@ -182,8 +268,10 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   }, [load]);
 
   const prepareView = router.isReady && router.query.prepare === '1';
-  const metadataReadOnly = detail?.haul.status !== 'planned';
-  const activePrepareView = detail?.haul.status === 'active' && prepareView;
+  const isOwner = viewerRole === 'owner';
+  const metadataReadOnly = !isOwner || detail?.haul.status !== 'planned';
+  const activePrepareView = isOwner && detail?.haul.status === 'active' && prepareView;
+  const canInvite = isOwner && detail?.haul.status === 'planned' && !activePrepareView;
 
   function itemPreparationLocked(itemId: string): boolean {
     if (detail?.haul.status === 'planned') return false;
@@ -194,14 +282,14 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   }
 
   useEffect(() => {
-    if (!router.isReady) return;
+    if (!router.isReady || !isOwner) return;
     if (detail?.haul.status !== 'active') return;
     if (router.query.prepare === '1') return;
     void router.replace(APP_ROUTE_BUILDERS.foodHaulShop(haulId));
-  }, [detail, haulId, router, router.isReady, router.query.prepare]);
+  }, [detail, haulId, isOwner, router, router.isReady, router.query.prepare]);
 
   useEffect(() => {
-    if (!detail || detail.haul.status !== 'planned' || !metadata) return;
+    if (!isOwner || !detail || detail.haul.status !== 'planned' || !metadata) return;
     const serialized = JSON.stringify(metadata);
     if (serialized === lastSavedMetadata.current) return;
     const budget = metadata.budgetAmount.trim() === '' ? null : Number(metadata.budgetAmount);
@@ -230,7 +318,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
       }
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [detail, haulId, metadata, retryAutosave]);
+  }, [detail, haulId, isOwner, metadata, retryAutosave]);
 
   const itemsBySource = useMemo(() => {
     const grouped = new Map<string, GroceryHaulItem[]>();
@@ -245,9 +333,12 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
     return grouped;
   }, [detail?.items]);
 
+  const haulOnlyItems = itemsBySource.get(HAUL_ONLY_ITEM_BUCKET) ?? [];
+  const canAddHaulOnlyItem = viewerRole === 'contributor' && detail?.haul.status === 'planned';
+
   const rosterStoreCount = detail?.stores.length ?? 0;
   const rosterStoreLabel = rosterStoreCount === 1 ? '1 Store' : `${rosterStoreCount} Stores`;
-  const canManageStores = detail?.haul.status === 'planned' && !activePrepareView;
+  const canManageStores = isOwner && detail?.haul.status === 'planned' && !activePrepareView;
 
   const memberIds = useMemo(
     () => new Set(detail?.source_lists.map((source) => source.grocery_list_id) ?? []),
@@ -277,7 +368,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   }
 
   async function changeQuantity(item: GroceryHaulItem, delta: number) {
-    if (itemPreparationLocked(item.id) || itemBusy) return;
+    if (!canEditPreparationItem(item) || isHaulContributorOriginItem(item) || itemBusy) return;
     const nextQuantity = Math.max(0, item.final_quantity + delta);
     if (nextQuantity === item.final_quantity) return;
     setItemBusy(item.id);
@@ -344,6 +435,33 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
     void activateShoppingView();
   }
 
+  function canEditPreparationItem(item: GroceryHaulItem): boolean {
+    if (!detail) return false;
+    if (isHaulContributorOriginItem(item)) {
+      return canMutateHaulContributorItem(
+        item,
+        { role: viewerRole, personId: viewerPersonId ?? '' },
+        detail.haul.status,
+      );
+    }
+    if (viewerRole === 'contributor') return false;
+    return !itemPreparationLocked(item.id);
+  }
+
+  async function removeHaulOnlyItem(item: GroceryHaulItem) {
+    if (!canEditPreparationItem(item) || itemBusy) return;
+    setItemBusy(item.id);
+    setError(null);
+    try {
+      await planService.removeHaulContributorItem(haulId, item.id);
+      await reloadDetail();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to remove this item.');
+    } finally {
+      setItemBusy(null);
+    }
+  }
+
   async function addSelectedLists() {
     if (selectedListIds.length === 0 || addingLists) return;
     setAddingLists(true);
@@ -387,13 +505,13 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               Try again
             </button>
           </div>
-        ) : detail.haul.status === 'active' && !prepareView ? (
+        ) : isOwner && detail.haul.status === 'active' && !prepareView ? (
           <div className="mx-auto max-w-[950px] space-y-4">
             <div className="h-12 w-2/3 animate-pulse rounded-xl bg-white/[0.05]" />
             <p className="text-[14px] leading-[20.4px] text-white/50">Continue to Shopping View…</p>
           </div>
         ) : detail.haul.status !== 'planned' && !activePrepareView ? (
-          <HistoricalHaul detail={detail} />
+          <HistoricalHaul detail={detail} contributorNames={contributorNames} />
         ) : (
           <div className="mx-auto w-full max-w-[1036px]">
             <div className="w-full xl:max-w-[950px] xl:pl-[60px]">
@@ -426,7 +544,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               className="flex w-full flex-col items-stretch border-b border-white/25 sm:flex-row"
               aria-label="Haul builder controls"
             >
-              {!activePrepareView && (
+              {isOwner && !activePrepareView && (
                 <button
                   type="button"
                   onClick={() => {
@@ -440,31 +558,34 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                   Add lists ({detail.source_lists.length})
                 </button>
               )}
-              <div className={`grid min-h-11 grid-cols-[minmax(0,163fr)_minmax(0,151fr)] items-stretch sm:basis-[35%] sm:min-w-[18rem] sm:max-w-[314px] ${activePrepareView ? 'sm:ml-auto' : ''}`}>
-                <div className="flex min-w-0 flex-1 items-stretch">
-                  <span className="inline-flex min-w-0 flex-1 items-center justify-center rounded-tl-[12px] border border-b-0 border-white/25 px-3 text-[14.4px] font-semibold text-white/70">
-                    {rosterStoreLabel}
-                  </span>
+              {isOwner && (
+                <div className={`grid min-h-11 grid-cols-[minmax(0,163fr)_minmax(0,151fr)] items-stretch sm:basis-[35%] sm:min-w-[18rem] sm:max-w-[314px] ${activePrepareView ? 'sm:ml-auto' : ''}`}>
+                  <div className="flex min-w-0 flex-1 items-stretch">
+                    <span className="inline-flex min-w-0 flex-1 items-center justify-center rounded-tl-[12px] border border-b-0 border-white/25 px-3 text-[14.4px] font-semibold text-white/70">
+                      {rosterStoreLabel}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={!canManageStores}
+                      title={canManageStores ? 'Manage Haul stores' : 'Stores can only be edited on Draft Hauls.'}
+                      onClick={() => setStoresOpen(true)}
+                      aria-label="Manage Haul stores"
+                      className="inline-flex min-h-11 w-11 shrink-0 items-center justify-center border border-b-0 border-l-0 border-white/25 text-sm font-semibold text-white/80 disabled:cursor-not-allowed disabled:text-white/35"
+                    >
+                      +
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    disabled={!canManageStores}
-                    title={canManageStores ? 'Manage Haul stores' : 'Stores can only be edited on Draft Hauls.'}
-                    onClick={() => setStoresOpen(true)}
-                    aria-label="Manage Haul stores"
-                    className="inline-flex min-h-11 w-11 shrink-0 items-center justify-center border border-b-0 border-l-0 border-white/25 text-sm font-semibold text-white/80 disabled:cursor-not-allowed disabled:text-white/35"
+                    disabled={!canInvite}
+                    title={canInvite ? 'Invite someone to this Haul' : 'People can only be invited while the Haul is a Draft.'}
+                    onClick={() => setInviteOpen(true)}
+                    className="inline-flex min-h-11 min-w-0 items-center justify-center rounded-t-[12px] rounded-b-none bg-brand-50 px-3 text-[14.4px] font-semibold text-[#16110d] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    +
+                    + Invite to haul
                   </button>
                 </div>
-                <button
-                  type="button"
-                  disabled
-                  title="Invite to Haul is planned for a later phase."
-                  className="inline-flex min-h-11 min-w-0 items-center justify-center rounded-t-[12px] rounded-b-none bg-brand-50 px-3 text-[14.4px] font-semibold text-[#16110d] disabled:cursor-not-allowed"
-                >
-                  + Invite to haul
-                </button>
-              </div>
+              )}
             </section>
 
             {autosaveError && (
@@ -534,7 +655,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                     <div>
                                       {item.product_title ? (
                                         <p className="text-[14px] leading-[20.4px] text-white/50">{productLabel}</p>
-                                      ) : !itemPreparationLocked(item.id) ? (
+                                      ) : canEditPreparationItem(item) ? (
                                         <button
                                           type="button"
                                           onClick={() => {
@@ -562,7 +683,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                       )}
                                     </p>
                                     <div className="inline-flex h-9 w-[110px] items-center rounded-full border border-white/20">
-                                      {!itemPreparationLocked(item.id) && (
+                                      {canEditPreparationItem(item) && (
                                         <button
                                           type="button"
                                           aria-label={`Decrease ${item.name_snapshot} final Haul quantity`}
@@ -576,7 +697,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                       <span className="min-w-9 flex-1 text-center text-[20px] font-semibold text-white/50" aria-label={`Final Haul quantity ${item.final_quantity}`}>
                                         {item.final_quantity}
                                       </span>
-                                      {!itemPreparationLocked(item.id) && (
+                                      {canEditPreparationItem(item) && (
                                         <button
                                           type="button"
                                           aria-label={`Increase ${item.name_snapshot} final Haul quantity`}
@@ -594,7 +715,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                                       </p>
                                     )}
                                   </div>
-                                  {!itemPreparationLocked(item.id) && (
+                                  {canEditPreparationItem(item) && (
                                     <details className="relative shrink-0">
                                       <summary aria-label={`More actions for ${item.name_snapshot}`} className="cursor-pointer list-none px-1 py-1 text-lg tracking-widest text-white/65">
                                         •••
@@ -625,44 +746,115 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                 })}
               </div>
             </section>
+
+            <section className="mt-8 border-b border-white/15 pb-6" aria-label="Haul-only items">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-[20px] font-semibold text-brand-50">Added to Haul</h2>
+                {canAddHaulOnlyItem && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingContributorItem(null);
+                      setContributorItemOpen(true);
+                    }}
+                    className="rounded-full border border-white/25 px-4 py-2 text-xs font-semibold text-white/80"
+                  >
+                    Add item
+                  </button>
+                )}
+              </div>
+              {haulOnlyItems.length === 0 ? (
+                <p className="mt-4 text-sm text-white/45">No Haul-only items yet.</p>
+              ) : (
+                <ul className="mt-4 divide-y divide-white/10">
+                  {haulOnlyItems.map((item) => {
+                    const attribution = haulContributorAttributionLabel(item, contributorNames);
+                    const mutable = canEditPreparationItem(item);
+                    const qtyLabel = [item.final_quantity, item.unit_snapshot].filter(Boolean).join(' ');
+                    return (
+                      <li key={item.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-base font-semibold text-brand-50">{item.name_snapshot}</p>
+                          {attribution && <p className="mt-0.5 text-xs text-white/40">{attribution}</p>}
+                          <p className="mt-1 text-sm text-white/50">{qtyLabel || '—'}</p>
+                        </div>
+                        {mutable && (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={itemBusy === item.id}
+                              onClick={() => {
+                                setEditingContributorItem(item);
+                                setContributorItemOpen(true);
+                              }}
+                              className="rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/80"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={itemBusy === item.id}
+                              onClick={() => void removeHaulOnlyItem(item)}
+                              className="rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/80"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
             </div>
 
             <section className="mt-12 w-full max-w-[1036px] rounded-t-[24px] border border-b-0 border-white/25 bg-transparent px-6 py-8 xl:pl-[60px] xl:pr-[26px]" aria-labelledby="shopping-summary-title">
               <h2 id="shopping-summary-title" className="text-[20px] font-semibold text-brand-50">Shopping Summary</h2>
-              <label className="mt-4 block text-sm text-white/70">
-                <span className="sr-only">Haul name</span>
-                <input
-                  value={metadata.title}
-                  readOnly={metadataReadOnly}
-                  onChange={(event) => setMetadata({ ...metadata, title: event.target.value })}
-                  className="mt-1 w-full max-w-md border-0 border-b border-white/30 bg-transparent px-0 py-1 text-sm font-medium text-white/80 outline-none focus:border-white/60"
-                />
-              </label>
-              <div className="mt-4 space-y-2 text-sm text-white/70">
-                <label className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-white/50">Date:</span>
-                  <input
-                    type="date"
-                    value={metadata.shoppingDate}
-                    readOnly={metadataReadOnly}
-                    onChange={(event) => setMetadata({ ...metadata, shoppingDate: event.target.value })}
-                    className="min-w-0 flex-1 border-0 border-b border-white/30 bg-transparent px-0 py-0.5 text-sm text-white outline-none focus:border-white/60 max-w-[12rem]"
-                  />
-                </label>
-                <label className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-white/50">Budget:</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={metadata.budgetAmount}
-                    readOnly={metadataReadOnly}
-                    onChange={(event) => setMetadata({ ...metadata, budgetAmount: event.target.value })}
-                    placeholder="Optional"
-                    className="min-w-0 flex-1 border-0 border-b border-white/30 bg-transparent px-0 py-0.5 text-sm text-white outline-none focus:border-white/60 max-w-[12rem]"
-                  />
-                </label>
-              </div>
+              {isOwner ? (
+                <>
+                  <label className="mt-4 block text-sm text-white/70">
+                    <span className="sr-only">Haul name</span>
+                    <input
+                      value={metadata.title}
+                      readOnly={metadataReadOnly}
+                      onChange={(event) => setMetadata({ ...metadata, title: event.target.value })}
+                      className="mt-1 w-full max-w-md border-0 border-b border-white/30 bg-transparent px-0 py-1 text-sm font-medium text-white/80 outline-none focus:border-white/60"
+                    />
+                  </label>
+                  <div className="mt-4 space-y-2 text-sm text-white/70">
+                    <label className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-white/50">Date:</span>
+                      <input
+                        type="date"
+                        value={metadata.shoppingDate}
+                        readOnly={metadataReadOnly}
+                        onChange={(event) => setMetadata({ ...metadata, shoppingDate: event.target.value })}
+                        className="min-w-0 flex-1 border-0 border-b border-white/30 bg-transparent px-0 py-0.5 text-sm text-white outline-none focus:border-white/60 max-w-[12rem]"
+                      />
+                    </label>
+                    <label className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-white/50">Budget:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={metadata.budgetAmount}
+                        readOnly={metadataReadOnly}
+                        onChange={(event) => setMetadata({ ...metadata, budgetAmount: event.target.value })}
+                        placeholder="Optional"
+                        className="min-w-0 flex-1 border-0 border-b border-white/30 bg-transparent px-0 py-0.5 text-sm text-white outline-none focus:border-white/60 max-w-[12rem]"
+                      />
+                    </label>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-4 text-sm text-white/70">
+                  {metadata.title}
+                  {' · '}
+                  {formatHaulDate(metadata.shoppingDate)}
+                </p>
+              )}
               {detail.estimate.by_store.length > 0 && (
                 <div className="mt-6 space-y-4 border-t border-white/15 pt-5">
                   {detail.estimate.by_store.map((store) => {
@@ -720,7 +912,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     •••
                   </span>
                 </div>
-              ) : (
+              ) : isOwner ? (
                 <div className="mt-6 flex w-full max-w-[880px] items-center gap-1.5">
                   <button
                     type="button"
@@ -734,31 +926,54 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     •••
                   </span>
                 </div>
-              )}
+              ) : null}
             </section>
           </div>
         )}
       </SignedInPageScroll>
       <JournalFooterNav />
 
-      <HaulStoreManagementDialog
-        open={storesOpen}
-        haulId={haulId}
-        stores={detail?.stores ?? []}
-        items={detail?.items ?? []}
-        onClose={() => setStoresOpen(false)}
-        onChanged={reloadDetail}
-      />
+      {isOwner && (
+        <HaulStoreManagementDialog
+          open={storesOpen}
+          haulId={haulId}
+          stores={detail?.stores ?? []}
+          items={detail?.items ?? []}
+          onClose={() => setStoresOpen(false)}
+          onChanged={reloadDetail}
+        />
+      )}
 
-      <HaulItemEditor
+      {isOwner && (
+        <HaulItemEditor
+          haulId={haulId}
+          haulCurrency={detail?.haul.currency ?? 'USD'}
+          rosterStores={detail?.stores ?? []}
+          item={editingItem}
+          openInProductSearch={chooseProductFirst}
+          onClose={() => {
+            setChooseProductFirst(false);
+            setEditingItem(null);
+          }}
+          onSaved={reloadDetail}
+        />
+      )}
+
+      {isOwner && (
+        <HaulInviteDialog
+          open={inviteOpen}
+          haulId={haulId}
+          onClose={() => setInviteOpen(false)}
+        />
+      )}
+
+      <HaulContributorItemDialog
+        open={contributorItemOpen}
         haulId={haulId}
-        haulCurrency={detail?.haul.currency ?? 'USD'}
-        rosterStores={detail?.stores ?? []}
-        item={editingItem}
-        openInProductSearch={chooseProductFirst}
+        item={editingContributorItem}
         onClose={() => {
-          setChooseProductFirst(false);
-          setEditingItem(null);
+          setContributorItemOpen(false);
+          setEditingContributorItem(null);
         }}
         onSaved={reloadDetail}
       />
@@ -772,6 +987,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
         onContinue={continueFromReadiness}
       />
 
+      {isOwner && (
       <ItemManagementDialog
         open={addListsOpen}
         onClose={() => setAddListsOpen(false)}
@@ -819,6 +1035,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
         </div>
         {addListsError && <p role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{addListsError}</p>}
       </ItemManagementDialog>
+      )}
     </div>
   );
 }

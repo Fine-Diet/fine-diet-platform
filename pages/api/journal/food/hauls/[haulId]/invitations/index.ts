@@ -42,6 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ownerPersonId: ctx.personId,
       haulId,
       email: body.email,
+      ...(body.deliver === false ? { deliver: false } : {}),
     });
     return res.status(result.outcome === 'created' ? 201 : 200).json({ result });
   } catch (err) {
