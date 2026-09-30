@@ -277,3 +277,38 @@ export function buildAcquisitionPatch(
   if (nextPrice !== item.acquired_price_amount) patch.price_amount = nextPrice;
   return patch;
 }
+
+/** Matches estimate grouping key in `computeGroceryHaulPreparationEstimate`. */
+export function groceryHaulItemStoreKey(item: GroceryHaulItem): string | null {
+  if (!item.retailer && !item.store_location && !item.postal_code) return null;
+  return JSON.stringify([
+    item.retailer?.trim().toLocaleLowerCase() ?? '',
+    item.store_location?.trim().toLocaleLowerCase() ?? '',
+    item.postal_code?.trim().toLocaleUpperCase() ?? '',
+  ]);
+}
+
+export function summarizeHaulStoreItems(
+  items: readonly GroceryHaulItem[],
+  storeKey: string,
+  currency: string,
+): { itemCount: number; pricedCount: number; unpricedCount: number } {
+  let itemCount = 0;
+  let pricedCount = 0;
+  let unpricedCount = 0;
+  for (const item of items) {
+    const quantity = item.final_quantity ?? 0;
+    if (quantity <= 0) continue;
+    if (groceryHaulItemStoreKey(item) !== storeKey) continue;
+    itemCount += 1;
+    const price = item.price_amount;
+    const isPriced =
+      price != null
+      && price >= 0
+      && item.price_source != null
+      && item.price_currency === currency;
+    if (isPriced) pricedCount += 1;
+    else unpricedCount += 1;
+  }
+  return { itemCount, pricedCount, unpricedCount };
+}

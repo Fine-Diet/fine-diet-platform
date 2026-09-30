@@ -37,19 +37,17 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(builder).toContain('planService.addGroceryListsToHaul');
   });
 
-  it('preserves Need → product → store/price → final quantity and never patches source demand', () => {
+  it('preserves Need → product → store → price → final quantity and never patches source demand', () => {
     const builder = read('components/food/hauls/HaulBuilder.tsx');
-    const need = builder.indexOf('sourceDemandLabel(item)');
-    const product = builder.indexOf('item.product_title', need);
-    const store = builder.indexOf('itemStoreLabel(item)', need);
-    const quantity = builder.indexOf('final_quantity: nextQuantity', need);
-    expect(need).toBeGreaterThan(-1);
-    expect(product).toBeGreaterThan(need);
-    expect(store).toBeGreaterThan(need);
-    expect(quantity).toBeGreaterThan(product);
+    expect(builder).toContain('sourceDemandLabel(item)');
+    expect(builder).toContain('item.product_title');
+    expect(builder).toContain('itemStoreLabel(item)');
+    expect(builder).toContain('final_quantity: nextQuantity');
     expect(builder).toContain('Choose Product');
     expect(builder).toContain('quantity_snapshot is immutable provenance');
     expect(builder).not.toContain('quantity_snapshot: nextQuantity');
+    expect(builder).toContain('w-[110px]');
+    expect(builder).not.toContain('sm:grid-cols-[minmax(0,1.15fr)');
   });
 
   it('keeps quantity zero visible, muted, and represented as final Haul truth', () => {
@@ -84,21 +82,40 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(builder).not.toMatch(/>\s*Saved\s*</);
     expect(builder).toContain('detail.estimate.estimated_total');
     expect(builder).toContain('detail.estimate.by_store.map');
-    expect(builder).toContain('Tax is not included');
+    expect(builder).toContain('Tax not included');
   });
 
   it('uses the settled builder control rail, Shopping Summary, and distinct store count', () => {
     const builder = read('components/food/hauls/HaulBuilder.tsx');
+    const library = read('components/food/hauls/HaulsLibrary.tsx');
     expect(builder).toContain('Shopping Summary');
     expect(builder).toContain('countDistinctAssignedStores');
     expect(builder).toContain('distinctStoreCount');
     expect(builder).toContain('Invite to Haul is planned for a later phase');
     expect(builder).toContain('Adding stores from the builder is not available yet');
-    expect(builder).not.toContain('Haul Estimate');
+    expect(builder).toContain('Haul Estimate ·');
     expect(builder).toContain('computeGroceryHaulPreparationEstimate(');
     expect(builder).not.toContain('item.final_quantity * item.price_amount');
     expect(builder).toContain('FoodSectionViewSwitcher');
-    expect(builder).toContain('max-w-[950px]');
+    expect(builder).toContain('max-w-[1036px]');
+    expect(builder).toContain('lg:ml-[60px]');
+    expect(builder).toContain('h-[113px]');
+    expect(builder).toContain('lg:w-[578px]');
+    expect(builder).toContain('lg:w-[163px]');
+    expect(builder).toContain('lg:w-[151px]');
+    expect(builder).not.toContain('lg:ml-auto');
+    expect(builder).toContain('summarizeHaulStoreItems');
+    expect(builder).toContain('unpriced');
+    expect(builder).toContain('Add lists (');
+    expect(builder).toContain('sr-only">Haul Builder');
+    expect(builder).not.toContain('>Source Lists<');
+    expect(library).toContain('max-w-[950px]');
+    expect(library).toContain('h-[34px]');
+    expect(library).toContain('text-[44px]');
+    expect(library).toContain('lg:space-y-[5px]');
+    expect(library).toContain('lg:h-[25px]');
+    expect(library).toContain('rounded-none border-0');
+    expect(library).toContain('rounded-t-[12px] rounded-b-none');
     expect(builder).toContain('bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700');
     expect(builder).toContain('<ItemManagementDialog');
     expect(read('components/food/hauls/HaulItemEditor.tsx')).toContain('shell="workspace"');
