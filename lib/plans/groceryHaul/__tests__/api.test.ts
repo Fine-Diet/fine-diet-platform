@@ -4,9 +4,30 @@ const CALLER_PERSON = 'person-caller';
 const OTHER_PERSON = 'person-other';
 
 const mockRequireJournalAccess = jest.fn();
+const mockRequireJournalAuth = jest.fn();
+const mockRequireCallerJournalAccess = jest.fn();
+const mockResolveHaulViewerAccess = jest.fn();
+const mockRequireHaulMemberAccess = jest.fn();
+
 jest.mock('@/lib/access/requireJournalAccess', () => ({
   requireJournalAccess: (...args: unknown[]) => mockRequireJournalAccess(...args),
+  requireJournalAuth: (...args: unknown[]) => mockRequireJournalAuth(...args),
+  requireCallerJournalAccess: (...args: unknown[]) => mockRequireCallerJournalAccess(...args),
 }));
+
+jest.mock('@/lib/plans/groceryHaul/resolveHaulViewerAccess', () => ({
+  resolveHaulViewerAccess: (...args: unknown[]) => mockResolveHaulViewerAccess(...args),
+}));
+
+jest.mock('@/lib/access/requireHaulAccess', () => {
+  const actual = jest.requireActual<typeof import('@/lib/access/requireHaulAccess')>(
+    '@/lib/access/requireHaulAccess',
+  );
+  return {
+    ...actual,
+    requireHaulMemberAccess: (...args: unknown[]) => mockRequireHaulMemberAccess(...args),
+  };
+});
 
 jest.mock('@/lib/peopleService', () => ({
   logEvent: jest.fn().mockResolvedValue(undefined),
@@ -60,6 +81,13 @@ class GroceryHaulNotFoundError extends Error {
 
 const mockCreateGroceryHaulFromList = jest.fn();
 const mockGetGroceryHaulDetail = jest.fn();
+const mockUpdateGroceryHaulMetadata = jest.fn();
+const mockGetSharedGroceryHaulDetail = jest.fn();
+
+jest.mock('@/lib/plans/groceryHaul/haulCollaboration', () => ({
+  getSharedGroceryHaulDetail: (...args: unknown[]) => mockGetSharedGroceryHaulDetail(...args),
+}));
+
 jest.mock('@/lib/plans/groceryListService', () => ({
   GroceryListNotFoundError,
 }));
@@ -72,11 +100,27 @@ jest.mock('@/lib/plans/groceryHaul/service', () => ({
   GroceryHaulNotFoundError,
   createGroceryHaulFromList: (...args: unknown[]) => mockCreateGroceryHaulFromList(...args),
   getGroceryHaulDetail: (...args: unknown[]) => mockGetGroceryHaulDetail(...args),
+  updateGroceryHaulMetadata: (...args: unknown[]) => mockUpdateGroceryHaulMetadata(...args),
 }));
 
 import createHandler from '@/pages/api/journal/food/grocery-lists/[listId]/hauls';
 import getHandler from '@/pages/api/journal/food/hauls/[haulId]';
+import sharedHandler from '@/pages/api/journal/food/hauls/[haulId]/shared';
 import decisionEventsHandler from '@/pages/api/journal/decision-events';
+
+const HAUL_ID = 'haul-1';
+const AUTH_CTX = { personId: CALLER_PERSON, user: { id: 'auth-user' } };
+
+function ownerHaulAccess() {
+  mockRequireJournalAuth.mockResolvedValue(AUTH_CTX);
+  mockRequireCallerJournalAccess.mockResolvedValue(true);
+  mockResolveHaulViewerAccess.mockResolvedValue({
+    role: 'owner',
+    haulId: HAUL_ID,
+    ownerPersonId: CALLER_PERSON,
+    actorPersonId: CALLER_PERSON,
+  });
+}
 
 const mockLogEvent = logEvent as jest.MockedFunction<typeof logEvent>;
 
@@ -230,30 +274,133 @@ describe('POST /api/journal/food/grocery-lists/:listId/hauls', () => {
   });
 });
 
-describe('GET /api/journal/food/hauls/:haulId', () => {
+describe('GET/PATCH /api/journal/food/hauls/:haulId (owner-only guard)', () => {
+  beforeEach(() => {
+    ownerHaulAccess();
+  });
+
   it('loads the caller-owned Haul and rejects POST', async () => {
     mockGetGroceryHaulDetail.mockResolvedValue({
-      haul: { id: 'haul-1', person_id: CALLER_PERSON },
+      haul: { id: HAUL_ID, person_id: CALLER_PERSON },
       items: [],
     });
-    const getReq = { method: 'GET', query: { haulId: 'haul-1' } } as unknown as NextApiRequest;
+    const getReq = { method: 'GET', query: { haulId: HAUL_ID } } as unknown as NextApiRequest;
     const getRes = createMockRes();
     await getHandler(getReq, getRes);
-    expect(mockGetGroceryHaulDetail).toHaveBeenCalledWith(CALLER_PERSON, 'haul-1');
+    expect(mockGetGroceryHaulDetail).toHaveBeenCalledWith(CALLER_PERSON, HAUL_ID);
     expect(getRes.statusCode).toBe(200);
 
-    const postReq = { method: 'POST', query: { haulId: 'haul-1' } } as unknown as NextApiRequest;
+    const postReq = { method: 'POST', query: { haulId: HAUL_ID } } as unknown as NextApiRequest;
     const postRes = createMockRes();
     await getHandler(postReq, postRes);
     expect(postRes.statusCode).toBe(405);
   });
 
-  it('maps missing hauls to 404', async () => {
+  it('maps missing hauls to 404 after owner guard passes', async () => {
     mockGetGroceryHaulDetail.mockRejectedValue(new GroceryHaulNotFoundError('Grocery haul not found.'));
     const req = { method: 'GET', query: { haulId: 'missing' } } as unknown as NextApiRequest;
     const res = createMockRes();
     await getHandler(req, res);
     expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 404 for accepted contributors without journal (shared fallback)', async () => {
+    mockResolveHaulViewerAccess.mockResolvedValue({
+      role: 'contributor',
+      haulId: HAUL_ID,
+      ownerPersonId: OTHER_PERSON,
+      actorPersonId: CALLER_PERSON,
+    });
+    const req = { method: 'GET', query: { haulId: HAUL_ID } } as unknown as NextApiRequest;
+    const res = createMockRes();
+    await getHandler(req, res);
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: 'Grocery haul not found.' });
+    expect(mockGetGroceryHaulDetail).not.toHaveBeenCalled();
+    expect(mockRequireCallerJournalAccess).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 for owners without journal entitlement', async () => {
+    mockRequireCallerJournalAccess.mockImplementation(async (res) => {
+      res.status(403).json({ error: 'Journal access required' });
+      return false;
+    });
+    const req = { method: 'GET', query: { haulId: HAUL_ID } } as unknown as NextApiRequest;
+    const res = createMockRes();
+    await getHandler(req, res);
+    expect(res.statusCode).toBe(403);
+    expect(mockGetGroceryHaulDetail).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for non-members', async () => {
+    mockResolveHaulViewerAccess.mockResolvedValue(null);
+    const req = { method: 'GET', query: { haulId: HAUL_ID } } as unknown as NextApiRequest;
+    const res = createMockRes();
+    await getHandler(req, res);
+    expect(res.statusCode).toBe(404);
+    expect(mockGetGroceryHaulDetail).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when unauthenticated', async () => {
+    mockRequireJournalAuth.mockImplementation(async (_req, res) => {
+      res.status(401).json({ error: 'Unauthorized' });
+      return null;
+    });
+    const req = { method: 'GET', query: { haulId: HAUL_ID } } as unknown as NextApiRequest;
+    const res = createMockRes();
+    await getHandler(req, res);
+    expect(res.statusCode).toBe(401);
+    expect(mockResolveHaulViewerAccess).not.toHaveBeenCalled();
+  });
+
+  it('allows PATCH for journal-entitled owners', async () => {
+    mockUpdateGroceryHaulMetadata.mockResolvedValue({ id: HAUL_ID, title: 'Updated' });
+    const req = {
+      method: 'PATCH',
+      query: { haulId: HAUL_ID },
+      body: { title: 'Updated' },
+    } as unknown as NextApiRequest;
+    const res = createMockRes();
+    await getHandler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(mockUpdateGroceryHaulMetadata).toHaveBeenCalled();
+  });
+
+  it('contributor owner-endpoint 404 then shared GET succeeds', async () => {
+    mockResolveHaulViewerAccess.mockResolvedValue({
+      role: 'contributor',
+      haulId: HAUL_ID,
+      ownerPersonId: OTHER_PERSON,
+      actorPersonId: CALLER_PERSON,
+    });
+    const ownerRes = createMockRes();
+    await getHandler({ method: 'GET', query: { haulId: HAUL_ID } } as unknown as NextApiRequest, ownerRes);
+    expect(ownerRes.statusCode).toBe(404);
+
+    mockRequireHaulMemberAccess.mockResolvedValue({
+      ...AUTH_CTX,
+      access: {
+        role: 'contributor',
+        haulId: HAUL_ID,
+        ownerPersonId: OTHER_PERSON,
+        actorPersonId: CALLER_PERSON,
+      },
+    });
+    mockGetSharedGroceryHaulDetail.mockResolvedValue({
+      detail: { haul: { id: HAUL_ID }, items: [] },
+      viewer: { role: 'contributor', person_id: CALLER_PERSON },
+      contributors: [],
+    });
+    const sharedRes = createMockRes();
+    await sharedHandler(
+      { method: 'GET', query: { haulId: HAUL_ID } } as unknown as NextApiRequest,
+      sharedRes,
+    );
+    expect(sharedRes.statusCode).toBe(200);
+    expect(mockGetSharedGroceryHaulDetail).toHaveBeenCalledWith({
+      actorPersonId: CALLER_PERSON,
+      haulId: HAUL_ID,
+    });
   });
 });
 

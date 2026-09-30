@@ -19,8 +19,16 @@ jest.mock('@/lib/access/effectiveAccess', () => ({
   resolveEffectiveAccessForAuthUser: (...args: unknown[]) => mockResolveAccess(...args),
 }));
 
+const mockResolveHaulViewerAccess = jest.fn();
+jest.mock('@/lib/plans/groceryHaul/resolveHaulViewerAccess', () => ({
+  resolveHaulViewerAccess: (...args: unknown[]) => mockResolveHaulViewerAccess(...args),
+}));
+
 import { middleware } from '@/middleware';
 import { deriveOnboardingState } from '@/lib/onboarding/onboardingState';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
+
+const HAUL_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 
 function requestFor(path: string, host = 'app.myfinediet.com'): NextRequest {
   return new NextRequest(new URL(`https://${host}${path}`), {
@@ -47,10 +55,24 @@ function authorized(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function unauthorized(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'unauthorized',
+    allowed: false,
+    grantSource: 'none',
+    personId: 'p1',
+    authUserId: 'auth-1',
+    onboarding: deriveOnboardingState({ onboarding_completed_at: '2026-07-01T00:00:00Z' }),
+    reason: 'no_active_grant',
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetUser.mockResolvedValue({ id: 'auth-1', email: 'a@b.com', role: 'user' });
   mockResolveAccess.mockResolvedValue(authorized());
+  mockResolveHaulViewerAccess.mockResolvedValue(null);
 });
 
 describe('middleware access gate', () => {
@@ -162,5 +184,117 @@ describe('middleware access gate', () => {
     const res = await middleware(requestFor('/journal/log'));
     expect(res.status).toBe(307);
     expect(res.headers.get('location') || '').toContain('/app/log');
+  });
+
+  describe('haul contributor journal bypass', () => {
+    beforeEach(() => {
+      mockResolveAccess.mockResolvedValue(unauthorized());
+    });
+
+    it('allows accepted contributors without journal grant on haul detail', async () => {
+      mockResolveHaulViewerAccess.mockResolvedValue({
+        role: 'contributor',
+        haulId: HAUL_ID,
+        ownerPersonId: 'owner-1',
+        actorPersonId: 'p1',
+      });
+      const res = await middleware(requestFor(`${APP_ROUTES.foodHauls}/${HAUL_ID}`));
+      expect(res.status).toBe(200);
+      expect(mockResolveHaulViewerAccess).toHaveBeenCalledWith('p1', HAUL_ID);
+    });
+
+    it('allows accepted contributors without journal grant on haul shop', async () => {
+      mockResolveHaulViewerAccess.mockResolvedValue({
+        role: 'contributor',
+        haulId: HAUL_ID,
+        ownerPersonId: 'owner-1',
+        actorPersonId: 'p1',
+      });
+      const res = await middleware(requestFor(`${APP_ROUTES.foodHauls}/${HAUL_ID}/shop`));
+      expect(res.status).toBe(200);
+    });
+
+    it('allows contributors on strict haul routes without general onboarding', async () => {
+      mockResolveAccess.mockResolvedValue(
+        unauthorized({ onboarding: deriveOnboardingState({}) }),
+      );
+      mockResolveHaulViewerAccess.mockResolvedValue({
+        role: 'contributor',
+        haulId: HAUL_ID,
+        ownerPersonId: 'owner-1',
+        actorPersonId: 'p1',
+      });
+      for (const path of [
+        `${APP_ROUTES.foodHauls}/${HAUL_ID}`,
+        `${APP_ROUTES.foodHauls}/${HAUL_ID}/shop`,
+      ]) {
+        const res = await middleware(requestFor(path));
+        expect(res.status).toBe(200);
+      }
+    });
+
+    it('still waitlists contributors without journal grant on onboarding and log', async () => {
+      mockResolveAccess.mockResolvedValue(
+        unauthorized({ onboarding: deriveOnboardingState({}) }),
+      );
+      mockResolveHaulViewerAccess.mockResolvedValue({
+        role: 'contributor',
+        haulId: HAUL_ID,
+        ownerPersonId: 'owner-1',
+        actorPersonId: 'p1',
+      });
+      for (const path of [APP_ROUTES.onboarding, '/app/log']) {
+        const res = await middleware(requestFor(path));
+        expect(res.status).toBe(307);
+        expect(res.headers.get('location') || '').toContain('/journal-waitlist');
+      }
+      expect(mockResolveHaulViewerAccess).not.toHaveBeenCalled();
+    });
+
+    it('sends non-members without journal grant to waitlist on haul detail', async () => {
+      mockResolveHaulViewerAccess.mockResolvedValue(null);
+      const res = await middleware(requestFor(`${APP_ROUTES.foodHauls}/${HAUL_ID}`));
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location') || '').toContain('/journal-waitlist');
+    });
+
+    it('sends owners without journal grant to waitlist on haul detail', async () => {
+      mockResolveHaulViewerAccess.mockResolvedValue({
+        role: 'owner',
+        haulId: HAUL_ID,
+        ownerPersonId: 'p1',
+        actorPersonId: 'p1',
+      });
+      const res = await middleware(requestFor(`${APP_ROUTES.foodHauls}/${HAUL_ID}`));
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location') || '').toContain('/journal-waitlist');
+    });
+
+    it('still journal-gates contributors on non-haul app routes', async () => {
+      mockResolveHaulViewerAccess.mockResolvedValue({
+        role: 'contributor',
+        haulId: HAUL_ID,
+        ownerPersonId: 'owner-1',
+        actorPersonId: 'p1',
+      });
+      const res = await middleware(requestFor('/app/log'));
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location') || '').toContain('/journal-waitlist');
+      expect(mockResolveHaulViewerAccess).not.toHaveBeenCalled();
+    });
+
+    it('does not exempt the haul library index without journal grant', async () => {
+      const res = await middleware(requestFor(APP_ROUTES.foodHauls));
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location') || '').toContain('/journal-waitlist');
+      expect(mockResolveHaulViewerAccess).not.toHaveBeenCalled();
+    });
+
+    it('fails closed to waitlist when haul membership resolution throws', async () => {
+      mockResolveHaulViewerAccess.mockRejectedValue(new Error('db down'));
+      const res = await middleware(requestFor(`${APP_ROUTES.foodHauls}/${HAUL_ID}`));
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location') || '').toContain('/journal-waitlist');
+    });
   });
 });

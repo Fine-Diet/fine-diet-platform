@@ -1,8 +1,8 @@
 /**
  * Haul membership-aware API access guard (Invite to Haul v1, Phase B1).
  *
- * The owner-only Haul routes keep using requireJournalAccess unchanged. This
- * guard is ONLY for routes a Haul contributor may call. It never impersonates
+ * Owner-only Haul routes use requireOwnerJournalHaulAccess (journal + ownership).
+ * requireHaulMemberAccess is for routes a contributor may call. It never impersonates
  * the owner: the caller's own person id is always the actor, and the role is
  * derived from the database, never from the request.
  *
@@ -26,10 +26,38 @@ import {
 import {
   resolveHaulViewerAccess,
   type HaulViewerAccess,
-} from '@/lib/plans/groceryHaul/haulCollaboration';
+} from '@/lib/plans/groceryHaul/resolveHaulViewerAccess';
 
 export interface HaulMemberContext extends JournalAccessContext {
   access: HaulViewerAccess;
+}
+
+const HAUL_NOT_FOUND_BODY = { error: 'Grocery haul not found.' };
+
+/**
+ * Owner-only canonical Haul read/write (GET/PATCH /api/journal/food/hauls/:haulId).
+ *
+ * Authenticates and resolves membership first. Contributors and non-members get
+ * 404 so clients can fall back to the shared read endpoint. Owners without
+ * journal entitlement get 403.
+ */
+export async function requireOwnerJournalHaulAccess(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  haulId: string,
+): Promise<JournalAccessContext | null> {
+  const ctx = await requireJournalAuth(req, res);
+  if (!ctx) return null;
+
+  const access = await resolveHaulViewerAccess(ctx.personId, haulId);
+  if (!access || access.role !== 'owner') {
+    res.status(404).json(HAUL_NOT_FOUND_BODY);
+    return null;
+  }
+
+  if (!(await requireCallerJournalAccess(res, ctx))) return null;
+
+  return ctx;
 }
 
 export async function requireHaulMemberAccess(

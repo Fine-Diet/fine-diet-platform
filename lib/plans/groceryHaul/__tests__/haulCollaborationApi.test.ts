@@ -11,6 +11,10 @@ jest.mock('@/lib/access/requireJournalAccess', () => ({
   requireCallerJournalAccess: (...args: unknown[]) => mockRequireCallerJournalAccess(...args),
 }));
 
+jest.mock('@/lib/plans/groceryHaul/resolveHaulViewerAccess', () => ({
+  resolveHaulViewerAccess: (...args: unknown[]) => mockResolveViewerAccess(...args),
+}));
+
 // ES5-target ts-jest: `extends Error` loses instanceof unless the prototype is reset.
 class GroceryHaulNotFoundError extends Error {
   constructor(message: string) {
