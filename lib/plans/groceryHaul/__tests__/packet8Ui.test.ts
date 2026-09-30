@@ -21,6 +21,10 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(dialog).toContain('source_grocery_list_ids: selectedIds');
     expect(dialog).toContain('creationToken ?? crypto.randomUUID()');
     expect(dialog).toContain('selectedIds.length === 0');
+    expect(dialog).toContain('shell="create-resource"');
+    expect(dialog).toContain('HaulSourceListPicker');
+    expect(dialog).toContain('persistentListSummaries');
+    expect(dialog).toContain('lg:w-[98px]');
     expect(dialog).not.toContain('title:');
   });
 

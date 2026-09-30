@@ -11,6 +11,8 @@ import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 import type { GeneratedGroceryList, GroceryHaulCollectionItem } from '@/lib/plans/types';
+import type { GroceryListReadinessDecision } from '@/lib/plans/groceryListReadiness/policy';
+import { buildEligibleHaulSourceCandidates } from '@/lib/plans/groceryHaul/sourceListSelection';
 import { StartHaulDialog } from './StartHaulDialog';
 import {
   formatHaulCollectionSpend,
@@ -78,6 +80,10 @@ export default function HaulsLibrary() {
   const router = useRouter();
   const [hauls, setHauls] = useState<GroceryHaulCollectionItem[]>([]);
   const [lists, setLists] = useState<GeneratedGroceryList[]>([]);
+  const [persistentListSummaries, setPersistentListSummaries] = useState<
+    Record<string, GroceryListReadinessDecision>
+  >({});
+  const [defaultListId, setDefaultListId] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -96,6 +102,8 @@ export default function HaulsLibrary() {
         (list): list is GeneratedGroceryList =>
           Boolean(list && list.status === 'active' && !list.archived_at),
       ));
+      setPersistentListSummaries(overview.persistent_list_summaries);
+      setDefaultListId(overview.default_list?.id ?? null);
       setLoadState('ready');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load Hauls.');
@@ -106,6 +114,11 @@ export default function HaulsLibrary() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const eligibleStartLists = useMemo(
+    () => buildEligibleHaulSourceCandidates(lists, persistentListSummaries),
+    [lists, persistentListSummaries],
+  );
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
@@ -190,12 +203,12 @@ export default function HaulsLibrary() {
                   ? 'Create a Draft from one or more active Lists with source demand.'
                   : 'Try a title, date, source List, or store name.'}
               </p>
-              {hauls.length === 0 && lists.length > 0 && (
+              {hauls.length === 0 && eligibleStartLists.length > 0 && (
                 <button type="button" onClick={() => setStartOpen(true)} className="mt-5 rounded-full bg-brand-50 px-6 py-3 text-sm font-semibold text-[#16110d]">
                   Create New
                 </button>
               )}
-              {hauls.length === 0 && lists.length === 0 && (
+              {hauls.length === 0 && eligibleStartLists.length === 0 && (
                 <Link href={APP_ROUTES.foodLists} className="mt-5 inline-flex rounded-full border border-white/20 px-6 py-3 text-sm font-semibold">
                   Go to Lists
                 </Link>
@@ -212,6 +225,8 @@ export default function HaulsLibrary() {
       <StartHaulDialog
         open={startOpen}
         lists={lists}
+        persistentListSummaries={persistentListSummaries}
+        defaultListId={defaultListId}
         onClose={() => setStartOpen(false)}
         onCreated={(result) => void router.push(APP_ROUTE_BUILDERS.foodHaul(result.haul_id))}
       />

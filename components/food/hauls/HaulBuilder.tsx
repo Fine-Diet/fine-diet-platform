@@ -15,6 +15,7 @@ import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitch
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
+import { CreateResourceDialogFooter } from '@/components/food/itemManagement/CreateResourceDialogFooter';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 import type {
@@ -24,12 +25,15 @@ import type {
   GroceryHaulExecutionItemState,
   GroceryHaulItem,
 } from '@/lib/plans/types';
+import type { GroceryListReadinessDecision } from '@/lib/plans/groceryListReadiness/policy';
 import { HaulExecutionReadinessDialog } from './HaulExecutionReadinessDialog';
 import { HaulItemEditor } from './HaulItemEditor';
+import { HaulSourceListPicker } from './HaulSourceListPicker';
 import {
   computeGroceryHaulPreparationEstimate,
   countDistinctAssignedStores,
 } from '@/lib/plans/groceryHaul/estimate';
+import { buildEligibleHaulSourceCandidates } from '@/lib/plans/groceryHaul/sourceListSelection';
 import {
   formatHaulCurrency,
   formatHaulDate,
@@ -118,6 +122,10 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [addingLists, setAddingLists] = useState(false);
   const [addListsError, setAddListsError] = useState<string | null>(null);
+  const [persistentListSummaries, setPersistentListSummaries] = useState<
+    Record<string, GroceryListReadinessDecision>
+  >({});
+  const [defaultListId, setDefaultListId] = useState<string | null>(null);
   const [executionStateByItemId, setExecutionStateByItemId] = useState(
     () => new Map<string, GroceryHaulExecutionItemState>(),
   );
@@ -137,6 +145,8 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
         (list): list is GeneratedGroceryList =>
           Boolean(list && list.status === 'active' && !list.archived_at),
       ));
+      setPersistentListSummaries(overview.persistent_list_summaries);
+      setDefaultListId(overview.default_list?.id ?? null);
       setOpenSourceId((current) =>
         current && nextDetail.source_lists.some((source) => source.grocery_list_id === current)
           ? current
@@ -233,10 +243,17 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
     [detail?.items],
   );
 
-  const memberIds = new Set(detail?.source_lists.map((source) => source.grocery_list_id) ?? []);
-  const availableLists = lists.filter((list) => !memberIds.has(list.id));
-  const visibleAddLists = availableLists.filter((list) =>
-    groceryListTitle(list).toLocaleLowerCase().includes(addListQuery.trim().toLocaleLowerCase()),
+  const memberIds = useMemo(
+    () => new Set(detail?.source_lists.map((source) => source.grocery_list_id) ?? []),
+    [detail?.source_lists],
+  );
+
+  const addableSourceLists = useMemo(
+    () =>
+      buildEligibleHaulSourceCandidates(lists, persistentListSummaries, {
+        excludeListIds: memberIds,
+      }),
+    [lists, persistentListSummaries, memberIds],
   );
 
   function switchSource(sourceId: string) {
@@ -408,7 +425,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                     setAddListsError(null);
                     setAddListsOpen(true);
                   }}
-                  disabled={availableLists.length === 0}
+                  disabled={addableSourceLists.length === 0}
                   className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/20 px-4 text-xs font-semibold disabled:opacity-35"
                 >
                   <Plus className="h-4 w-4" aria-hidden />
@@ -735,46 +752,45 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
         onClose={() => setAddListsOpen(false)}
         labelledBy="add-lists-title"
         busy={addingLists}
+        shell="create-resource"
         footer={(
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setAddListsOpen(false)} className="px-4 py-2 text-sm text-white/55">Cancel</button>
-            <button type="button" onClick={() => void addSelectedLists()} disabled={selectedListIds.length === 0 || addingLists} className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-40">
-              {addingLists ? 'Adding…' : 'Add Lists'}
-            </button>
-          </div>
+          <CreateResourceDialogFooter
+            primaryLabel={addingLists ? 'Adding…' : 'Add Lists'}
+            onPrimary={() => void addSelectedLists()}
+            primaryDisabled={selectedListIds.length === 0}
+            primaryBusy={addingLists}
+            onSecondary={() => setAddListsOpen(false)}
+            secondaryDisabled={addingLists}
+          />
         )}
       >
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Haul Builder</p>
-        <h2 id="add-lists-title" className="mt-1 text-2xl font-semibold text-white">Add source Lists</h2>
-        <p className="mt-2 text-sm text-white/50">Add active Lists and preserve their current demand snapshots in this Haul.</p>
-        <div className="relative mt-5">
+        <h2 id="add-lists-title" className="text-2xl font-semibold text-white">Add source Lists</h2>
+        <div className="relative mt-4">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
           <input
             type="search"
             value={addListQuery}
             onChange={(event) => setAddListQuery(event.target.value)}
-            placeholder="Search active Lists"
+            placeholder="Search Lists"
+            aria-label="Search Lists"
             className="min-h-11 w-full rounded-full border border-white/20 bg-transparent pl-10 pr-4 text-base outline-none focus:border-white/60 sm:text-xl"
           />
         </div>
-        <div className="mt-3 space-y-2">
-          {visibleAddLists.length === 0 ? (
-            <p className="rounded-xl border border-white/10 px-4 py-4 text-sm text-white/45">No additional active Lists found.</p>
-          ) : visibleAddLists.map((list) => (
-            <label key={list.id} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-white/10 px-4 py-3">
-              <input
-                type="checkbox"
-                checked={selectedListIds.includes(list.id)}
-                onChange={() => setSelectedListIds((current) =>
-                  current.includes(list.id)
-                    ? current.filter((id) => id !== list.id)
-                    : [...current, list.id],
-                )}
-                className="h-4 w-4 accent-white"
-              />
-              <span className="text-sm font-semibold">{groceryListTitle(list)}</span>
-            </label>
-          ))}
+        <div className="mt-3">
+          <HaulSourceListPicker
+            lists={lists}
+            summaries={persistentListSummaries}
+            defaultListId={defaultListId}
+            selectedIds={selectedListIds}
+            onToggle={(listId) => setSelectedListIds((current) =>
+              current.includes(listId)
+                ? current.filter((id) => id !== listId)
+                : [...current, listId],
+            )}
+            searchQuery={addListQuery}
+            excludeListIds={Array.from(memberIds)}
+            emptyMessage="No additional active Lists with pending demand found."
+          />
         </div>
         {addListsError && <p role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{addListsError}</p>}
       </ItemManagementDialog>

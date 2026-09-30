@@ -50,4 +50,28 @@ describe('ItemManagementDialog default shell', () => {
       /PANTRY_WORKSPACE_PANEL_CLASS[\s\S]*bg-\[#211a14\]/,
     );
   });
+
+  it('adds create-resource shell for Food creation and transition modals', () => {
+    const source = read('components/food/itemManagement/ItemManagementDialog.tsx');
+    const lists = read('components/food/lists/ListsManager.tsx');
+    const startHaul = read('components/food/hauls/StartHaulDialog.tsx');
+    expect(source).toContain("'create-resource'");
+    expect(source).toContain('CREATE_RESOURCE_OVERLAY_CLASS');
+    expect(source).toContain('lg:max-w-[550px]');
+    expect(source).toContain('lg:bg-black/[0.62]');
+    expect(source).toContain('lg:before:bg-[#251F18]/[0.92]');
+    expect(source).toContain('lg:before:backdrop-blur-[10px]');
+    expect(lists).toContain('shell="create-resource"');
+    expect(lists).toContain("primaryLabel={creatingList ? 'Saving…' : 'Save'}");
+    expect(lists).toContain('id="new-list-title"');
+    expect(source).toContain('CREATE_RESOURCE_PANEL_CLASS');
+    expect(source).toContain('overflow-visible rounded-none');
+    expect(source).toContain('sm:rounded-none');
+    expect(lists).not.toContain('List name');
+    expect(lists).toContain('border-b border-white/50');
+    expect(startHaul).toContain('shell="create-resource"');
+    expect(read('components/food/hauls/HaulExecutionReadinessDialog.tsx')).toContain(
+      'shell="create-resource"',
+    );
+  });
 });

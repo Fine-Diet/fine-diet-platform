@@ -1,5 +1,6 @@
 'use client';
 
+import { CreateResourceDialogFooter } from '@/components/food/itemManagement/CreateResourceDialogFooter';
 import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
 import type {
   GroceryHaulExecutionDeferredFinding,
@@ -75,47 +76,48 @@ export function HaulExecutionReadinessDialog({
       onClose={onClose}
       labelledBy="haul-readiness-title"
       busy={starting}
+      shell="create-resource"
       footer={(
-        <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-white/55"
-          >
-            Return to preparation
-          </button>
-          {readiness.can_start && (
+        readiness.can_start ? (
+          <CreateResourceDialogFooter
+            primaryLabel={starting ? 'Opening…' : 'Continue to Shopping View'}
+            onPrimary={onContinue}
+            primaryBusy={starting}
+            onSecondary={onClose}
+            secondaryDisabled={starting}
+            secondaryLabel="Return to preparation"
+          />
+        ) : (
+          <div className="flex w-full flex-col items-stretch">
             <button
               type="button"
-              onClick={onContinue}
-              disabled={starting}
-              className="rounded-full bg-brand-50 px-5 py-2 text-sm font-semibold text-[#16110d] disabled:opacity-50"
+              onClick={onClose}
+              className="min-h-10 w-full text-sm text-white/55"
             >
-              {starting ? 'Opening…' : 'Continue to Shopping View'}
+              Return to preparation
             </button>
-          )}
-        </div>
+          </div>
+        )
       )}
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">
-        Shopping View
-      </p>
-      <h2 id="haul-readiness-title" className="mt-1 text-2xl font-semibold text-white">
+      <h2 id="haul-readiness-title" className="text-2xl font-semibold text-white">
         {blocked ? 'Shopping View is not ready' : 'Review before Shopping View'}
       </h2>
       <p className="mt-2 text-sm text-white/50">
         {blocked
           ? 'At least one item must have a final quantity above zero before this Haul can enter Shopping View.'
-          : 'Warnings and deferred checks are shown as-is. They do not automatically block shopping.'}
+          : 'Review anything that needs attention. You can still continue.'}
       </p>
 
-      <FindingList heading="Blocking issues" findings={readiness.blockers} items={items} />
-      <FindingList heading="Warnings" findings={readiness.warnings} items={items} />
-      <FindingList
-        heading="Deferred checks"
-        findings={readiness.deferred_findings}
-        items={items}
-      />
+      <div className="mt-2 max-h-[min(24rem,50dvh)] overflow-y-auto overscroll-contain">
+        <FindingList heading="Blocking issues" findings={readiness.blockers} items={items} />
+        <FindingList heading="Warnings" findings={readiness.warnings} items={items} />
+        <FindingList
+          heading="Deferred checks"
+          findings={readiness.deferred_findings}
+          items={items}
+        />
+      </div>
 
     </ItemManagementDialog>
   );
