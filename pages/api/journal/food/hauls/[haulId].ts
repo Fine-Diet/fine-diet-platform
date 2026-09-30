@@ -3,11 +3,11 @@
  *
  * Canonical Haul preparation read and owner-scoped Draft metadata autosave.
  *
- * Auth: self-only via requireJournalAccess.
+ * Auth: owner-only with journal entitlement (contributors → 404 for shared fallback).
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireJournalAccess } from '@/lib/access/requireJournalAccess';
+import { requireOwnerJournalHaulAccess } from '@/lib/access/requireHaulAccess';
 import {
   GroceryHaulConflictError,
   GroceryHaulNotFoundError,
@@ -28,7 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const ctx = await requireJournalAccess(req, res);
+    const ctx = await requireOwnerJournalHaulAccess(req, res, haulId);
     if (!ctx) return;
     const { personId } = ctx;
 

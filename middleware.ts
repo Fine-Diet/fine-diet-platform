@@ -4,7 +4,9 @@ import {
   isSafeRedirectTarget,
   normalizeAutomaticLoginReturnTarget,
 } from './lib/redirectHelpers';
+import { parseStrictContributorHaulAppPath } from './lib/access/haulContributorAppRoutes';
 import { resolveEffectiveAccessForAuthUser } from './lib/access/effectiveAccess';
+import { resolveHaulViewerAccess } from './lib/plans/groceryHaul/resolveHaulViewerAccess';
 import {
   APP_ROUTES,
   getCanonicalAppRouteForLegacyJournalPath,
@@ -102,7 +104,30 @@ export async function middleware(request: NextRequest) {
 
     try {
       const decision = await resolveEffectiveAccessForAuthUser(user.id);
-      if (!decision.allowed) {
+      let appEntryAllowed = decision.allowed;
+      /** Invite v1: accepted contributor on strict shared Haul UI only — no journal/onboarding. */
+      let haulContributorSharedEntry = false;
+
+      if (!appEntryAllowed && decision.personId) {
+        const contributorHaulRoute = parseStrictContributorHaulAppPath(pathname);
+        if (contributorHaulRoute) {
+          try {
+            const haulAccess = await resolveHaulViewerAccess(
+              decision.personId,
+              contributorHaulRoute.haulId,
+            );
+            if (haulAccess?.role === 'contributor') {
+              appEntryAllowed = true;
+              haulContributorSharedEntry = true;
+            }
+          } catch (haulAccessErr) {
+            console.error('[Middleware] Haul contributor access check failed:', haulAccessErr);
+            return redirectToWaitlist(url, pathname, search);
+          }
+        }
+      }
+
+      if (!appEntryAllowed) {
         return redirectToWaitlist(url, pathname, search);
       }
 
@@ -113,7 +138,11 @@ export async function middleware(request: NextRequest) {
         onboarding_last_step: decision.onboarding.lastStep,
       };
 
-      if (mustEnterOnboarding(metadata) && !isOnboardingGateExempt(pathname)) {
+      if (
+        mustEnterOnboarding(metadata) &&
+        !isOnboardingGateExempt(pathname) &&
+        !haulContributorSharedEntry
+      ) {
         const dest = buildOnboardingRedirectDestination(pathname, search);
         const [destPath, destQuery] = dest.split('?');
         url.pathname = destPath;

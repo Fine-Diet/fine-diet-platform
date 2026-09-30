@@ -9,6 +9,7 @@
 
 import type {
   GroceryHaulCreateOutcome,
+  GroceryHaulItemOriginType,
   GroceryHaulStatus,
   GroceryItemSourceType,
   GroceryItemStatus,
@@ -136,3 +137,62 @@ export const GROCERY_HAUL_CURRENCY_PATTERN = /^[A-Z]{3}$/;
 export function isGroceryHaulCurrency(value: string): boolean {
   return GROCERY_HAUL_CURRENCY_PATTERN.test(value);
 }
+
+// ---------------------------------------------------------------------------
+// Invite to Haul v1 (Phase B1): Haul-only collaboration
+// ---------------------------------------------------------------------------
+
+export const HAUL_INVITE_COLLABORATION_SQL_PATH =
+  'scripts/sql/addHaulInviteCollaboration.sql';
+export const HAUL_INVITE_COLLABORATION_ROLLBACK_SQL_PATH =
+  'scripts/sql/rollbackHaulInviteCollaboration.sql';
+
+export const HAUL_INVITATIONS_TABLE = 'grocery_haul_invitations';
+
+export const HAUL_INVITE_CREATE_RPC_NAME = 'create_grocery_haul_invitation';
+export const HAUL_INVITE_REVOKE_RPC_NAME = 'revoke_grocery_haul_invitation';
+export const HAUL_INVITE_ACCEPT_RPC_NAME = 'accept_grocery_haul_invitation';
+export const HAUL_CONTRIBUTOR_ITEM_ADD_RPC_NAME = 'add_grocery_haul_contributor_item';
+export const HAUL_CONTRIBUTOR_ITEM_UPDATE_RPC_NAME = 'update_grocery_haul_contributor_item';
+export const HAUL_CONTRIBUTOR_ITEM_REMOVE_RPC_NAME = 'remove_grocery_haul_contributor_item';
+
+export const HAUL_INVITATION_ROLES = ['contributor'] as const;
+export const HAUL_INVITATION_STATUSES = ['pending', 'accepted', 'revoked'] as const;
+export type HaulInvitationRole = (typeof HAUL_INVITATION_ROLES)[number];
+export type HaulInvitationStatus = (typeof HAUL_INVITATION_STATUSES)[number];
+
+export const HAUL_ITEM_ORIGIN_TYPES = [
+  'source_list_snapshot',
+  'haul_contributor',
+] as const satisfies readonly GroceryHaulItemOriginType[];
+
+/** Database-enforced limits; mirrored here so the API can fail fast with a clear message. */
+export const HAUL_INVITE_MAX_LIVE_PER_HAUL = 10;
+export const HAUL_INVITE_MAX_PENDING_PER_OWNER = 20;
+export const HAUL_CONTRIBUTOR_MAX_ITEMS_PER_MEMBER = 100;
+
+export const HAUL_INVITE_RPC_ERRORS = [
+  'HAUL_INVITE_INVALID_ARGS',
+  'HAUL_INVITE_INVALID_EMAIL',
+  'HAUL_INVITE_FORBIDDEN',
+  'HAUL_INVITE_NOT_FOUND',
+  'HAUL_INVITE_NOT_DRAFT',
+  'HAUL_INVITE_HAUL_NOT_OPEN',
+  'HAUL_INVITE_SELF',
+  'HAUL_INVITE_LIMIT',
+  'HAUL_INVITE_ACCOUNT_NOT_LINKED',
+  'HAUL_INVITE_IDENTITY_MISMATCH',
+  'HAUL_INVITE_REVOKED',
+] as const;
+
+export const HAUL_CONTRIBUTOR_RPC_ERRORS = [
+  'HAUL_CONTRIBUTOR_INVALID_ARGS',
+  'HAUL_CONTRIBUTOR_FORBIDDEN',
+  'HAUL_CONTRIBUTOR_NOT_DRAFT',
+  'HAUL_CONTRIBUTOR_ITEM_NOT_FOUND',
+  'HAUL_CONTRIBUTOR_ITEM_LIMIT',
+  'HAUL_CONTRIBUTOR_INVALID_ITEM',
+] as const;
+
+export type HaulInviteRpcError = (typeof HAUL_INVITE_RPC_ERRORS)[number];
+export type HaulContributorRpcError = (typeof HAUL_CONTRIBUTOR_RPC_ERRORS)[number];

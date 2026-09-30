@@ -704,11 +704,24 @@ export interface GroceryHaulStoreSearchResponse {
   provider_error: string | null;
 }
 
+/**
+ * Provenance of a Haul item.
+ * - source_list_snapshot: frozen copy of a source List item (has a source List).
+ * - haul_contributor: Haul-only addition by an accepted contributor (no source
+ *   List, no grocery_item_id; never written back to grocery_items).
+ */
+export type GroceryHaulItemOriginType = 'source_list_snapshot' | 'haul_contributor';
+
 export interface GroceryHaulItem {
   id: string;
   haul_id: string;
+  /** Always the Haul OWNER, for every origin. Attribution is added_by_person_id. */
   person_id: string;
-  source_grocery_list_id: string;
+  /** null for Haul-only (haul_contributor) items. */
+  source_grocery_list_id: string | null;
+  origin_type: GroceryHaulItemOriginType;
+  /** Contributor who added a haul_contributor item; null for snapshot rows and after account erasure. */
+  added_by_person_id: string | null;
   grocery_item_id: string | null;
   name_snapshot: string;
   quantity_snapshot: number | null;
@@ -830,7 +843,8 @@ export interface GroceryHaulExecutionItem {
   state: GroceryHaulExecutionItemState;
   /** Live Haul preparation for pending rows; null when not joined. */
   current_preparation: GroceryHaulExecutionCurrentPreparation | null;
-  source_grocery_list_id: string;
+  /** null for Haul-only (haul_contributor) items. */
+  source_grocery_list_id: string | null;
   source_list_title: string | null;
   source_name_snapshot: string;
   source_quantity_snapshot: number | null;

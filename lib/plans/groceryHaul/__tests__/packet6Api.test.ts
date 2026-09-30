@@ -1,12 +1,24 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 const mockRequireJournalAccess = jest.fn();
+const mockRequireJournalAuth = jest.fn();
+const mockRequireCallerJournalAccess = jest.fn();
+const mockResolveHaulViewerAccess = jest.fn();
 const mockUpdateMetadata = jest.fn();
 const mockUpdateItem = jest.fn();
 const mockAddSources = jest.fn();
 
+const SESSION_CTX = { personId: 'person-1', user: { id: 'auth-user' } };
+const HAUL_ID = 'haul-1';
+
 jest.mock('@/lib/access/requireJournalAccess', () => ({
   requireJournalAccess: (...args: unknown[]) => mockRequireJournalAccess(...args),
+  requireJournalAuth: (...args: unknown[]) => mockRequireJournalAuth(...args),
+  requireCallerJournalAccess: (...args: unknown[]) => mockRequireCallerJournalAccess(...args),
+}));
+
+jest.mock('@/lib/plans/groceryHaul/resolveHaulViewerAccess', () => ({
+  resolveHaulViewerAccess: (...args: unknown[]) => mockResolveHaulViewerAccess(...args),
 }));
 
 class GroceryHaulNotFoundError extends Error {
@@ -74,9 +86,21 @@ function response(): NextApiResponse & { statusCode: number; body: unknown } {
   return res as unknown as NextApiResponse & { statusCode: number; body: unknown };
 }
 
+function ownerHaulAccess() {
+  mockRequireJournalAuth.mockResolvedValue(SESSION_CTX);
+  mockRequireCallerJournalAccess.mockResolvedValue(true);
+  mockResolveHaulViewerAccess.mockResolvedValue({
+    role: 'owner',
+    haulId: HAUL_ID,
+    ownerPersonId: SESSION_CTX.personId,
+    actorPersonId: SESSION_CTX.personId,
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
-  mockRequireJournalAccess.mockResolvedValue({ personId: 'person-1' });
+  mockRequireJournalAccess.mockResolvedValue(SESSION_CTX);
+  ownerHaulAccess();
 });
 
 describe('Packet 6 Haul write APIs', () => {
