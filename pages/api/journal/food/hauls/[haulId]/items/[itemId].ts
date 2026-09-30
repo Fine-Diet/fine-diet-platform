@@ -30,6 +30,7 @@ const fieldTypes: Record<string, 'number' | 'nullable-number' | 'nullable-string
   price_amount: 'nullable-number',
   price_currency: 'nullable-string',
   source_price_observation_id: 'nullable-string',
+  haul_store_id: 'nullable-string',
 };
 
 function validBody(body: Record<string, unknown>): boolean {
@@ -71,6 +72,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       packageSize: body.package_size as number | null | undefined,
       packageUnit: body.package_unit as string | null | undefined,
       packageCount: body.package_count as number | null | undefined,
+      haulStoreId: body.haul_store_id as string | null | undefined,
       retailer: body.retailer as string | null | undefined,
       storeLocation: body.store_location as string | null | undefined,
       postalCode: body.postal_code as string | null | undefined,

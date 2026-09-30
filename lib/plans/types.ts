@@ -658,6 +658,52 @@ export interface GroceryHaulSourceListReadModel extends GroceryHaulSourceList {
 export type GroceryHaulPriceSource = 'manual' | 'sourced';
 export type GroceryHaulResolutionSource = 'source_list' | 'haul_edit';
 
+export type GroceryHaulStoreSource = 'manual' | 'serpapi';
+
+export interface GroceryHaulStore {
+  id: string;
+  haul_id: string;
+  person_id: string;
+  retailer: string;
+  store_name: string | null;
+  store_location: string | null;
+  address_line1: string | null;
+  city: string | null;
+  region: string | null;
+  postal_code: string | null;
+  country_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  source: GroceryHaulStoreSource;
+  provider_place_id: string | null;
+  provider_data_id: string | null;
+  provider_location: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroceryHaulStoreSearchCandidate {
+  provider_place_id: string;
+  provider_data_id: string | null;
+  provider_location: string | null;
+  retailer: string;
+  store_name: string | null;
+  store_location: string | null;
+  address_line1: string | null;
+  city: string | null;
+  region: string | null;
+  postal_code: string | null;
+  country_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface GroceryHaulStoreSearchResponse {
+  results: GroceryHaulStoreSearchCandidate[];
+  provider_disabled: boolean;
+  provider_error: string | null;
+}
+
 export interface GroceryHaulItem {
   id: string;
   haul_id: string;
@@ -679,6 +725,7 @@ export interface GroceryHaulItem {
   package_size: number | null;
   package_unit: string | null;
   package_count: number | null;
+  haul_store_id: string | null;
   retailer: string | null;
   store_location: string | null;
   postal_code: string | null;
@@ -722,6 +769,7 @@ export interface GroceryHaulDetail {
   haul: GroceryHaul;
   source_lists: GroceryHaulSourceListReadModel[];
   items: GroceryHaulItem[];
+  stores: GroceryHaulStore[];
   estimate: GroceryHaulPreparationEstimate;
 }
 

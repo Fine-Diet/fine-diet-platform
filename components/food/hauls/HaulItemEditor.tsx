@@ -10,8 +10,10 @@ import { planService } from '@/lib/plans';
 import type { FoodSearchResult } from '@/lib/food/types';
 import type {
   GroceryHaulItem,
+  GroceryHaulStore,
   GroceryListPriceObservation,
 } from '@/lib/plans/types';
+import { haulStoreDisplayLabel, haulStoreLocationLine } from '@/lib/plans/groceryHaul/haulStoreIdentity';
 
 import { sourceDemandLabel } from './presentation';
 import { buildHaulItemPreparationPatch, validateHaulItemSave } from './haulItemSave';
@@ -29,6 +31,7 @@ export type HaulEditorSubpanel = 'main' | 'change_product' | 'manual_price' | 's
 interface HaulItemEditorProps {
   haulId: string;
   haulCurrency: string;
+  rosterStores?: GroceryHaulStore[];
   item: GroceryHaulItem | null;
   openInProductSearch?: boolean;
   onClose: () => void;
@@ -38,7 +41,7 @@ interface HaulItemEditorProps {
 type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
 
 const INPUT_CLASS =
-  'mt-1.5 w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/60 focus:ring-2 focus:ring-white/10 focus:ring-offset-0';
+  'mt-1.5 min-w-0 max-w-full w-full rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/60 focus:ring-2 focus:ring-white/10 focus:ring-offset-0';
 
 function FoodSearchResultsList({
   busy,
@@ -84,6 +87,7 @@ function applyDraftPatch(
 export function HaulItemEditor({
   haulId,
   haulCurrency,
+  rosterStores = [],
   item,
   openInProductSearch = false,
   onClose,
@@ -333,7 +337,7 @@ export function HaulItemEditor({
       <p className="text-base text-white/45 lg:font-semibold">Haul item</p>
       <h2
         id="haul-item-editor-title"
-        className="mt-2 text-[2.35rem] font-medium leading-tight text-white sm:text-[2.5rem] lg:mt-4 lg:text-[44px] lg:font-normal lg:leading-[44px]"
+        className="mt-2 break-words text-[2rem] font-medium leading-tight text-white sm:text-[2.5rem] lg:mt-4 lg:text-[44px] lg:font-normal lg:leading-[44px]"
       >
         {panelTitle}
       </h2>
@@ -448,30 +452,74 @@ export function HaulItemEditor({
             onPackageCountChange={(value) => updateDraft({ packageCount: value })}
             inputClassName={INPUT_CLASS}
           />
-          <label className="block">
-            <span className="text-xs text-white/55">Retailer</span>
-            <input
-              value={draft.retailer}
-              onChange={(event) => updateDraft({ retailer: event.target.value })}
-              className={INPUT_CLASS}
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs text-white/55">Store location</span>
-            <input
-              value={draft.storeLocation}
-              onChange={(event) => updateDraft({ storeLocation: event.target.value })}
-              className={INPUT_CLASS}
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs text-white/55">ZIP/postal</span>
-            <input
-              value={draft.postalCode}
-              onChange={(event) => updateDraft({ postalCode: event.target.value })}
-              className={INPUT_CLASS}
-            />
-          </label>
+          {rosterStores.length > 0 ? (
+            <label className="block">
+              <span className="text-xs text-white/55">Store destination</span>
+              <select
+                value={draft.haulStoreId ?? ''}
+                onChange={(event) => {
+                  const nextId = event.target.value || null;
+                  if (!nextId) {
+                    updateDraft({
+                      haulStoreId: null,
+                      retailer: '',
+                      storeLocation: '',
+                      postalCode: '',
+                    });
+                    return;
+                  }
+                  const store = rosterStores.find((row) => row.id === nextId);
+                  if (!store) return;
+                  updateDraft({
+                    haulStoreId: store.id,
+                    retailer: store.retailer,
+                    storeLocation: store.store_location ?? haulStoreLocationLine(store),
+                    postalCode: store.postal_code ?? '',
+                  });
+                }}
+                className={INPUT_CLASS}
+              >
+                <option value="">No store</option>
+                {rosterStores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {haulStoreDisplayLabel(store)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <>
+              <label className="block">
+                <span className="text-xs text-white/55">Retailer</span>
+                <input
+                  value={draft.retailer}
+                  onChange={(event) => updateDraft({ retailer: event.target.value, haulStoreId: null })}
+                  className={INPUT_CLASS}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-white/55">Store location</span>
+                <input
+                  value={draft.storeLocation}
+                  onChange={(event) => updateDraft({ storeLocation: event.target.value, haulStoreId: null })}
+                  className={INPUT_CLASS}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-white/55">ZIP/postal</span>
+                <input
+                  value={draft.postalCode}
+                  onChange={(event) => updateDraft({ postalCode: event.target.value, haulStoreId: null })}
+                  className={INPUT_CLASS}
+                />
+              </label>
+            </>
+          )}
+          {rosterStores.length > 0 && draft.haulStoreId && (
+            <p className="text-xs text-white/45">
+              {[draft.retailer, draft.storeLocation, draft.postalCode].filter(Boolean).join(' · ')}
+            </p>
+          )}
           <label className="block">
             <span className="text-xs text-white/55">Price</span>
             <input

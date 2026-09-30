@@ -35,7 +35,7 @@ function HaulCollectionTable({ hauls }: { hauls: GroceryHaulCollectionItem[] }) 
   return (
     <section aria-labelledby="recent-hauls-heading">
       <h2 id="recent-hauls-heading" className="sr-only">Recent Hauls</h2>
-      <div className="mt-1 hidden h-9 grid-cols-[16%_46%_22%_1fr] items-center gap-4 text-[10px] font-semibold text-white lg:grid">
+      <div className="mt-1 hidden h-9 grid-cols-[minmax(0,156fr)_minmax(0,435fr)_minmax(0,210fr)_minmax(6rem,133fr)] items-center px-2 text-[10px] font-semibold text-white lg:grid">
         <span>Date</span>
         <span>Store</span>
         <span>Spend</span>
@@ -48,18 +48,18 @@ function HaulCollectionTable({ hauls }: { hauls: GroceryHaulCollectionItem[] }) 
             <li key={haul.id}>
               <Link
                 href={haulHrefForStatus(haul.id, haul.status)}
-                className="grid gap-2 transition-colors hover:bg-white/[0.035] max-lg:px-1 max-lg:py-4 lg:h-[25px] lg:grid-cols-[16%_46%_22%_1fr] lg:items-center lg:gap-4 lg:py-0"
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 transition-colors hover:bg-white/[0.035] max-lg:px-1 max-lg:py-4 lg:min-h-[25px] lg:grid-cols-[minmax(0,156fr)_minmax(0,435fr)_minmax(0,210fr)_minmax(6rem,133fr)] lg:items-center lg:gap-0 lg:px-2 lg:py-0"
               >
-                <div>
-                  <p className="text-sm text-white/50">{formatHaulDate(haul.shopping_date)}</p>
+                <div className="min-w-0 break-words">
+                  <p className="text-[14px] text-white/50">{formatHaulDate(haul.shopping_date)}</p>
                   <p className="mt-1 text-xs text-white/45 lg:hidden">{storeLabel(haul)}</p>
                 </div>
-                <p className="hidden truncate text-sm text-white/50 lg:block">{storeLabel(haul)}</p>
+                <p className="hidden truncate text-[14px] text-white/50 lg:block">{storeLabel(haul)}</p>
                 <div>
-                  <p className="text-sm text-white/50">{spend.amount}</p>
+                  <p className="text-[14px] text-white/50">{spend.amount}</p>
                   <p className="mt-1 text-[10px] text-white/35 lg:hidden">{spend.qualifier}</p>
                 </div>
-                <p className="text-sm text-white/50 max-lg:col-span-2">{haulStatusLabel(haul.status)}</p>
+                <p className="text-[14px] text-white/50 max-lg:col-span-2">{haulStatusLabel(haul.status)}</p>
               </Link>
             </li>
           );
@@ -130,7 +130,7 @@ export default function HaulsLibrary() {
 
   return (
     <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
-      <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
+      <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14 xl:pt-[124px]">
         <div className="mx-auto w-full max-w-[950px]">
           <header className="flex flex-col">
             <div className="h-[34px] shrink-0">
@@ -140,12 +140,12 @@ export default function HaulsLibrary() {
                 anchorBackgroundClass="bg-[#17130f]"
               />
             </div>
-            <h1 className="mt-1 max-w-[900px] text-[44px] font-regular leading-[53px] tracking-tight text-brand-50">
+            <h1 className="mt-1 max-w-[900px] text-[32px] font-regular leading-tight text-brand-50 sm:text-[44px] sm:leading-[53px]">
               Start or continue your haul preparation.
             </h1>
           </header>
 
-          <div className="mt-6 flex h-11 w-full flex-col border-b border-white/25 sm:flex-row sm:items-stretch">
+          <div className="mt-6 grid w-full grid-cols-2 border-b border-white/25 sm:flex sm:items-stretch">
             <button
               type="button"
               onClick={() => setStartOpen(true)}
@@ -160,7 +160,7 @@ export default function HaulsLibrary() {
             >
               Recent
             </button>
-            <div className="relative flex min-h-11 min-w-0 flex-1 items-center">
+            <div className="relative col-span-2 flex min-h-11 min-w-0 flex-1 items-center sm:ml-[25px]">
               <input
                 type="search"
                 value={query}

@@ -69,7 +69,7 @@ const CREATE_RESOURCE_OVERLAY_CLASS = cn(
   'items-start justify-center overflow-y-auto p-0',
   'bg-neutral-900/90 backdrop-blur-md',
   'top-[var(--app-chrome-offset,2.25rem)] bottom-0 max-lg:top-0',
-  'lg:bg-black/[0.62] lg:backdrop-blur-none',
+  'lg:bg-black/[0.62] lg:backdrop-blur-none lg:px-6 lg:py-8',
   'lg:before:pointer-events-none lg:before:absolute lg:before:inset-0',
   'lg:before:bg-[#251F18]/[0.92] lg:before:backdrop-blur-[10px]',
   'lg:top-[var(--app-chrome-offset,2.25rem)] lg:bottom-0',
@@ -83,7 +83,7 @@ const CREATE_RESOURCE_PANEL_CLASS = cn(
 );
 
 const CREATE_RESOURCE_BODY_CLASS = cn(
-  'min-h-0 flex-1 overflow-x-visible overflow-y-auto px-5 pb-4 pt-6',
+  'min-h-0 min-w-0 flex-1 break-words overflow-y-auto px-5 pb-4 pt-6',
   'lg:overflow-visible lg:px-0 lg:pb-0 lg:pt-0',
 );
 

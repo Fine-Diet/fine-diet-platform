@@ -31,7 +31,7 @@ describe('Packet 11E contracts after Packet 3 Lists migration', () => {
   it('creates a Haul only from the explicit manager action', () => {
     const manager = read('components/food/lists/ListsManager.tsx');
     const legacyIndex = read('pages/app/food/groceries/index.tsx');
-    expect(manager).toContain('onClick={() => void buildHaul()}');
+    expect(manager).toContain('onPrimary={() => void buildHaul()}');
     expect(manager).toContain('planService.startGroceryHaulFromList(selectedListId');
     expect(legacyIndex).not.toContain('startGroceryHaulFromList');
   });
