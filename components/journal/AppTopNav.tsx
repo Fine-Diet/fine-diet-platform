@@ -12,8 +12,11 @@ interface AppTopNavProps {
 
 export function AppTopNav({ drawerOpen = false, onOpenDrawer }: AppTopNavProps) {
   return (
-    <header className="bg-black/20 backdrop-blur-md border-b border-white/[0.04]">
-      <div className="py-6 h-9 px-4 md:px-6 flex items-center justify-between mx-auto">
+    <header
+      data-app-top-nav
+      className="border-b border-white/[0.04] bg-black/20 backdrop-blur-md"
+    >
+      <div className="mx-auto flex h-9 items-center justify-between px-4 py-6 md:px-6">
         <button
           type="button"
           onClick={onOpenDrawer}

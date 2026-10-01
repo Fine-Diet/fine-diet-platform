@@ -297,9 +297,9 @@ export function AppSideMenu({
       <div
         onClick={onClose}
         aria-hidden
-        className={`fixed inset-0 z-[75] bg-black/50 backdrop-blur-sm transition-opacity duration-200 lg:hidden ${
-          hasFinishSetupNotice ? 'top-[5.5rem]' : ''
-        } ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        className={`fixed bottom-0 left-0 right-0 z-[75] bg-black/50 backdrop-blur-sm transition-opacity duration-200 lg:hidden top-[var(--app-chrome-offset,calc(3rem+1px))] ${
+          open ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
       />
 
       {/* Panel: overlay on mobile, persistent sidebar on desktop. */}
@@ -308,10 +308,10 @@ export function AppSideMenu({
         className={`fixed left-0 z-[80] flex w-[250px] max-w-[85vw] flex-col bg-neutral-900 shadow-large transition-transform duration-200 ease-out lg:z-30 lg:max-w-none lg:translate-x-0 lg:shadow-none ${
           hasFinishSetupNotice
             ? APP_SIDEBAR_WITH_NOTICE_OFFSET_CLASS
-            : 'top-0 h-full lg:top-9 lg:h-[calc(100vh-2.25rem)]'
+            : 'top-[var(--app-chrome-offset,calc(3rem+1px))] h-[calc(100%-var(--app-chrome-offset,calc(3rem+1px)))] lg:h-[calc(100vh-var(--app-chrome-offset,calc(3rem+1px)))]'
         } ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <nav className="flex flex-1 flex-col overflow-y-auto pb-safe pt-9 lg:pt-[15px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="flex flex-1 flex-col overflow-y-auto pb-safe pt-[15px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {APP_DRAWER_HUBS.map((hub) => (hub.type === 'link' ? renderLinkRow(hub) : renderHub(hub)))}
 
           {/* Lower utility links, pinned to the bottom beneath a single divider */}

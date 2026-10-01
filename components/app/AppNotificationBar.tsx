@@ -4,13 +4,21 @@ import Link from 'next/link';
 
 import { cn } from '@/lib/utils';
 
-/** Banner is 88px (2× h-11). Banner + app top nav (h-9) = 124px. */
+/**
+ * Setup notice is a fixed 5.5rem bar. The top nav keeps its original
+ * border-box row: h-9 with py-6 uses 3rem, plus the 1px header border.
+ * Page clearance, the drawer, and Food overlays read one measured
+ * `--app-chrome-offset`; these lengths are the pre-measurement fallback.
+ */
 export const APP_NOTIFICATION_BAR_HEIGHT_CLASS = 'h-[5.5rem]';
-export const APP_CHROME_OFFSET = '2.25rem';
-export const APP_CHROME_OFFSET_WITH_NOTICE = '7.75rem';
-export const APP_CHROME_WITH_NOTICE_OFFSET_CLASS = 'pt-[7.75rem]';
+export const APP_NOTICE_HEIGHT = '5.5rem';
+export const APP_TOP_NAV_HEIGHT = 'calc(3rem + 1px)';
+export const APP_CHROME_OFFSET = APP_TOP_NAV_HEIGHT;
+export const APP_CHROME_OFFSET_WITH_NOTICE = `calc(${APP_NOTICE_HEIGHT} + ${APP_TOP_NAV_HEIGHT})`;
+export const APP_CHROME_OFFSET_CLASS = 'pt-[var(--app-chrome-offset,calc(3rem+1px))]';
+export const APP_CHROME_WITH_NOTICE_OFFSET_CLASS = APP_CHROME_OFFSET_CLASS;
 export const APP_SIDEBAR_WITH_NOTICE_OFFSET_CLASS =
-  'top-[5.5rem] h-[calc(100%-5.5rem)] lg:top-[7.75rem] lg:h-[calc(100vh-7.75rem)]';
+  'top-[var(--app-chrome-offset,calc(8.5rem+1px))] h-[calc(100%-var(--app-chrome-offset,calc(8.5rem+1px)))] lg:h-[calc(100vh-var(--app-chrome-offset,calc(8.5rem+1px)))]';
 
 export function AppNotificationBar({
   message,

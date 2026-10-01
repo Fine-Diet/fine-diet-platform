@@ -1,0 +1,339 @@
+{
+  "label": "fixture QA",
+  "baseUrl": "http://127.0.0.1:3027",
+  "realDeviceKeyboard": "NOT_RUN",
+  "nestedScanner": "NOT_RUN",
+  "shots": [
+    "food-home-recipe-closed-desktop-1440x900.png",
+    "food-home-recipe-open-desktop-1440x900.png",
+    "food-home-recipe-closed-phone-390x844.png",
+    "food-home-recipe-open-phone-390x844.png",
+    "haul-summary-scroll-end-1440.png",
+    "store-plus-corner-1440.png",
+    "food-overlay-desktop-1440.png",
+    "food-overlay-narrow-390.png",
+    "setup-notice-present-1440.png"
+  ],
+  "checks": [
+    {
+      "id": "recipe-open-desktop-1440x900",
+      "headerBottom": 81,
+      "chrome": "81px",
+      "drawerLeft": 0,
+      "drawerWidth": 250,
+      "menu": {
+        "top": 679,
+        "right": 1145,
+        "bottom": 820,
+        "left": 545,
+        "width": 600,
+        "height": 141
+      },
+      "footerTop": 828,
+      "menuAboveFooter": true,
+      "triggerTop": 631,
+      "triggerShift": -369,
+      "triggerStillVisible": true
+    },
+    {
+      "id": "recipe-escape-desktop-1440x900",
+      "closed": true
+    },
+    {
+      "id": "recipe-open-laptop-1280x720",
+      "headerBottom": 81,
+      "chrome": "81px",
+      "drawerLeft": 0,
+      "drawerWidth": 250,
+      "menu": {
+        "top": 499,
+        "right": 1065,
+        "bottom": 640,
+        "left": 465,
+        "width": 600,
+        "height": 141
+      },
+      "footerTop": 648,
+      "menuAboveFooter": true,
+      "triggerTop": 451,
+      "triggerShift": -387,
+      "triggerStillVisible": true
+    },
+    {
+      "id": "recipe-escape-laptop-1280x720",
+      "closed": true
+    },
+    {
+      "id": "recipe-open-laptop-1280x600",
+      "headerBottom": 81,
+      "chrome": "81px",
+      "drawerLeft": 0,
+      "drawerWidth": 250,
+      "menu": {
+        "top": 379,
+        "right": 1065,
+        "bottom": 520,
+        "left": 465,
+        "width": 600,
+        "height": 141
+      },
+      "footerTop": 528,
+      "menuAboveFooter": true,
+      "triggerTop": 331,
+      "triggerShift": -399,
+      "triggerStillVisible": true
+    },
+    {
+      "id": "recipe-escape-laptop-1280x600",
+      "closed": true
+    },
+    {
+      "id": "recipe-open-drawer-below-1023",
+      "headerBottom": 81,
+      "chrome": "81px",
+      "drawerLeft": -250,
+      "drawerWidth": 250,
+      "menu": {
+        "top": 579,
+        "right": 812,
+        "bottom": 720,
+        "left": 212,
+        "width": 600,
+        "height": 141
+      },
+      "footerTop": 728,
+      "menuAboveFooter": true,
+      "triggerTop": 531,
+      "triggerShift": -379,
+      "triggerStillVisible": true
+    },
+    {
+      "id": "recipe-escape-drawer-below-1023",
+      "closed": true
+    },
+    {
+      "id": "recipe-open-drawer-at-1024",
+      "headerBottom": 81,
+      "chrome": "81px",
+      "drawerLeft": 0,
+      "drawerWidth": 250,
+      "menu": {
+        "top": 579,
+        "right": 937,
+        "bottom": 720,
+        "left": 337,
+        "width": 600,
+        "height": 141
+      },
+      "footerTop": 728,
+      "menuAboveFooter": true,
+      "triggerTop": 531,
+      "triggerShift": -379,
+      "triggerStillVisible": true
+    },
+    {
+      "id": "recipe-escape-drawer-at-1024",
+      "closed": true
+    },
+    {
+      "id": "recipe-open-tablet-768x1024",
+      "headerBottom": 81,
+      "chrome": "81px",
+      "drawerLeft": -250,
+      "drawerWidth": 250,
+      "menu": {
+        "top": 803,
+        "right": 684,
+        "bottom": 944,
+        "left": 84,
+        "width": 600,
+        "height": 141
+      },
+      "footerTop": 952,
+      "menuAboveFooter": true,
+      "triggerTop": 755,
+      "triggerShift": -357,
+      "triggerStillVisible": true
+    },
+    {
+      "id": "recipe-escape-tablet-768x1024",
+      "closed": true
+    },
+    {
+      "id": "recipe-open-phone-390x844",
+      "headerBottom": 81,
+      "chrome": "81px",
+      "drawerLeft": -250,
+      "drawerWidth": 250,
+      "menu": {
+        "top": 623,
+        "right": 366,
+        "bottom": 764,
+        "left": 24,
+        "width": 342,
+        "height": 141
+      },
+      "footerTop": 772,
+      "menuAboveFooter": true,
+      "triggerTop": 575,
+      "triggerShift": -413,
+      "triggerStillVisible": true
+    },
+    {
+      "id": "recipe-escape-phone-390x844",
+      "closed": true
+    },
+    {
+      "id": "recipe-open-phone-360x740",
+      "headerBottom": 81,
+      "chrome": "81px",
+      "drawerLeft": -250,
+      "drawerWidth": 250,
+      "menu": {
+        "top": 520,
+        "right": 336,
+        "bottom": 661,
+        "left": 24,
+        "width": 312,
+        "height": 141
+      },
+      "footerTop": 668,
+      "menuAboveFooter": true,
+      "triggerTop": 472,
+      "triggerShift": -423,
+      "triggerStillVisible": true
+    },
+    {
+      "id": "recipe-escape-phone-360x740",
+      "closed": true
+    },
+    {
+      "id": "recipe-open-reflow-320",
+      "headerBottom": 81,
+      "chrome": "81px",
+      "drawerLeft": -250,
+      "drawerWidth": 250,
+      "menu": {
+        "top": 520,
+        "right": 296,
+        "bottom": 661,
+        "left": 24,
+        "width": 272,
+        "height": 141
+      },
+      "footerTop": 668,
+      "menuAboveFooter": true,
+      "triggerTop": 472,
+      "triggerShift": -461,
+      "triggerStillVisible": true
+    },
+    {
+      "id": "recipe-escape-reflow-320",
+      "closed": true
+    },
+    {
+      "id": "haul-summary-scroll-end-1440",
+      "summary": {
+        "top": 367,
+        "right": 1363,
+        "bottom": 900,
+        "left": 327,
+        "width": 1036,
+        "height": 533
+      },
+      "viewportHeight": 900,
+      "cta": {
+        "top": 751,
+        "bottom": 788
+      },
+      "footerTop": 828,
+      "borderReachesViewportEnd": true,
+      "ctaAboveFooter": true,
+      "plus": {
+        "top": 7,
+        "right": 1127,
+        "bottom": 51,
+        "left": 1083,
+        "width": 44,
+        "height": 44
+      },
+      "storeLabel": {
+        "topLeft": "12px",
+        "top": 7,
+        "right": 1083
+      },
+      "plusStyle": {
+        "topRight": "12px",
+        "bottomRight": "0px",
+        "bottomLeft": "0px"
+      }
+    },
+    {
+      "id": "food-overlay-desktop-1440",
+      "header": {
+        "top": 0,
+        "right": 1440,
+        "bottom": 81,
+        "left": 0,
+        "width": 1440,
+        "height": 81
+      },
+      "overlay": {
+        "top": 81,
+        "right": 1440,
+        "bottom": 900,
+        "left": 250,
+        "width": 1190,
+        "height": 819
+      },
+      "seam": 0,
+      "drawerStillVisible": 250
+    },
+    {
+      "id": "overlay-escape-desktop",
+      "closed": true
+    },
+    {
+      "id": "food-overlay-narrow-390",
+      "header": {
+        "top": 0,
+        "right": 390,
+        "bottom": 81,
+        "left": 0,
+        "width": 390,
+        "height": 81
+      },
+      "overlay": {
+        "top": 81,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 763
+      },
+      "seam": 0,
+      "overlayLeft": 0
+    },
+    {
+      "id": "setup-notice-present-1440",
+      "notice": {
+        "top": 0,
+        "right": 1440,
+        "bottom": 88,
+        "left": 0,
+        "width": 1440,
+        "height": 88
+      },
+      "header": {
+        "top": 88,
+        "right": 1440,
+        "bottom": 169,
+        "left": 0,
+        "width": 1440,
+        "height": 81
+      },
+      "chrome": "169px",
+      "headerStartsAtNoticeBottom": true
+    }
+  ]
+}

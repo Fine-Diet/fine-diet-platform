@@ -1088,6 +1088,8 @@ export default function PantryManager() {
         open={addOpen}
         onClose={() => !addBusy && setAddOpen(false)}
         labelledBy="add-pantry-title"
+        contentPane
+        overlayClassName="items-center p-3 sm:p-5"
         panelClassName="border border-white/10 bg-[#211a14] shadow-2xl"
       >
         <div className="p-5">

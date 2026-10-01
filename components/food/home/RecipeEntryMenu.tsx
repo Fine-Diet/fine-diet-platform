@@ -10,6 +10,17 @@ const OPTIONS: Array<{ action: RecipeEntryAction; label: string }> = [
   { action: 'url', label: 'Import from a link' },
 ];
 
+function scrollParent(node: HTMLElement): HTMLElement | null {
+  let current = node.parentElement;
+  while (current) {
+    const overflow = getComputedStyle(current).overflowY;
+    const canScroll = current.scrollHeight > current.clientHeight + 1;
+    if ((overflow === 'auto' || overflow === 'scroll') && canScroll) return current;
+    current = current.parentElement;
+  }
+  return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
+}
+
 export function RecipeEntryMenu({
   onAction,
 }: {
@@ -17,6 +28,7 @@ export function RecipeEntryMenu({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -34,14 +46,32 @@ export function RecipeEntryMenu({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const frame = window.requestAnimationFrame(() => {
+      const menu = menuRef.current;
+      if (!menu) return;
+      const footer = document.querySelector<HTMLElement>('[data-app-footer]');
+      const footerTop = footer?.getBoundingClientRect().top ?? window.innerHeight;
+      const rect = menu.getBoundingClientRect();
+      const limit = footerTop - 8;
+      if (rect.bottom <= limit) return;
+      const delta = rect.bottom - limit;
+      const scroller = scrollParent(menu);
+      if (scroller) scroller.scrollBy({ top: delta });
+      else window.scrollBy({ top: delta });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
   return (
-    <div ref={rootRef} className="relative mx-auto mt-4 w-full max-w-[600px]">
+    <div ref={rootRef} className="mx-auto mt-4 w-full max-w-[600px]">
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex min-h-10 w-full items-center justify-center rounded-full border border-white/15 px-5 text-sm font-normal text-white/45 transition-colors hover:border-white/30 hover:text-white"
+        className="relative flex min-h-10 w-full items-center justify-center rounded-full border border-white/15 px-5 text-sm font-normal text-white/45 transition-colors hover:border-white/30 hover:text-white"
       >
         <span>Add a recipe.</span>
         <span aria-hidden className="absolute right-5 text-lg font-normal">+</span>
@@ -49,9 +79,10 @@ export function RecipeEntryMenu({
 
       {open && (
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Add a recipe"
-          className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-20 rounded-[20px] border border-white/20 bg-[#211b15] p-2 shadow-large"
+          className="mt-2 rounded-[20px] border border-white/20 bg-[#211b15] p-2 shadow-large"
         >
           {OPTIONS.map((option) => (
             <button
