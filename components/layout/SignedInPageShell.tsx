@@ -18,10 +18,10 @@ export const SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS = 'lg:left-[250px]';
 export const SIGNED_IN_PAGE_GUTTER_CLASS = 'px-6 sm:px-12';
 /** Fallback only. AppShell replaces this with the measured chrome edge. */
 export const SIGNED_IN_TOP_CLEARANCE_VAR =
-  'var(--app-chrome-offset, calc(5rem + 1px))';
+  'var(--app-chrome-offset, calc(3rem + 1px))';
 export const FOOD_CONTENT_PANE_FRAME_CLASS = [
   'fixed bottom-0 right-0 z-[90] flex justify-center overflow-y-auto',
-  'top-[var(--app-chrome-offset,calc(5rem+1px))]',
+  'top-[var(--app-chrome-offset,calc(3rem+1px))]',
   'left-[var(--app-drawer-width,0px)]',
 ].join(' ');
 

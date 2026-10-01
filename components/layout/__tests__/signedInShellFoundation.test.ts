@@ -13,7 +13,7 @@ describe('signed-in shell foundation', () => {
     const source = geometry();
     expect(source).toContain("'lg:pl-[250px]'");
     expect(source).toContain("'lg:left-[250px]'");
-    expect(source).toContain("'var(--app-chrome-offset, calc(5rem + 1px))'");
+    expect(source).toContain("'var(--app-chrome-offset, calc(3rem + 1px))'");
   });
 
   it('reserves footer, safe-area, and optional local-action clearance', () => {

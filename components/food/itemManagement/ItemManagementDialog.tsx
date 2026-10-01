@@ -49,7 +49,7 @@ const PANTRY_WORKSPACE_BODY_CLASS =
 const PANTRY_WORKSPACE_OVERLAY_CLASS = cn(
   'items-start justify-center overflow-y-auto p-0',
   'bg-neutral-900/90 backdrop-blur-md',
-  'top-[var(--app-chrome-offset,calc(5rem+1px))]',
+  'top-[var(--app-chrome-offset,calc(3rem+1px))]',
 );
 
 const PANTRY_WORKSPACE_PANEL_CLASS = cn(
@@ -68,7 +68,7 @@ const PANTRY_WORKSPACE_FOOTER_CLASS = cn(
 const CREATE_RESOURCE_OVERLAY_CLASS = cn(
   'items-start justify-center overflow-y-auto p-0',
   'bg-neutral-900/90 backdrop-blur-md',
-  'top-[var(--app-chrome-offset,calc(5rem+1px))]',
+  'top-[var(--app-chrome-offset,calc(3rem+1px))]',
   'lg:bg-black/[0.62] lg:backdrop-blur-none lg:px-6 lg:py-8',
   'lg:before:pointer-events-none lg:before:absolute lg:before:inset-0',
   'lg:before:bg-[#251F18]/[0.92] lg:before:backdrop-blur-[10px]',
@@ -158,7 +158,7 @@ export function ItemManagementDialog({
                   'items-start justify-center overflow-y-auto p-0',
                   'lg:bg-neutral-900/90 lg:backdrop-blur-md',
                   'bg-black/70 backdrop-blur-sm',
-                  'top-[var(--app-chrome-offset,calc(5rem+1px))]',
+                  'top-[var(--app-chrome-offset,calc(3rem+1px))]',
                 ),
             )}
         panelClassName={panelClassName}

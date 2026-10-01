@@ -16,7 +16,7 @@ export function AppTopNav({ drawerOpen = false, onOpenDrawer }: AppTopNavProps) 
       data-app-top-nav
       className="border-b border-white/[0.04] bg-black/20 backdrop-blur-md"
     >
-      <div className="mx-auto box-content flex h-8 items-center justify-between px-4 py-6 md:px-6">
+      <div className="mx-auto flex h-9 items-center justify-between px-4 py-6 md:px-6">
         <button
           type="button"
           onClick={onOpenDrawer}

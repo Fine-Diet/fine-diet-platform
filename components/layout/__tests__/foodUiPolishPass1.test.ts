@@ -7,19 +7,21 @@ function read(relativePath: string): string {
 }
 
 describe('Food UI polish pass 1 geometry', () => {
-  it('counts chrome once from the measured header instead of the clipped h-9 offset', () => {
+  it('keeps the original header height and aligns chrome to that measured edge', () => {
     const nav = read('components/journal/AppTopNav.tsx');
     const shell = read('components/journal/AppShell.tsx');
     const drawer = read('components/journal/AppSideMenu.tsx');
     expect(nav).toContain('data-app-top-nav');
-    expect(nav).toContain('box-content flex h-8');
+    expect(nav).toContain('h-9');
     expect(nav).toContain('py-6');
-    expect(nav).not.toContain('h-9');
+    expect(nav).not.toContain('box-content');
+    expect(nav).toContain('h-[.85rem]');
     expect(shell).toContain("'--app-chrome-offset'");
     expect(shell).toContain('ResizeObserver');
     expect(shell).toContain('APP_CHROME_OFFSET_CLASS');
     expect(shell).not.toContain("'pt-9'");
-    expect(drawer).toContain('lg:top-[var(--app-chrome-offset,calc(5rem+1px))]');
+    expect(drawer).toContain('top-[var(--app-chrome-offset,calc(3rem+1px))]');
+    expect(drawer).not.toContain('top-0 h-full');
     expect(drawer).not.toContain('lg:top-9');
   });
 
