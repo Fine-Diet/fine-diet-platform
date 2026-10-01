@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { RecipeEntryMenu, type RecipeEntryAction } from './RecipeEntryMenu';
+import { SIGNED_IN_FOOTER_CLEARANCE_CLASS } from '@/components/layout/SignedInPageShell';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import {
   buildEssentialsCardContent,
@@ -121,7 +122,7 @@ export function FoodHomeStatusSurface({
 
       <StackedPageSection
         layer={1}
-        className="min-h-[280px] bg-[#2a231b] px-6 pb-32 pt-14 sm:px-12 sm:pt-14"
+        className={`min-h-[280px] bg-[#2a231b] px-6 pt-14 sm:px-12 sm:pt-14 ${SIGNED_IN_FOOTER_CLEARANCE_CLASS}`}
         contentClassName="max-w-[950px]"
       >
         <div className="text-center">

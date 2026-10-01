@@ -1,0 +1,73 @@
+{
+  "haul": {
+    "id": "qa-haul",
+    "person_id": "qa-person",
+    "source_grocery_list_id": "qa-list",
+    "shopping_date": "2026-10-03",
+    "status": "planned",
+    "creation_token": "qa-token",
+    "title": "Weekday Haul",
+    "budget_amount": 120,
+    "currency": "USD",
+    "shopping_started_at": null,
+    "created_at": "2026-10-01T12:00:00.000Z",
+    "updated_at": "2026-10-01T12:00:00.000Z"
+  },
+  "source_lists": [
+    {
+      "haul_id": "qa-haul",
+      "grocery_list_id": "qa-list",
+      "person_id": "qa-person",
+      "created_at": "2026-10-01T12:00:00.000Z",
+      "title": "Weekly List"
+    }
+  ],
+  "items": [],
+  "stores": [
+    {
+      "id": "qa-store",
+      "haul_id": "qa-haul",
+      "person_id": "qa-person",
+      "retailer": "Market",
+      "store_name": "Market",
+      "store_location": "Main",
+      "address_line1": null,
+      "city": null,
+      "region": null,
+      "postal_code": null,
+      "country_code": null,
+      "latitude": null,
+      "longitude": null,
+      "source": "manual",
+      "provider_place_id": null,
+      "provider_data_id": null,
+      "provider_location": null,
+      "created_at": "2026-10-01T12:00:00.000Z",
+      "updated_at": "2026-10-01T12:00:00.000Z"
+    }
+  ],
+  "estimate": {
+    "currency": "USD",
+    "estimated_total": 42,
+    "estimated_tax": null,
+    "tax_status": "excluded",
+    "execution_item_count": 2,
+    "excluded_item_count": 0,
+    "priced_item_count": 1,
+    "unpriced_item_count": 1,
+    "missing_product_count": 0,
+    "missing_store_count": 0,
+    "manual_subtotal": 42,
+    "sourced_subtotal": 0,
+    "by_store": [
+      {
+        "store_key": "qa-store",
+        "retailer": "Market",
+        "store_location": "Main",
+        "postal_code": null,
+        "estimated_subtotal": 42,
+        "priced_item_count": 1
+      }
+    ]
+  }
+}

@@ -3,9 +3,14 @@
 import {
   type ReactNode,
   type RefObject,
+  useEffect,
   useRef,
+  useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 
+import { useRegisterFoodContentPane } from '@/components/layout/foodContentPaneOverlay';
+import { FOOD_CONTENT_PANE_FRAME_CLASS } from '@/components/layout/SignedInPageShell';
 import { cn } from '@/lib/utils';
 import { useAccessibleDialog } from './useAccessibleDialog';
 
@@ -23,6 +28,11 @@ export interface AppDialogProps {
   inertTargetRef?: RefObject<HTMLElement | null>;
   overlayClassName?: string;
   panelClassName?: string;
+  /**
+   * Food opt-in: backdrop fills the content pane below top chrome and to the
+   * right of the persistent drawer. Default dialogs stay full-viewport.
+   */
+  contentPane?: boolean;
 }
 
 /**
@@ -44,27 +54,38 @@ export function AppDialog({
   inertTargetRef,
   overlayClassName,
   panelClassName,
+  contentPane = false,
 }: AppDialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const dialogOpen = open && (!contentPane || mounted);
+  useRegisterFoodContentPane(dialogOpen && contentPane);
 
   useAccessibleDialog({
-    open,
+    open: dialogOpen,
     containerRef: panelRef,
     onDismiss: onClose,
     closeOnEscape,
     inertTargetRef,
   });
 
-  if (!open) return null;
+  if (!dialogOpen) return null;
 
-  return (
+  const overlay = (
     <div
       className={cn(
-        'fixed inset-0 z-[90] flex justify-center bg-black/70 backdrop-blur-sm',
-        presentation === 'dialog'
+        contentPane
+          ? FOOD_CONTENT_PANE_FRAME_CLASS
+          : 'fixed inset-0 z-[90] flex justify-center bg-black/70 backdrop-blur-sm',
+        !contentPane && (presentation === 'dialog'
           ? 'items-end p-3 sm:items-center sm:p-5'
-          : 'items-end',
-        'pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-5',
+          : 'items-end'),
+        !contentPane && 'pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-5',
         overlayClassName,
       )}
       role="presentation"
@@ -96,4 +117,10 @@ export function AppDialog({
       </div>
     </div>
   );
+
+  if (contentPane && typeof document !== 'undefined') {
+    return createPortal(overlay, document.body);
+  }
+
+  return overlay;
 }

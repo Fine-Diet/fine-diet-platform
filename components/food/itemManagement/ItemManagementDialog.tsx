@@ -49,7 +49,7 @@ const PANTRY_WORKSPACE_BODY_CLASS =
 const PANTRY_WORKSPACE_OVERLAY_CLASS = cn(
   'items-start justify-center overflow-y-auto p-0',
   'bg-neutral-900/90 backdrop-blur-md',
-  'top-[var(--app-chrome-offset,2.25rem)] bottom-0 max-lg:top-0',
+  'top-[var(--app-chrome-offset,calc(5rem+1px))]',
 );
 
 const PANTRY_WORKSPACE_PANEL_CLASS = cn(
@@ -68,11 +68,10 @@ const PANTRY_WORKSPACE_FOOTER_CLASS = cn(
 const CREATE_RESOURCE_OVERLAY_CLASS = cn(
   'items-start justify-center overflow-y-auto p-0',
   'bg-neutral-900/90 backdrop-blur-md',
-  'top-[var(--app-chrome-offset,2.25rem)] bottom-0 max-lg:top-0',
+  'top-[var(--app-chrome-offset,calc(5rem+1px))]',
   'lg:bg-black/[0.62] lg:backdrop-blur-none lg:px-6 lg:py-8',
   'lg:before:pointer-events-none lg:before:absolute lg:before:inset-0',
   'lg:before:bg-[#251F18]/[0.92] lg:before:backdrop-blur-[10px]',
-  'lg:top-[var(--app-chrome-offset,2.25rem)] lg:bottom-0',
 );
 
 const CREATE_RESOURCE_PANEL_CLASS = cn(
@@ -121,7 +120,8 @@ export function ItemManagementDialog({
         open={open}
         onClose={() => !busy && onClose()}
         labelledBy={labelledBy}
-        overlayClassName={cn(SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS, CREATE_RESOURCE_OVERLAY_CLASS)}
+        contentPane
+            overlayClassName={cn(SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS, CREATE_RESOURCE_OVERLAY_CLASS)}
         panelClassName={CREATE_RESOURCE_PANEL_CLASS}
       >
         <div className="flex min-h-0 flex-1 flex-col lg:min-h-full">
@@ -149,16 +149,18 @@ export function ItemManagementDialog({
         open={open}
         onClose={() => !busy && onClose()}
         labelledBy={labelledBy}
-        overlayClassName={cn(
-          SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS,
-          isPantryWorkspace
-            ? PANTRY_WORKSPACE_OVERLAY_CLASS
-            : cn(
-              'lg:items-start lg:justify-center lg:overflow-y-auto lg:p-0',
-              'lg:bg-neutral-900/90 lg:backdrop-blur-md',
-              'lg:top-[var(--app-chrome-offset,2.25rem)] lg:bottom-0',
-            ),
-        )}
+        contentPane
+            overlayClassName={cn(
+              SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS,
+              isPantryWorkspace
+                ? PANTRY_WORKSPACE_OVERLAY_CLASS
+                : cn(
+                  'items-start justify-center overflow-y-auto p-0',
+                  'lg:bg-neutral-900/90 lg:backdrop-blur-md',
+                  'bg-black/70 backdrop-blur-sm',
+                  'top-[var(--app-chrome-offset,calc(5rem+1px))]',
+                ),
+            )}
         panelClassName={panelClassName}
       >
         <div className="flex min-h-0 flex-1 flex-col lg:min-h-full">

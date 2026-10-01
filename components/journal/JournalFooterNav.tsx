@@ -6,6 +6,7 @@ import { HomeIcon, NotebookIcon, ProgramsIcon, PlansIcon, FoodIcon } from '@/com
 import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 import { useNutritionTargetsOverlay } from '@/components/nutrition/targets/NutritionTargetsOverlayProvider';
 import { APP_ROUTES, LEGACY_JOURNAL_ROUTES } from '@/lib/routes/appRoutes';
+import { useFoodContentPaneOpen } from '@/components/layout/foodContentPaneOverlay';
 import { SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS } from '@/components/layout/SignedInPageShell';
 import { cn } from '@/lib/utils';
 import { SVGProps } from 'react';
@@ -78,7 +79,8 @@ export function JournalFooterNav() {
   // under the overlay while either is open.
   const { isOpen: mealRhythmOpen } = useMealRhythmOverlay();
   const { isOpen: nutritionTargetsOpen } = useNutritionTargetsOverlay();
-  const anyOverlayOpen = mealRhythmOpen || nutritionTargetsOpen;
+  const foodPaneOpen = useFoodContentPaneOpen();
+  const anyOverlayOpen = mealRhythmOpen || nutritionTargetsOpen || foodPaneOpen;
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedPillLeft, setSelectedPillLeft] = useState(0);
@@ -157,10 +159,12 @@ export function JournalFooterNav() {
 
   return (
     <div
+      data-app-footer
       className={cn(
         'fixed bottom-0 left-0 right-0 mx-auto my-2 max-w-[600px] px-2',
         SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS,
         anyOverlayOpen ? 'z-[40]' : 'z-[70]',
+        anyOverlayOpen && 'pointer-events-none',
       )}
       aria-hidden={anyOverlayOpen || undefined}
     >

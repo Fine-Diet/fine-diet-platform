@@ -13,7 +13,7 @@ import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 
 import { FoodSectionViewSwitcher } from '@/components/food/FoodSectionViewSwitcher';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
-import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
+import { SignedInPageScroll, SIGNED_IN_FOOTER_CLEARANCE_CLASS } from '@/components/layout/SignedInPageShell';
 import { ItemManagementDialog } from '@/components/food/itemManagement/ItemManagementDialog';
 import { CreateResourceDialogFooter } from '@/components/food/itemManagement/CreateResourceDialogFooter';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -272,6 +272,13 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
   const metadataReadOnly = !isOwner || detail?.haul.status !== 'planned';
   const activePrepareView = isOwner && detail?.haul.status === 'active' && prepareView;
   const canInvite = isOwner && detail?.haul.status === 'planned' && !activePrepareView;
+  const showPreparationSummary = Boolean(
+    loadState === 'ready'
+    && detail
+    && metadata
+    && !(isOwner && detail.haul.status === 'active' && !prepareView)
+    && (detail.haul.status === 'planned' || activePrepareView),
+  );
 
   function itemPreparationLocked(itemId: string): boolean {
     if (detail?.haul.status === 'planned') return false;
@@ -495,7 +502,10 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
 
   return (
     <div className={`flex min-h-screen flex-col text-white ${FOOD_PAGE_BACKGROUND_CLASS}`}>
-      <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14 xl:pt-[114px]">
+      <SignedInPageScroll
+        reserveFooter={!showPreparationSummary}
+        className={`px-6 pt-10 sm:px-12 sm:pt-14 xl:pt-[114px] ${showPreparationSummary ? 'flex flex-col' : ''}`}
+      >
         {loadState === 'error' || !detail || !metadata ? (
           <div className="mx-auto max-w-[800px]">
             <p role="alert" className="rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
@@ -513,7 +523,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
         ) : detail.haul.status !== 'planned' && !activePrepareView ? (
           <HistoricalHaul detail={detail} contributorNames={contributorNames} />
         ) : (
-          <div className="mx-auto w-full max-w-[1036px]">
+          <div className="mx-auto flex min-h-full w-full max-w-[1036px] flex-1 flex-col">
             <div className="w-full xl:max-w-[950px] xl:pl-[60px]">
             {activePrepareView && (
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
@@ -570,7 +580,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
                       title={canManageStores ? 'Manage Haul stores' : 'Stores can only be edited on Draft Hauls.'}
                       onClick={() => setStoresOpen(true)}
                       aria-label="Manage Haul stores"
-                      className="inline-flex min-h-11 w-11 shrink-0 items-center justify-center border border-b-0 border-l-0 border-white/25 text-sm font-semibold text-white/80 disabled:cursor-not-allowed disabled:text-white/35"
+                      className="inline-flex min-h-11 w-11 shrink-0 items-center justify-center rounded-tr-[12px] rounded-bl-none rounded-br-none border border-b-0 border-l-0 border-white/25 text-sm font-semibold text-white/80 disabled:cursor-not-allowed disabled:text-white/35"
                     >
                       +
                     </button>
@@ -809,7 +819,7 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
             </section>
             </div>
 
-            <section className="mt-12 w-full max-w-[1036px] rounded-t-[24px] border border-b-0 border-white/25 bg-transparent px-6 py-8 xl:pl-[60px] xl:pr-[26px]" aria-labelledby="shopping-summary-title">
+            <section className={`mt-12 flex w-full max-w-[1036px] flex-1 flex-col rounded-t-[24px] border border-b-0 border-white/25 bg-transparent px-6 pt-8 xl:pl-[60px] xl:pr-[26px] ${SIGNED_IN_FOOTER_CLEARANCE_CLASS}`} aria-labelledby="shopping-summary-title" data-shopping-summary>
               <h2 id="shopping-summary-title" className="text-[20px] font-semibold text-brand-50">Shopping Summary</h2>
               {isOwner ? (
                 <>
