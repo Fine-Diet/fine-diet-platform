@@ -190,8 +190,13 @@ describe('Packet 13 Plans Home contract', () => {
 
     expect(view).toContain('openMealRhythm');
     expect(view).toContain("trigger: 'plans'");
-    expect(plans?.items?.filter((item) => item.group === 'library').map((item) => item.label))
-      .toEqual(['Meals', 'Day Plans', 'Week Plans']);
+    expect(plans?.items?.map((item) => item.label)).toEqual([
+      'Overview',
+      'Day',
+      'Week',
+      'Month',
+      'Library',
+    ]);
   });
 
   it('keeps Plans Home week navigation local while Month remains objectless', () => {

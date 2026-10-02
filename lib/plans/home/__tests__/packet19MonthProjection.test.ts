@@ -60,14 +60,14 @@ describe('Packet 19 objectless Month projection', () => {
 
   it('links every Plans View selector and drawer destination to canonical Month', () => {
     const rail = read('components/plans/home/PlanningRouteRail.tsx');
-    expect(read('pages/journal/plans/day/index.tsx')).toContain(
-      'href={APP_ROUTES.plansMonth}',
-    );
+    const switcher = read('components/journal/plans/PlansViewSwitcher.tsx');
+    expect(switcher).toContain('href: APP_ROUTES.plansMonth');
+    expect(read('pages/journal/plans/day/index.tsx')).toContain('<PlansViewSwitcher currentView="day" />');
     expect(read('components/journal/plans/WeekPlanningWorkspace.tsx')).toContain(
-      'href={APP_ROUTES.plansMonth}',
+      '<PlansViewSwitcher currentView="week" />',
     );
     expect(read('components/journal/plans/MonthCalendarProjection.tsx')).toContain(
-      'href={APP_ROUTES.plansMonth}',
+      '<PlansViewSwitcher currentView="month" />',
     );
     expect(rail).toContain('href={APP_ROUTES.plansMonth}');
     expect(rail).not.toContain('Month planning is not available yet');

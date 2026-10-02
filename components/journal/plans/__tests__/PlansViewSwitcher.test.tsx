@@ -74,8 +74,10 @@ describe('PlansViewSwitcher', () => {
     expect(container.textContent).toContain('Plans');
     expect(container.textContent).toContain('›');
     expect(container.textContent).toContain('Day');
+    expect(container.textContent).not.toContain('Overview');
     expect(container.textContent).not.toContain('Week');
     expect(container.textContent).not.toContain('Month');
+    expect(container.textContent).not.toContain('Library');
   });
 
   it('does not expose Week or Month as visible collapsed choices', () => {
@@ -92,13 +94,19 @@ describe('PlansViewSwitcher', () => {
     expect(findLink(container, 'Month')).toBeTruthy();
   });
 
-  it('shows expanded options in canonical Day, Week, Month order', () => {
+  it('shows expanded options in Overview, Day, Week, Month, Library order', () => {
     act(() => root.render(<PlansViewSwitcher currentView="day" />));
     act(() => findButton(container, 'Day').click());
     const labels = Array.from(container.querySelectorAll('button, a'))
       .map((node) => node.textContent?.trim())
-      .filter((label) => label === 'Day' || label === 'Week' || label === 'Month');
-    expect(labels).toEqual(['Day', 'Week', 'Month']);
+      .filter((label) =>
+        label === 'Overview' ||
+        label === 'Day' ||
+        label === 'Week' ||
+        label === 'Month' ||
+        label === 'Library',
+      );
+    expect(labels).toEqual(['Overview', 'Day', 'Week', 'Month', 'Library']);
   });
 
   it('styles the current Day view as active', () => {
@@ -147,6 +155,13 @@ describe('PlansViewSwitcher', () => {
     act(() => root.render(<PlansViewSwitcher currentView="day" />));
     act(() => findButton(container, 'Day').click());
     expect(findLink(container, 'Month').getAttribute('href')).toBe(APP_ROUTES.plansMonth);
+  });
+
+  it('links Overview and Library into the same five-item set', () => {
+    act(() => root.render(<PlansViewSwitcher currentView="day" />));
+    act(() => findButton(container, 'Day').click());
+    expect(findLink(container, 'Overview').getAttribute('href')).toBe(APP_ROUTES.plans);
+    expect(findLink(container, 'Library').getAttribute('href')).toBe(APP_ROUTES.plansLibrary);
   });
 
   it('does not render a dropdown or popover panel', () => {

@@ -47,19 +47,22 @@ describe('Packet 13F compact Home authoring and Plans IA', () => {
     expect(capture).toContain('Cancel');
   });
 
-  it('keeps Home / Manage / Library taxonomy with the live Month projection', () => {
+  it('keeps a flat Overview / Day / Week / Month / Library drawer with the live Month projection', () => {
     const plans = APP_DRAWER_HUBS.find((hub) => hub.id === 'plans');
     const items = plans?.items ?? [];
 
-    expect(items[0]).toMatchObject({ id: 'plans-home', label: 'Home' });
-    expect(items.filter((item) => item.group === 'manage').map((item) => item.label))
-      .toEqual(['Day', 'Week', 'Month']);
+    expect(items.map((item) => item.label)).toEqual([
+      'Overview',
+      'Day',
+      'Week',
+      'Month',
+      'Library',
+    ]);
+    expect(items.some((item) => item.group)).toBe(false);
     expect(items.find((item) => item.id === 'plans-month')).toMatchObject({
       status: 'current',
       href: '/app/plans/month',
     });
-    expect(items.filter((item) => item.group === 'library').map((item) => item.label))
-      .toEqual(['Meals', 'Day Plans', 'Week Plans']);
     expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month.tsx'))).toBe(true);
   });
 });

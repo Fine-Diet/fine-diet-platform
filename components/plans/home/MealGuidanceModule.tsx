@@ -6,6 +6,7 @@ import {
 } from 'react';
 
 import { PlanMealComposerPanel } from '@/components/journal/plans/PlanMealComposerPanel';
+import { PlansViewSwitcher } from '@/components/journal/plans/PlansViewSwitcher';
 import { MealStateMarker } from '@/components/plans/home/MealStateMarker';
 import { PlansHomeColumn } from '@/components/plans/home/PlansHomeColumn';
 import type {
@@ -143,11 +144,7 @@ export function MealGuidanceModule({
       className="overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       data-plans-breadcrumb
     >
-      <div className="flex items-center gap-2 text-2xl font-semibold text-white">
-        <span>Plans</span>
-        <span aria-hidden className="text-4xl font-light leading-none text-white">›</span>
-        <span>Overview</span>
-      </div>
+      <PlansViewSwitcher currentView="overview" />
     </div>
   );
 
