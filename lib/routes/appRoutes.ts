@@ -10,6 +10,8 @@ export const APP_ROUTES = {
   plansDay: '/app/plans/day',
   plansWeek: '/app/plans/week',
   plansMonth: '/app/plans/month',
+  /** Single Plans Library: Meals, Day Plans, and Week Plans. */
+  plansLibrary: '/app/plans/library',
   plansDayTemplates: '/app/plans/day-templates',
   plansWeekPatterns: '/app/plans/week-patterns',
   /** @deprecated Legacy flat path. Prefer the nested Food routes. */

@@ -8,9 +8,8 @@ describe('Plans Home overview layout', () => {
   const module = read('components/plans/home/MealGuidanceModule.tsx');
   const rail = read('components/plans/home/PlanningRouteRail.tsx');
 
-  it('renders Plans and Overview in a nowrap horizontal-scroll breadcrumb', () => {
-    expect(module).toContain('>Plans</span>');
-    expect(module).toContain('>Overview</span>');
+  it('renders the shared Plans eyebrow on Overview inside a nowrap horizontal-scroll row', () => {
+    expect(module).toContain('<PlansViewSwitcher currentView="overview" />');
     expect(module).toContain('data-plans-breadcrumb');
     expect(module).toContain('whitespace-nowrap');
     expect(module).toContain('overflow-x-auto');

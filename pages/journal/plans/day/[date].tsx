@@ -19,6 +19,7 @@ import { DayView } from '@/components/journal/plans/DayView';
 import { PlanMealComposerPanel } from '@/components/journal/plans/PlanMealComposerPanel';
 import { ScheduleConflictBanner } from '@/components/journal/plans/ScheduleConflictBanner';
 import { SlotCard } from '@/components/journal/plans/SlotCard';
+import { PlansViewSwitcher } from '@/components/journal/plans/PlansViewSwitcher';
 import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { selectCurrentPlan, formatPlanTitleFallback } from '@/lib/plans/currentPlan';
@@ -875,9 +876,7 @@ export default function JournalPlanDayPage() {
           ) : showValidDay && plan ? (
             <>
               <header className="mb-8">
-                <p className="text-sm font-semibold text-white/80 antialiased">
-                  Plans <span className="mx-2 text-white/30">›</span> Manage
-                </p>
+                <PlansViewSwitcher currentView="day" />
                 <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h1 className="text-4xl font-light tracking-tight text-white antialiased sm:text-5xl">
