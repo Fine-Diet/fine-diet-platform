@@ -127,6 +127,7 @@ export function AppSideMenu({
     const pathOnly = asPath.split('?')[0];
     const hrefPath = item.href.split('?')[0].split('#')[0];
     if (pathOnly === hrefPath) return true;
+    if (item.match === 'exact') return false;
     if (!item.href.includes('?') && pathOnly.startsWith(`${hrefPath}/`)) return true;
     return false;
   }
@@ -145,7 +146,6 @@ export function AppSideMenu({
           aria-disabled="true"
           className={`flex items-center py-4 pr-5 text-base text-brand-50/30 antialiased ${indentClass}`}
         >
-          {isComingSoon && <SoonBadge />}
           <span className="min-w-0 truncate">{item.label}</span>
         </div>
       );

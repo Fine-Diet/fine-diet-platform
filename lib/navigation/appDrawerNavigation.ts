@@ -13,8 +13,9 @@ import { APP_ROUTES } from '@/lib/routes/appRoutes';
  * - For partial / future items, point to the closest safe existing route
  *   (with query params where helpful) so navigation never 404s, and tag the
  *   item so the UI can show a "Soon" treatment.
- * - Assessments links to the Programs collection/section, never to Gut Check.
- *   Gut Check is one assessment instance and is deliberately absent here.
+ * - Assessments stays in the Programs submenu as a disabled item. It does not
+ *   route anywhere, including Gut Check. Gut Check is one assessment instance
+ *   and is deliberately absent here.
  */
 
 export type DrawerItemStatus = 'current' | 'partial' | 'coming-soon';
@@ -29,6 +30,8 @@ export interface DrawerChildItem {
   group?: 'manage' | 'library';
   /** Visible taxonomy item with no route until its real surface exists. */
   disabled?: boolean;
+  /** Exact pathname match. Prefix matching would mark Explore active on every child route. */
+  match?: 'exact' | 'prefix';
   /** Nested links under a non-navigating subgroup row (e.g. Food → Shopping). */
   children?: DrawerChildItem[];
 }
@@ -81,12 +84,25 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
     matchPrefix: programs,
     status: 'current',
     items: [
-      { id: 'programs-home', label: 'Programs Home', href: programs, status: 'current' },
-      { id: 'active-program', label: 'Active Program', href: programs, status: 'partial' },
-      { id: 'baseline', label: 'Fine Diet Method / Baseline', href: programs, status: 'coming-soon' },
-      { id: 'assessments', label: 'Assessments', href: `${programs}?section=assessments`, status: 'coming-soon' },
-      { id: 'program-library', label: 'Program Library', href: programs, status: 'current' },
-      { id: 'integrative-care', label: 'Integrative Care', href: `${programs}?section=care`, status: 'coming-soon' },
+      {
+        id: 'programs-explore',
+        label: 'Explore',
+        href: programs,
+        status: 'current',
+        match: 'exact',
+      },
+      {
+        id: 'my-programs',
+        label: 'My Programs',
+        href: APP_ROUTES.programsMy,
+        status: 'current',
+      },
+      {
+        id: 'assessments',
+        label: 'Assessments',
+        status: 'coming-soon',
+        disabled: true,
+      },
     ],
   },
   {

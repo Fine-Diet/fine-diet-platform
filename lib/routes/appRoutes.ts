@@ -4,6 +4,8 @@ export const APP_ROUTES = {
   home: '/app',
   onboarding: '/app/onboarding',
   programs: '/app/programs',
+  /** Ownership and history for programs the signed-in person can access or has used. */
+  programsMy: '/app/programs/my',
   plans: '/app/plans',
   plansDay: '/app/plans/day',
   plansWeek: '/app/plans/week',
