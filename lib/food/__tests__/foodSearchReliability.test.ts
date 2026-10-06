@@ -719,7 +719,7 @@ describe('food_search_events schema contract', () => {
     expect(sql).toContain('CREATE EXTENSION IF NOT EXISTS pg_trgm');
     expect(sql).toContain('search_food_objects_fuzzy_v1');
     expect(sql).toContain('word_similarity');
-    expect(sql).toContain('pg_catalog.similarity');
+    expect(sql).toContain('similarity(v_query');
     expect(sql).toContain('generate_series');
     expect(sql).toContain('transposition_candidates');
     expect(sql).toContain('set_config');
