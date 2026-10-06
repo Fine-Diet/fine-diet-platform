@@ -11,6 +11,10 @@
 -- can produce thousands of lossy candidates on the current food_objects corpus.
 -- GiST supports nearest-neighbor ordering (<-> and <<->), so we can ask only
 -- for the closest candidates and keep latency bounded.
+--
+-- Retrieval is intentionally broader than display acceptance:
+-- - SQL returns at most 48 candidates.
+-- - Application-side Damerau-Levenshtein/Dice rescoring accepts at most 12.
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -28,7 +32,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_food_objects_brand_name_gist_trgm_ac
 
 CREATE OR REPLACE FUNCTION public.search_food_objects_fuzzy_v2(
   p_query text,
-  p_limit integer DEFAULT 12,
+  p_limit integer DEFAULT 48,
   p_min_similarity real DEFAULT 0.20
 )
 RETURNS TABLE (
@@ -43,45 +47,68 @@ AS $$
   WITH params AS (
     SELECT
       lower(btrim(coalesce(p_query, ''))) AS q,
-      LEAST(GREATEST(coalesce(p_limit, 12), 1), 12) AS lim,
+      LEAST(GREATEST(coalesce(p_limit, 48), 1), 48) AS lim,
       GREATEST(0.0::real, LEAST(coalesce(p_min_similarity, 0.20::real), 1.0::real)) AS min_sim
   ),
   eligible AS (
-    SELECT *
+    SELECT
+      q,
+      lim,
+      min_sim,
+      (
+        SELECT count(*)
+        FROM regexp_split_to_table(q, '[^a-z0-9]+') AS token
+        WHERE token <> ''
+      ) AS token_count
     FROM params
     WHERE char_length(q) >= 5
       AND q !~ '^[0-9[:space:]-]+$'
   ),
-  canonical_string AS (
+  swaps AS (
     SELECT
-      fo.id,
-      (1.0 - (fo.canonical_name <-> e.q))::real AS score
+      e.q,
+      substring(e.q from 1 for i - 1)
+      || substring(e.q from i + 1 for 1)
+      || substring(e.q from i for 1)
+      || substring(e.q from i + 2) AS variant
+    FROM eligible e
+    CROSS JOIN LATERAL generate_series(1, greatest(char_length(e.q) - 1, 0)) AS g(i)
+    WHERE e.token_count = 1
+      AND e.q ~ '^[a-z0-9]+$'
+      AND char_length(e.q) BETWEEN 5 AND 32
+  ),
+  transposition_candidates AS (
+    SELECT hit.id, 0.80::real AS score
+    FROM swaps s
+    CROSS JOIN LATERAL (
+      SELECT fo.id
+      FROM public.food_objects fo
+      WHERE fo.is_deleted = false
+        AND s.variant <> s.q
+        AND (
+          fo.canonical_name ILIKE ('%' || s.variant || '%')
+          OR (
+            fo.brand_name IS NOT NULL
+            AND fo.brand_name ILIKE ('%' || s.variant || '%')
+          )
+        )
+      ORDER BY fo.id
+      LIMIT 4
+    ) AS hit
+  ),
+  canonical_string AS (
+    SELECT fo.id, (1.0 - (fo.canonical_name <-> e.q))::real AS score
     FROM eligible e
     CROSS JOIN LATERAL (
       SELECT id, canonical_name
       FROM public.food_objects
       WHERE is_deleted = false
       ORDER BY canonical_name <-> e.q
-      LIMIT 12
-    ) fo
-  ),
-  canonical_word AS (
-    SELECT
-      fo.id,
-      (1.0 - (e.q <<-> fo.canonical_name))::real AS score
-    FROM eligible e
-    CROSS JOIN LATERAL (
-      SELECT id, canonical_name
-      FROM public.food_objects
-      WHERE is_deleted = false
-      ORDER BY e.q <<-> canonical_name
-      LIMIT 12
+      LIMIT 16
     ) fo
   ),
   brand_string AS (
-    SELECT
-      fo.id,
-      (1.0 - (fo.brand_name <-> e.q))::real AS score
+    SELECT fo.id, (1.0 - (fo.brand_name <-> e.q))::real AS score
     FROM eligible e
     CROSS JOIN LATERAL (
       SELECT id, brand_name
@@ -89,13 +116,23 @@ AS $$
       WHERE is_deleted = false
         AND brand_name IS NOT NULL
       ORDER BY brand_name <-> e.q
-      LIMIT 12
+      LIMIT 16
     ) fo
   ),
+  canonical_word AS (
+    SELECT fo.id, (1.0 - (e.q <<-> fo.canonical_name))::real AS score
+    FROM eligible e
+    CROSS JOIN LATERAL (
+      SELECT id, canonical_name
+      FROM public.food_objects
+      WHERE is_deleted = false
+      ORDER BY e.q <<-> canonical_name
+      LIMIT 16
+    ) fo
+    WHERE e.token_count > 1
+  ),
   brand_word AS (
-    SELECT
-      fo.id,
-      (1.0 - (e.q <<-> fo.brand_name))::real AS score
+    SELECT fo.id, (1.0 - (e.q <<-> fo.brand_name))::real AS score
     FROM eligible e
     CROSS JOIN LATERAL (
       SELECT id, brand_name
@@ -103,17 +140,20 @@ AS $$
       WHERE is_deleted = false
         AND brand_name IS NOT NULL
       ORDER BY e.q <<-> brand_name
-      LIMIT 12
+      LIMIT 16
     ) fo
+    WHERE e.token_count > 1
   ),
   combined AS (
     SELECT id, max(score)::real AS score
     FROM (
+      SELECT * FROM transposition_candidates
+      UNION ALL
       SELECT * FROM canonical_string
       UNION ALL
-      SELECT * FROM canonical_word
-      UNION ALL
       SELECT * FROM brand_string
+      UNION ALL
+      SELECT * FROM canonical_word
       UNION ALL
       SELECT * FROM brand_word
     ) candidates
@@ -132,4 +172,4 @@ REVOKE ALL ON FUNCTION public.search_food_objects_fuzzy_v2(text, integer, real) 
 GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v2(text, integer, real) TO service_role;
 
 COMMENT ON FUNCTION public.search_food_objects_fuzzy_v2(text, integer, real) IS
-  'Bounded pg_trgm GiST nearest-neighbor fallback for food name/brand typos. Returns at most 12 candidates for caller-side acceptance/ranking. Execute is service_role only.';
+  'Bounded pg_trgm GiST nearest-neighbor fallback for food name/brand typos. Returns at most 48 candidates for caller-side acceptance/ranking. Execute is service_role only.';
