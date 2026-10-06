@@ -99,7 +99,6 @@ BEGIN
         WHERE fo.is_deleted = false
           AND NOT (fo.id = ANY($2))
           AND lower(fo.canonical_name) LIKE ($1 || '%')
-        ORDER BY fo.id
         LIMIT LEAST(2, $3)
       $q$ USING v_variant, v_seen, v_remaining
       LOOP
@@ -120,7 +119,6 @@ BEGIN
           AND fo.brand_name IS NOT NULL
           AND NOT (fo.id = ANY($2))
           AND lower(fo.brand_name) LIKE ($1 || '%')
-        ORDER BY fo.id
         LIMIT LEAST(2, $3)
       $q$ USING v_variant, v_seen, v_remaining
       LOOP
