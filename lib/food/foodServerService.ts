@@ -898,13 +898,14 @@ async function retrieveFuzzyFoodRows(
     acceptedCount: 0,
     similarities,
   };
-  const rpc = (supabaseAdmin as unknown as {
+  const admin = supabaseAdmin as unknown as {
     rpc?: (
       fn: string,
       args: Record<string, unknown>,
     ) => PromiseLike<{ data: FuzzyRpcRow[] | null; error: { message?: string } | null }>;
-  }).rpc;
-  if (typeof rpc !== 'function') {
+  };
+  const rpc = typeof admin.rpc === 'function' ? admin.rpc.bind(admin) : null;
+  if (!rpc) {
     return { ...empty, error: 'rpc_unavailable' };
   }
 
