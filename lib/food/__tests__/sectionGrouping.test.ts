@@ -9,6 +9,7 @@
  */
 
 import type { FoodObject, FoodSearchResult, SearchResultSection, SectionKey } from '../types';
+import { isVerifiedCanonicalCommonFood } from '../canonicalCommonPlacement';
 
 // Mock determineSectionKey function (mirrors the logic in foodServerService.ts)
 function determineSectionKey(
@@ -35,6 +36,9 @@ function determineSectionKey(
     }
     if (food.sourceType === 'provisional') {
       return 'scanned';
+    }
+    if (isVerifiedCanonicalCommonFood(food)) {
+      return 'common';
     }
     return 'other';
   }
@@ -220,6 +224,24 @@ describe('Section Key Assignment', () => {
       });
       expect(determineSectionKey(food, personId, false, 0)).toBe('other');
     });
+
+    it('should keep unverified null-provider common foods in other', () => {
+      const food = createMockFood({
+        sourceProvider: null,
+        sourceType: 'common',
+        isVerified: false,
+      });
+      expect(determineSectionKey(food, personId, false, 0)).toBe('other');
+    });
+
+    it('should keep verified null-provider branded foods out of common', () => {
+      const food = createMockFood({
+        sourceProvider: null,
+        sourceType: 'branded',
+        isVerified: true,
+      });
+      expect(determineSectionKey(food, personId, false, 0)).toBe('other');
+    });
   });
 
   describe('Fine Diet verified foods', () => {
@@ -239,6 +261,18 @@ describe('Section Key Assignment', () => {
         isVerified: true,
       });
       expect(determineSectionKey(food, personId, true, 0)).toBe('my_foods');
+    });
+
+    it('should assign verified legacy common foods with a null provider to common', () => {
+      for (const name of ['Banana', 'Apple', 'Broccoli', 'Chicken Breast', 'Greek Yogurt']) {
+        const food = createMockFood({
+          canonicalName: name,
+          sourceProvider: null,
+          sourceType: 'common',
+          isVerified: true,
+        });
+        expect(determineSectionKey(food, personId, false, 0)).toBe('common');
+      }
     });
 
     it('should keep logged fine_diet items in my_foods', () => {

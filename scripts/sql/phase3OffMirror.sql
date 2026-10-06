@@ -3,7 +3,9 @@
 -- Run in Supabase Dashboard → SQL Editor
 -- ============================================================================
 
--- 1. Extend food_search_events with Phase 3 telemetry columns
+-- 1. Extend food_search_events with Phase 3 telemetry columns.
+--    Current idempotent definition: scripts/sql/foodSearchEventsCurrent.sql.
+--    Column name near_exact_match_existed matches logSearchEvent.
 ALTER TABLE public.food_search_events
   ADD COLUMN IF NOT EXISTS normalized_query          TEXT,
   ADD COLUMN IF NOT EXISTS off_fallback_shown        BOOLEAN,
