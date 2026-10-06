@@ -84,8 +84,8 @@ BEGIN
       SELECT
         fo.id,
         GREATEST(
-          pg_catalog.similarity(v_query, lower(fo.canonical_name)),
-          pg_catalog.similarity(v_query, lower(coalesce(fo.brand_name, '')))
+          similarity(v_query, lower(fo.canonical_name)),
+          similarity(v_query, lower(coalesce(fo.brand_name, '')))
         )::real AS score
       FROM public.food_objects fo
       WHERE fo.is_deleted = false
