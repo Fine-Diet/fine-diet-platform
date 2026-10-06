@@ -39,132 +39,175 @@ RETURNS TABLE (
   id uuid,
   similarity real
 )
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY INVOKER
 SET search_path = public
 AS $$
-  WITH params AS (
-    SELECT
-      lower(btrim(coalesce(p_query, ''))) AS q,
-      LEAST(GREATEST(coalesce(p_limit, 48), 1), 48) AS lim,
-      GREATEST(0.0::real, LEAST(coalesce(p_min_similarity, 0.20::real), 1.0::real)) AS min_sim
-  ),
-  eligible AS (
-    SELECT
-      q,
-      lim,
-      min_sim,
-      (
-        SELECT count(*)
-        FROM regexp_split_to_table(q, '[^a-z0-9]+') AS token
-        WHERE token <> ''
-      ) AS token_count
-    FROM params
-    WHERE char_length(q) >= 5
-      AND q !~ '^[0-9[:space:]-]+$'
-  ),
-  swaps AS (
-    SELECT
-      e.q,
-      substring(e.q from 1 for i - 1)
-      || substring(e.q from i + 1 for 1)
-      || substring(e.q from i for 1)
-      || substring(e.q from i + 2) AS variant
-    FROM eligible e
-    CROSS JOIN LATERAL generate_series(1, greatest(char_length(e.q) - 1, 0)) AS g(i)
-    WHERE e.token_count = 1
-      AND e.q ~ '^[a-z0-9]+$'
-      AND char_length(e.q) BETWEEN 5 AND 32
-  ),
-  transposition_candidates AS (
-    SELECT hit.id, 0.80::real AS score
-    FROM swaps s
-    CROSS JOIN LATERAL (
-      SELECT fo.id
+DECLARE
+  v_query text := lower(btrim(coalesce(p_query, '')));
+  v_limit integer := LEAST(GREATEST(coalesce(p_limit, 48), 1), 48);
+  v_min_similarity real := GREATEST(
+    0.0::real,
+    LEAST(coalesce(p_min_similarity, 0.20::real), 1.0::real)
+  );
+  v_token_count integer;
+  v_remaining integer;
+  v_seen uuid[] := ARRAY[]::uuid[];
+  v_variant text;
+  v_rec record;
+BEGIN
+  IF char_length(v_query) < 5
+     OR v_query ~ '^[0-9[:space:]-]+$' THEN
+    RETURN;
+  END IF;
+
+  SELECT count(*)
+  INTO v_token_count
+  FROM regexp_split_to_table(v_query, '[^a-z0-9]+') AS token
+  WHERE token <> '';
+
+  v_remaining := v_limit;
+
+  IF v_token_count = 1 AND v_query ~ '^[a-z0-9]+$' THEN
+    -- Adjacent-transposition rescue, e.g. amyul -> amylu.
+    -- Each variant is independently bounded and uses the existing trigram
+    -- indexes for ILIKE containment.
+    FOR i IN 1..greatest(char_length(v_query) - 1, 0) LOOP
+      EXIT WHEN v_remaining <= 0;
+
+      v_variant :=
+        substring(v_query from 1 for i - 1)
+        || substring(v_query from i + 1 for 1)
+        || substring(v_query from i for 1)
+        || substring(v_query from i + 2);
+
+      CONTINUE WHEN v_variant = v_query;
+
+      FOR v_rec IN EXECUTE $q$
+        SELECT fo.id
+        FROM public.food_objects fo
+        WHERE fo.is_deleted = false
+          AND NOT (fo.id = ANY($2))
+          AND (
+            fo.canonical_name ILIKE ('%' || $1 || '%')
+            OR (
+              fo.brand_name IS NOT NULL
+              AND fo.brand_name ILIKE ('%' || $1 || '%')
+            )
+          )
+        ORDER BY fo.id
+        LIMIT LEAST(4, $3)
+      $q$ USING v_variant, v_seen, v_remaining
+      LOOP
+        id := v_rec.id;
+        similarity := 0.80::real;
+        RETURN NEXT;
+        v_seen := array_append(v_seen, v_rec.id);
+        v_remaining := v_remaining - 1;
+        EXIT WHEN v_remaining <= 0;
+      END LOOP;
+    END LOOP;
+
+    -- Whole-string canonical-name nearest neighbors.
+    IF v_remaining > 0 THEN
+      FOR v_rec IN EXECUTE $q$
+        SELECT
+          fo.id,
+          (1.0 - (fo.canonical_name <-> $1))::real AS score
+        FROM public.food_objects fo
+        WHERE fo.is_deleted = false
+          AND NOT (fo.id = ANY($2))
+        ORDER BY fo.canonical_name <-> $1
+        LIMIT $3
+      $q$ USING v_query, v_seen, v_remaining
+      LOOP
+        CONTINUE WHEN v_rec.score < v_min_similarity;
+        id := v_rec.id;
+        similarity := v_rec.score;
+        RETURN NEXT;
+        v_seen := array_append(v_seen, v_rec.id);
+        v_remaining := v_remaining - 1;
+        EXIT WHEN v_remaining <= 0;
+      END LOOP;
+    END IF;
+
+    -- Whole-string brand nearest neighbors.
+    IF v_remaining > 0 THEN
+      FOR v_rec IN EXECUTE $q$
+        SELECT
+          fo.id,
+          (1.0 - (fo.brand_name <-> $1))::real AS score
+        FROM public.food_objects fo
+        WHERE fo.is_deleted = false
+          AND fo.brand_name IS NOT NULL
+          AND NOT (fo.id = ANY($2))
+        ORDER BY fo.brand_name <-> $1
+        LIMIT $3
+      $q$ USING v_query, v_seen, v_remaining
+      LOOP
+        CONTINUE WHEN v_rec.score < v_min_similarity;
+        id := v_rec.id;
+        similarity := v_rec.score;
+        RETURN NEXT;
+        v_seen := array_append(v_seen, v_rec.id);
+        v_remaining := v_remaining - 1;
+        EXIT WHEN v_remaining <= 0;
+      END LOOP;
+    END IF;
+
+    RETURN;
+  END IF;
+
+  -- Multi-token typo fallback keeps word-level nearest-neighbor semantics,
+  -- but still performs two bounded GiST KNN scans rather than a broad threshold
+  -- scan across the catalog.
+  IF v_remaining > 0 THEN
+    FOR v_rec IN EXECUTE $q$
+      SELECT
+        fo.id,
+        (1.0 - ($1 <<-> fo.canonical_name))::real AS score
       FROM public.food_objects fo
       WHERE fo.is_deleted = false
-        AND s.variant <> s.q
-        AND (
-          fo.canonical_name ILIKE ('%' || s.variant || '%')
-          OR (
-            fo.brand_name IS NOT NULL
-            AND fo.brand_name ILIKE ('%' || s.variant || '%')
-          )
-        )
-      ORDER BY fo.id
-      LIMIT 4
-    ) AS hit
-  ),
-  canonical_string AS (
-    SELECT fo.id, (1.0 - (fo.canonical_name <-> e.q))::real AS score
-    FROM eligible e
-    CROSS JOIN LATERAL (
-      SELECT id, canonical_name
-      FROM public.food_objects
-      WHERE is_deleted = false
-      ORDER BY canonical_name <-> e.q
-      LIMIT 16
-    ) fo
-  ),
-  brand_string AS (
-    SELECT fo.id, (1.0 - (fo.brand_name <-> e.q))::real AS score
-    FROM eligible e
-    CROSS JOIN LATERAL (
-      SELECT id, brand_name
-      FROM public.food_objects
-      WHERE is_deleted = false
-        AND brand_name IS NOT NULL
-      ORDER BY brand_name <-> e.q
-      LIMIT 16
-    ) fo
-  ),
-  canonical_word AS (
-    SELECT fo.id, (1.0 - (e.q <<-> fo.canonical_name))::real AS score
-    FROM eligible e
-    CROSS JOIN LATERAL (
-      SELECT id, canonical_name
-      FROM public.food_objects
-      WHERE is_deleted = false
-      ORDER BY e.q <<-> canonical_name
-      LIMIT 16
-    ) fo
-    WHERE e.token_count > 1
-  ),
-  brand_word AS (
-    SELECT fo.id, (1.0 - (e.q <<-> fo.brand_name))::real AS score
-    FROM eligible e
-    CROSS JOIN LATERAL (
-      SELECT id, brand_name
-      FROM public.food_objects
-      WHERE is_deleted = false
-        AND brand_name IS NOT NULL
-      ORDER BY e.q <<-> brand_name
-      LIMIT 16
-    ) fo
-    WHERE e.token_count > 1
-  ),
-  combined AS (
-    SELECT id, max(score)::real AS score
-    FROM (
-      SELECT * FROM transposition_candidates
-      UNION ALL
-      SELECT * FROM canonical_string
-      UNION ALL
-      SELECT * FROM brand_string
-      UNION ALL
-      SELECT * FROM canonical_word
-      UNION ALL
-      SELECT * FROM brand_word
-    ) candidates
-    GROUP BY id
-  )
-  SELECT combined.id, combined.score AS similarity
-  FROM combined
-  CROSS JOIN params
-  WHERE combined.score >= params.min_sim
-  ORDER BY combined.score DESC, combined.id
-  LIMIT (SELECT lim FROM params);
+      ORDER BY $1 <<-> fo.canonical_name
+      LIMIT $2
+    $q$ USING v_query, LEAST(24, v_remaining)
+    LOOP
+      CONTINUE WHEN v_rec.score < v_min_similarity;
+      id := v_rec.id;
+      similarity := v_rec.score;
+      RETURN NEXT;
+      v_seen := array_append(v_seen, v_rec.id);
+      v_remaining := v_remaining - 1;
+      EXIT WHEN v_remaining <= 0;
+    END LOOP;
+  END IF;
+
+  IF v_remaining > 0 THEN
+    FOR v_rec IN EXECUTE $q$
+      SELECT
+        fo.id,
+        (1.0 - ($1 <<-> fo.brand_name))::real AS score
+      FROM public.food_objects fo
+      WHERE fo.is_deleted = false
+        AND fo.brand_name IS NOT NULL
+        AND NOT (fo.id = ANY($2))
+      ORDER BY $1 <<-> fo.brand_name
+      LIMIT $3
+    $q$ USING v_query, v_seen, LEAST(24, v_remaining)
+    LOOP
+      CONTINUE WHEN v_rec.score < v_min_similarity;
+      id := v_rec.id;
+      similarity := v_rec.score;
+      RETURN NEXT;
+      v_seen := array_append(v_seen, v_rec.id);
+      v_remaining := v_remaining - 1;
+      EXIT WHEN v_remaining <= 0;
+    END LOOP;
+  END IF;
+
+  RETURN;
+END;
 $$;
 
 REVOKE ALL ON FUNCTION public.search_food_objects_fuzzy_v2(text, integer, real) FROM PUBLIC;
