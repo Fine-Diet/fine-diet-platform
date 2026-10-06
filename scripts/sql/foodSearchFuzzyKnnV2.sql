@@ -2,7 +2,7 @@
 -- Food Search Fuzzy v2: bounded nearest-neighbor typo retrieval.
 --
 -- IMPORTANT:
--- - The two CREATE INDEX CONCURRENTLY statements must run outside a transaction.
+-- - The CREATE INDEX CONCURRENTLY statements must run outside a transaction.
 -- - The function is service-role only and SECURITY INVOKER.
 -- - v1 remains in place for rollback/history; application code calls v2.
 --
@@ -27,6 +27,15 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_food_objects_canonical_name_gist_trg
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_food_objects_brand_name_gist_trgm_active
   ON public.food_objects
   USING gist (brand_name gist_trgm_ops(siglen=64))
+  WHERE is_deleted = false
+    AND brand_name IS NOT NULL;
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_food_objects_canonical_name_prefix_active
+  ON public.food_objects (lower(canonical_name) text_pattern_ops)
+  WHERE is_deleted = false;
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_food_objects_brand_name_prefix_active
+  ON public.food_objects (lower(brand_name) text_pattern_ops)
   WHERE is_deleted = false
     AND brand_name IS NOT NULL;
 
@@ -89,15 +98,30 @@ BEGIN
         FROM public.food_objects fo
         WHERE fo.is_deleted = false
           AND NOT (fo.id = ANY($2))
-          AND (
-            fo.canonical_name ILIKE ($1 || '%')
-            OR (
-              fo.brand_name IS NOT NULL
-              AND fo.brand_name ILIKE ($1 || '%')
-            )
-          )
+          AND lower(fo.canonical_name) LIKE ($1 || '%')
         ORDER BY fo.id
-        LIMIT LEAST(4, $3)
+        LIMIT LEAST(2, $3)
+      $q$ USING v_variant, v_seen, v_remaining
+      LOOP
+        id := v_rec.id;
+        similarity := 0.80::real;
+        RETURN NEXT;
+        v_seen := array_append(v_seen, v_rec.id);
+        v_remaining := v_remaining - 1;
+        EXIT WHEN v_remaining <= 0;
+      END LOOP;
+
+      EXIT WHEN v_remaining <= 0;
+
+      FOR v_rec IN EXECUTE $q$
+        SELECT fo.id
+        FROM public.food_objects fo
+        WHERE fo.is_deleted = false
+          AND fo.brand_name IS NOT NULL
+          AND NOT (fo.id = ANY($2))
+          AND lower(fo.brand_name) LIKE ($1 || '%')
+        ORDER BY fo.id
+        LIMIT LEAST(2, $3)
       $q$ USING v_variant, v_seen, v_remaining
       LOOP
         id := v_rec.id;
