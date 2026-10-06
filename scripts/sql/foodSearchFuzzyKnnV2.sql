@@ -65,6 +65,8 @@ DECLARE
   v_seen uuid[] := ARRAY[]::uuid[];
   v_variant text;
   v_rec record;
+  v_transposition_count integer := 0;
+  v_best_canonical real := 0.0;
 BEGIN
   IF char_length(v_query) < 5
      OR v_query ~ '^[0-9[:space:]-]+$' THEN
@@ -103,7 +105,8 @@ BEGIN
       $q$ USING v_variant, v_seen, v_remaining
       LOOP
         id := v_rec.id;
-        similarity := 0.80::real;
+        similarity := 0.0::real;
+        v_transposition_count := v_transposition_count + 1;
         RETURN NEXT;
         v_seen := array_append(v_seen, v_rec.id);
         v_remaining := v_remaining - 1;
@@ -123,7 +126,8 @@ BEGIN
       $q$ USING v_variant, v_seen, v_remaining
       LOOP
         id := v_rec.id;
-        similarity := 0.80::real;
+        similarity := 0.0::real;
+        v_transposition_count := v_transposition_count + 1;
         RETURN NEXT;
         v_seen := array_append(v_seen, v_rec.id);
         v_remaining := v_remaining - 1;
@@ -141,9 +145,10 @@ BEGIN
         WHERE fo.is_deleted = false
           AND NOT (fo.id = ANY($2))
         ORDER BY fo.canonical_name <-> $1
-        LIMIT $3
+        LIMIT LEAST(24, $3)
       $q$ USING v_query, v_seen, v_remaining
       LOOP
+        v_best_canonical := GREATEST(v_best_canonical, v_rec.score);
         CONTINUE WHEN v_rec.score < v_min_similarity;
         id := v_rec.id;
         similarity := v_rec.score;
@@ -154,8 +159,12 @@ BEGIN
       END LOOP;
     END IF;
 
-    -- Whole-string brand nearest neighbors.
-    IF v_remaining > 0 THEN
+    -- Brand KNN is a rescue for weak canonical neighborhoods. If an adjacent
+    -- transposition already yielded candidates, application-side edit-distance
+    -- rescoring can decide them without paying for a second KNN scan.
+    IF v_remaining > 0
+       AND v_transposition_count = 0
+       AND v_best_canonical < 0.45::real THEN
       FOR v_rec IN EXECUTE $q$
         SELECT
           fo.id,
@@ -165,7 +174,7 @@ BEGIN
           AND fo.brand_name IS NOT NULL
           AND NOT (fo.id = ANY($2))
         ORDER BY fo.brand_name <-> $1
-        LIMIT $3
+        LIMIT LEAST(24, $3)
       $q$ USING v_query, v_seen, v_remaining
       LOOP
         CONTINUE WHEN v_rec.score < v_min_similarity;
