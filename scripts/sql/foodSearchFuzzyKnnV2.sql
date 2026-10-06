@@ -72,7 +72,7 @@ BEGIN
   IF v_token_count = 1 AND v_query ~ '^[a-z0-9]+$' THEN
     -- Adjacent-transposition rescue, e.g. amyul -> amylu.
     -- Each variant is independently bounded and uses the existing trigram
-    -- indexes for ILIKE containment.
+    -- indexes for bounded prefix lookup.
     FOR i IN 1..greatest(char_length(v_query) - 1, 0) LOOP
       EXIT WHEN v_remaining <= 0;
 
@@ -90,10 +90,10 @@ BEGIN
         WHERE fo.is_deleted = false
           AND NOT (fo.id = ANY($2))
           AND (
-            fo.canonical_name ILIKE ('%' || $1 || '%')
+            fo.canonical_name ILIKE ($1 || '%')
             OR (
               fo.brand_name IS NOT NULL
-              AND fo.brand_name ILIKE ('%' || $1 || '%')
+              AND fo.brand_name ILIKE ($1 || '%')
             )
           )
         ORDER BY fo.id
