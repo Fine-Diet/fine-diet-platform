@@ -86,6 +86,7 @@ import { buildFoodSearchEventRow } from './foodSearchEventSchema';
 import {
   acceptFuzzyCandidate,
   bestFuzzySimilarity,
+  FUZZY_ACCEPTED_CAP,
   FUZZY_CANDIDATE_CAP,
   FUZZY_RPC_NAME,
   FUZZY_SQL_MIN_SIMILARITY,
@@ -898,13 +899,14 @@ async function retrieveFuzzyFoodRows(
     acceptedCount: 0,
     similarities,
   };
-  const rpc = (supabaseAdmin as unknown as {
+  const admin = supabaseAdmin as unknown as {
     rpc?: (
       fn: string,
       args: Record<string, unknown>,
     ) => PromiseLike<{ data: FuzzyRpcRow[] | null; error: { message?: string } | null }>;
-  }).rpc;
-  if (typeof rpc !== 'function') {
+  };
+  const rpc = typeof admin.rpc === 'function' ? admin.rpc.bind(admin) : null;
+  if (!rpc) {
     return { ...empty, error: 'rpc_unavailable' };
   }
 
@@ -966,38 +968,44 @@ async function retrieveFuzzyFoodRows(
       .filter((row) => allowed.has(row.id))
       .map((row) => [row.id, row]),
   );
-  const accepted: FoodObjectRow[] = [];
-  for (const candidate of candidates) {
-    const row = byId.get(candidate.id);
-    if (!row) continue;
-    const rpcSimilarity = Number(candidate.similarity);
-    const safeSimilarity = Number.isFinite(rpcSimilarity) ? rpcSimilarity : 0;
-    if (!acceptFuzzyCandidate({
-      query: normalized,
-      tokens,
-      tokenGroups,
-      canonicalName: row.canonical_name,
-      brandName: row.brand_name,
-      rpcSimilarity: safeSimilarity,
-    })) {
-      continue;
-    }
-    similarities.set(
-      row.id,
-      bestFuzzySimilarity({
+  const accepted = candidates
+    .map((candidate) => {
+      const row = byId.get(candidate.id);
+      if (!row) return null;
+      const rpcSimilarity = Number(candidate.similarity);
+      const safeSimilarity = Number.isFinite(rpcSimilarity) ? rpcSimilarity : 0;
+      if (!acceptFuzzyCandidate({
         query: normalized,
         tokens,
+        tokenGroups,
         canonicalName: row.canonical_name,
         brandName: row.brand_name,
         rpcSimilarity: safeSimilarity,
-      }),
-    );
-    accepted.push(row);
+      })) {
+        return null;
+      }
+      return {
+        row,
+        similarity: bestFuzzySimilarity({
+          query: normalized,
+          tokens,
+          canonicalName: row.canonical_name,
+          brandName: row.brand_name,
+          rpcSimilarity: safeSimilarity,
+        }),
+      };
+    })
+    .filter((item): item is { row: FoodObjectRow; similarity: number } => item !== null)
+    .sort((a, b) => b.similarity - a.similarity || a.row.id.localeCompare(b.row.id))
+    .slice(0, FUZZY_ACCEPTED_CAP);
+
+  for (const item of accepted) {
+    similarities.set(item.row.id, item.similarity);
   }
 
   return {
     invoked: true,
-    rows: accepted,
+    rows: accepted.map((item) => item.row),
     candidateCount: candidates.length,
     acceptedCount: accepted.length,
     similarities,

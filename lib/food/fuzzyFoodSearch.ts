@@ -11,7 +11,7 @@
  * handles substitutions, insertions/deletions, and adjacent transpositions
  * such as "amyul" -> "amylu". This is never a catalog scan: Postgres
  * `pg_trgm` still performs candidate retrieval through
- * `search_food_objects_fuzzy_v1`.
+ * `search_food_objects_fuzzy_v2`.
  */
 
 import {
@@ -21,12 +21,13 @@ import {
 } from './searchNormalization';
 
 export const FUZZY_MIN_TOKEN_LENGTH = 5;
-export const FUZZY_CANDIDATE_CAP = 12;
+export const FUZZY_CANDIDATE_CAP = 48;
+export const FUZZY_ACCEPTED_CAP = 12;
 export const FUZZY_SQL_MIN_SIMILARITY = 0.2;
 export const FUZZY_ACCEPT_SIMILARITY = 0.42;
 /** Stays below one lexical token-match point (100). */
 export const FUZZY_ONLY_SCORE_CAP = 89;
-export const FUZZY_RPC_NAME = 'search_food_objects_fuzzy_v1';
+export const FUZZY_RPC_NAME = 'search_food_objects_fuzzy_v2';
 
 export interface FuzzyFoodNameRow {
   canonical_name: string;

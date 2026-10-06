@@ -83,16 +83,23 @@ jest.mock('@/lib/supabaseServerClient', () => {
     return builder;
   };
 
-  return {
-    supabaseAdmin: {
-      from: jest.fn((table: string) => buildQueryBuilder(table)),
-      rpc: jest.fn(async (_fn: string, args: { p_query?: string }) => {
-        rpcCalls += 1;
-        const hit = TYPO_HITS[String(args?.p_query ?? '')];
-        return { data: hit ? [hit] : [], error: null };
-      }),
-    },
+  const supabaseAdmin = {
+    from: jest.fn((table: string) => buildQueryBuilder(table)),
+    rpc: jest.fn(async function (
+      this: { from?: unknown },
+      _fn: string,
+      args: { p_query?: string },
+    ) {
+      if (typeof this?.from !== 'function') {
+        throw new Error('rpc lost Supabase client binding');
+      }
+      rpcCalls += 1;
+      const hit = TYPO_HITS[String(args?.p_query ?? '')];
+      return { data: hit ? [hit] : [], error: null };
+    }),
   };
+
+  return { supabaseAdmin };
 });
 
 jest.mock('@/lib/missingItems/missingItemRequestServerService', () => ({
@@ -713,24 +720,28 @@ describe('food_search_events schema contract', () => {
     ]);
   });
 
-  it('prepares a capped service-role trigram RPC with production-shape typo rescue', () => {
-    const sql = read('scripts/sql/foodSearchFuzzyFallbackV1.sql');
+  it('prepares a capped service-role GiST nearest-neighbor fuzzy RPC', () => {
+    const sql = read('scripts/sql/foodSearchFuzzyKnnV2.sql');
     const body = sql.slice(sql.indexOf('AS $'), sql.lastIndexOf('$'));
     expect(sql).toContain('CREATE EXTENSION IF NOT EXISTS pg_trgm');
-    expect(sql).toContain('search_food_objects_fuzzy_v1');
-    expect(sql).toContain('word_similarity');
-    expect(sql).toContain('similarity(v_query');
-    expect(sql).toContain('generate_series');
-    expect(sql).toContain('transposition_candidates');
-    expect(sql).toContain('set_config');
-    expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v1(text, integer, real) TO service_role');
+    expect(sql).toContain('idx_food_objects_canonical_name_gist_trgm_active');
+    expect(sql).toContain('idx_food_objects_brand_name_gist_trgm_active');
+    expect(sql).toContain('gist_trgm_ops(siglen=64)');
+    expect(sql).toContain('search_food_objects_fuzzy_v2');
+    expect(sql).toContain('fo.canonical_name <-> $1');
+    expect(sql).toContain('$1 <<-> fo.canonical_name');
+    expect(sql).toContain('fo.brand_name <-> $1');
+    expect(sql).toContain('$1 <<-> fo.brand_name');
+    expect(sql).toContain('idx_food_objects_canonical_name_prefix_active');
+    expect(sql).toContain('idx_food_objects_brand_name_prefix_active');
+    expect(sql).toContain('text_pattern_ops');
+    expect(sql).toContain('LIMIT LEAST(24, $3)');
+    expect(sql).toContain('p_limit integer DEFAULT 48');
+    expect(sql).toContain('LEAST(GREATEST(coalesce(p_limit, 48), 1), 48)');
+    expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v2(text, integer, real) TO service_role');
     expect(sql).not.toContain('TO anon');
-    expect(body).toMatch(/v_query\s+%\s+fo\.canonical_name\b/);
-    expect(body).toMatch(/v_query\s+%\s+fo\.brand_name\b/);
-    expect(body).toMatch(/v_query\s+<%\s+fo\.canonical_name\b/);
-    expect(body).toMatch(/v_query\s+<%\s+fo\.brand_name\b/);
-    expect(body).not.toMatch(/[%<]\s+lower\s*\(/);
-    expect(body).toContain('fo.brand_name IS NOT NULL');
+    expect(body).toContain('WHERE fo.is_deleted = false');
+    expect(body).toContain('brand_name IS NOT NULL');
     expect(sql).toContain('p_min_similarity real DEFAULT 0.20');
   });
 });
