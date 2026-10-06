@@ -483,6 +483,139 @@ describe('fuzzy acceptance', () => {
   });
 });
 
+type SearchEventCell = boolean | null;
+
+interface AppliedSearchEventMigration {
+  tableExists: boolean;
+  columns: Set<string>;
+  rows: Array<Record<string, SearchEventCell>>;
+  steps: string[];
+}
+
+/**
+ * Applies the idempotent events script to an in-memory catalog.
+ * CREATE TABLE and ADD COLUMN honor IF NOT EXISTS. Each DO block's
+ * EXISTS / NOT EXISTS checks are evaluated against the columns present
+ * at that point, then its RENAME or backfill runs only when they hold.
+ */
+function applyFoodSearchEventsMigration(
+  sql: string,
+  start: {
+    tableExists: boolean;
+    columns: string[];
+    rows: Array<Record<string, SearchEventCell>>;
+  },
+): AppliedSearchEventMigration {
+  const source = sql
+    .split('\n')
+    .map((line) => {
+      const mark = line.indexOf('--');
+      return mark === -1 ? line : line.slice(0, mark);
+    })
+    .join('\n');
+  const columns = new Set(start.columns);
+  const rows = start.rows.map((row) => ({ ...row }));
+  let tableExists = start.tableExists;
+  const steps: string[] = [];
+  const token =
+    /CREATE TABLE IF NOT EXISTS public\.food_search_events \(([\s\S]*?)\);|ADD COLUMN IF NOT EXISTS\s+([a-z_]+)|DO \$\$([\s\S]*?)\$\$;/g;
+
+  let match: RegExpExecArray | null;
+  while ((match = token.exec(source)) !== null) {
+    if (match[1] != null) {
+      steps.push('create');
+      if (!tableExists) {
+        tableExists = true;
+        for (const line of match[1].split('\n')) {
+          const column = line.match(/^\s*([a-z_]+)\s+(UUID|TEXT|INTEGER|BOOLEAN|TIMESTAMPTZ)\b/i);
+          if (column) columns.add(column[1]);
+        }
+      }
+      continue;
+    }
+
+    if (match[2] != null) {
+      const name = match[2];
+      steps.push(`add:${name}`);
+      if (tableExists && !columns.has(name)) {
+        columns.add(name);
+        for (const row of rows) row[name] = null;
+      }
+      continue;
+    }
+
+    const block = match[3];
+    const checks: Array<{ name: string; present: boolean }> = [];
+    const checkRe =
+      /(NOT\s+EXISTS|EXISTS)\s*\(\s*SELECT\s+1\s+FROM\s+information_schema\.columns[\s\S]*?column_name\s*=\s*'([a-z_]+)'[\s\S]*?\)/gi;
+    let check: RegExpExecArray | null;
+    while ((check = checkRe.exec(block)) !== null) {
+      checks.push({
+        name: check[2],
+        present: !/^NOT/i.test(check[1]),
+      });
+    }
+    if (checks.length === 0) {
+      throw new Error('DO block has no information_schema column check');
+    }
+    const holds = tableExists && checks.every((item) => columns.has(item.name) === item.present);
+    const rename = block.match(/RENAME COLUMN\s+([a-z_]+)\s+TO\s+([a-z_]+)/i);
+    const backfill = block.match(
+      /SET\s+([a-z_]+)\s*=\s*([a-z_]+)[\s\S]*?WHERE\s+([a-z_]+)\s+IS NULL\s+AND\s+([a-z_]+)\s+IS NOT NULL/i,
+    );
+    if (rename) steps.push(`rename:${rename[1]}->${rename[2]}`);
+    if (backfill) steps.push(`backfill:${backfill[2]}->${backfill[1]}`);
+    if (!holds) continue;
+
+    if (rename) {
+      const from = rename[1];
+      const to = rename[2];
+      columns.delete(from);
+      columns.add(to);
+      for (const row of rows) {
+        row[to] = row[from] ?? null;
+        delete row[from];
+      }
+    }
+
+    if (backfill) {
+      const dest = backfill[1];
+      const sourceColumn = backfill[2];
+      const destGuard = backfill[3];
+      const sourceGuard = backfill[4];
+      if (dest !== destGuard || sourceColumn !== sourceGuard) {
+        throw new Error('Backfill SET and WHERE columns disagree');
+      }
+      for (const row of rows) {
+        if (row[dest] == null && row[sourceColumn] != null) {
+          row[dest] = row[sourceColumn];
+        }
+      }
+    }
+  }
+
+  return { tableExists, columns, rows, steps };
+}
+
+const LEGACY_FOOD_SEARCH_EVENT_COLUMNS = [
+  'id',
+  'event_type',
+  'session_id',
+  'person_id',
+  'query',
+  'total_result_count',
+  'curated_result_count',
+  'off_result_count',
+  'selected_food_id',
+  'selected_food_source',
+  'selected_result_position',
+  'page_context',
+  'created_at',
+  'normalized_query',
+  'off_fallback_shown',
+  'near_exact_curated_match',
+];
+
 describe('food_search_events schema contract', () => {
   const read = (relative: string) =>
     fs.readFileSync(path.join(process.cwd(), relative), 'utf8');
@@ -512,20 +645,88 @@ describe('food_search_events schema contract', () => {
     expect(current).toContain('near_exact_curated_match');
     expect(current).toContain('RENAME COLUMN near_exact_curated_match TO near_exact_match_existed');
 
+    const applied = applyFoodSearchEventsMigration(current, {
+      tableExists: false,
+      columns: [],
+      rows: [],
+    });
+    const renameAt = applied.steps.indexOf(
+      'rename:near_exact_curated_match->near_exact_match_existed',
+    );
+    const addAt = applied.steps.indexOf('add:near_exact_match_existed');
+    const backfillAt = applied.steps.indexOf(
+      'backfill:near_exact_curated_match->near_exact_match_existed',
+    );
+    expect(renameAt).toBeGreaterThanOrEqual(0);
+    expect(addAt).toBeGreaterThan(renameAt);
+    expect(backfillAt).toBeGreaterThan(addAt);
+
     const alter = read('scripts/sql/alterFoodSearchEventsPhase3.sql');
     expect(alter).toContain('near_exact_match_existed');
     expect(alter).not.toMatch(/ADD COLUMN IF NOT EXISTS near_exact_curated_match/);
     expect(alter).not.toMatch(/BOOLEAN NOT NULL/);
   });
 
+  it('renames a legacy near-exact column before adding the canonical one', () => {
+    const current = read('scripts/sql/foodSearchEventsCurrent.sql');
+    const applied = applyFoodSearchEventsMigration(current, {
+      tableExists: true,
+      columns: LEGACY_FOOD_SEARCH_EVENT_COLUMNS,
+      rows: [
+        { near_exact_curated_match: true },
+        { near_exact_curated_match: false },
+        { near_exact_curated_match: null },
+      ],
+    });
+
+    expect(applied.columns.has('near_exact_curated_match')).toBe(false);
+    expect(applied.columns.has('near_exact_match_existed')).toBe(true);
+    expect(applied.rows.map((row) => row.near_exact_match_existed)).toEqual([
+      true,
+      false,
+      null,
+    ]);
+    expect(applied.rows.every((row) => !('near_exact_curated_match' in row))).toBe(true);
+  });
+
+  it('backfills legacy values when both near-exact columns already exist', () => {
+    const current = read('scripts/sql/foodSearchEventsCurrent.sql');
+    const applied = applyFoodSearchEventsMigration(current, {
+      tableExists: true,
+      columns: [...LEGACY_FOOD_SEARCH_EVENT_COLUMNS, 'near_exact_match_existed'],
+      rows: [
+        { near_exact_curated_match: true, near_exact_match_existed: null },
+        { near_exact_curated_match: true, near_exact_match_existed: false },
+        { near_exact_curated_match: false, near_exact_match_existed: null },
+        { near_exact_curated_match: null, near_exact_match_existed: true },
+      ],
+    });
+
+    expect(applied.columns.has('near_exact_curated_match')).toBe(true);
+    expect(applied.columns.has('near_exact_match_existed')).toBe(true);
+    expect(applied.rows).toEqual([
+      { near_exact_curated_match: true, near_exact_match_existed: true },
+      { near_exact_curated_match: true, near_exact_match_existed: false },
+      { near_exact_curated_match: false, near_exact_match_existed: false },
+      { near_exact_curated_match: null, near_exact_match_existed: true },
+    ]);
+  });
+
   it('prepares a capped service-role trigram RPC and does not apply it', () => {
     const sql = read('scripts/sql/foodSearchFuzzyFallbackV1.sql');
+    const body = sql.slice(sql.indexOf('AS $$'), sql.lastIndexOf('$$'));
     expect(sql).toContain('CREATE EXTENSION IF NOT EXISTS pg_trgm');
     expect(sql).toContain('search_food_objects_fuzzy_v1');
     expect(sql).toContain('word_similarity');
     expect(sql).toContain('LIMIT LEAST');
     expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v1(text, integer, real) TO service_role');
     expect(sql).toContain('NOT APPLIED');
+    expect(sql).toContain('Bitmap Index Scan');
+    expect(sql).toContain('gin_trgm_ops');
     expect(sql).not.toContain('TO anon');
+    expect(body).toMatch(/<%\s+fo\.canonical_name\b/);
+    expect(body).toMatch(/<%\s+fo\.brand_name\b/);
+    expect(body).not.toMatch(/<%\s+lower\s*\(/);
+    expect(body).toContain('fo.brand_name IS NOT NULL');
   });
 });

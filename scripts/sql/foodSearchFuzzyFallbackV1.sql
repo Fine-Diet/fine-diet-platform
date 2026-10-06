@@ -7,8 +7,19 @@
 --
 -- pg_trgm 1.6 is already installed in production. This script still
 -- creates the extension if a fresh database does not have it.
--- Existing GIN indexes from scripts/sql/addFoodSearchIndexes.sql
--- (canonical_name, brand_name gin_trgm_ops) support the <% operator.
+-- Performance contract: <% must use the raw indexed columns.
+-- scripts/sql/addFoodSearchIndexes.sql defines
+--   idx_food_objects_canonical_name_trgm ON canonical_name gin_trgm_ops
+--   idx_food_objects_brand_name_trgm ON brand_name gin_trgm_ops
+--   (partial: WHERE brand_name IS NOT NULL)
+-- Independent read-only EXPLAIN:
+--   '<query>' <% lower(canonical_name)  → Seq Scan
+--   '<query>' <% canonical_name          → Bitmap Index Scan on the trigram index
+-- Do not wrap canonical_name or brand_name in lower() inside the <%
+-- predicate. Do not add a functional index on lower(column).
+-- The brand <% predicate keeps "brand_name IS NOT NULL" so the partial
+-- brand index remains usable. word_similarity() may still case-fold for
+-- the score; that expression is a residual filter, not the index predicate.
 --
 -- Retrieval stays in Postgres. The application never loads the catalog
 -- to score typos. Candidate count is capped at 12. Queries shorter than
@@ -45,10 +56,10 @@ AS $$
     AND char_length(btrim(coalesce(p_query, ''))) >= 5
     AND btrim(p_query) !~ '^[0-9[:space:]-]+$'
     AND (
-      lower(btrim(p_query)) <% lower(fo.canonical_name)
+      lower(btrim(p_query)) <% fo.canonical_name
       OR (
         fo.brand_name IS NOT NULL
-        AND lower(btrim(p_query)) <% lower(fo.brand_name)
+        AND lower(btrim(p_query)) <% fo.brand_name
       )
     )
     AND GREATEST(

@@ -22,6 +22,17 @@
 -- so those columns are nullable. The canonical near-exact column name
 -- is near_exact_match_existed.
 --
+-- Legacy column order:
+--   1. If near_exact_curated_match exists and near_exact_match_existed
+--      does not, rename the old column to the new name first. Adding
+--      the new column before that rename makes the rename condition
+--      unreachable and leaves the legacy values behind.
+--   2. Add near_exact_match_existed only if it is still absent.
+--   3. If both columns exist, copy legacy values into the canonical
+--      column only where the canonical value is NULL. Do not overwrite
+--      a non-null canonical value. Keep the legacy column so a
+--      conflicting pair is not discarded.
+--
 -- Access: service_role only. RLS is enabled with no anon/authenticated
 -- policy (default deny). supabaseAdmin uses the service role, which
 -- bypasses RLS. This matches missing_item_requests.
@@ -59,7 +70,6 @@ CREATE TABLE IF NOT EXISTS public.food_search_events (
 ALTER TABLE public.food_search_events
   ADD COLUMN IF NOT EXISTS normalized_query TEXT,
   ADD COLUMN IF NOT EXISTS off_fallback_shown BOOLEAN,
-  ADD COLUMN IF NOT EXISTS near_exact_match_existed BOOLEAN,
   ADD COLUMN IF NOT EXISTS total_result_count INTEGER,
   ADD COLUMN IF NOT EXISTS curated_result_count INTEGER,
   ADD COLUMN IF NOT EXISTS off_result_count INTEGER,
@@ -70,7 +80,8 @@ ALTER TABLE public.food_search_events
   ADD COLUMN IF NOT EXISTS session_id TEXT,
   ADD COLUMN IF NOT EXISTS query TEXT;
 
--- Superseded name from alterFoodSearchEventsPhase3.sql.
+-- Rename the superseded column before the canonical column is added.
+-- Once near_exact_match_existed exists, "old AND NOT new" can never fire.
 DO $$
 BEGIN
   IF EXISTS (
@@ -88,6 +99,34 @@ BEGIN
   ) THEN
     ALTER TABLE public.food_search_events
       RENAME COLUMN near_exact_curated_match TO near_exact_match_existed;
+  END IF;
+END $$;
+
+ALTER TABLE public.food_search_events
+  ADD COLUMN IF NOT EXISTS near_exact_match_existed BOOLEAN;
+
+-- Both names present: fill only empty canonical values from the legacy
+-- column. Leave a non-null canonical value alone, and keep the legacy
+-- column so conflicting data is still stored.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'food_search_events'
+      AND column_name = 'near_exact_curated_match'
+  ) AND EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'food_search_events'
+      AND column_name = 'near_exact_match_existed'
+  ) THEN
+    UPDATE public.food_search_events
+    SET near_exact_match_existed = near_exact_curated_match
+    WHERE near_exact_match_existed IS NULL
+      AND near_exact_curated_match IS NOT NULL;
   END IF;
 END $$;
 
@@ -116,7 +155,8 @@ COMMENT ON TABLE public.food_search_events IS
 
 COMMENT ON COLUMN public.food_search_events.near_exact_match_existed IS
   'True when curated results contained a near-exact match. Application column. '
-  'The earlier name near_exact_curated_match is renamed into this column when present.';
+  'Renamed from near_exact_curated_match when that was the only name. '
+  'If both columns exist, null canonical values are backfilled from the legacy column.';
 
 COMMENT ON COLUMN public.food_search_events.off_fallback_shown IS
   'True when a promoted-OFF or raw-OFF section was shown. Nullable because '
