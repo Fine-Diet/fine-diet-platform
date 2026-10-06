@@ -21,7 +21,8 @@ import {
 } from './searchNormalization';
 
 export const FUZZY_MIN_TOKEN_LENGTH = 5;
-export const FUZZY_CANDIDATE_CAP = 12;
+export const FUZZY_CANDIDATE_CAP = 48;
+export const FUZZY_ACCEPTED_CAP = 12;
 export const FUZZY_SQL_MIN_SIMILARITY = 0.2;
 export const FUZZY_ACCEPT_SIMILARITY = 0.42;
 /** Stays below one lexical token-match point (100). */
