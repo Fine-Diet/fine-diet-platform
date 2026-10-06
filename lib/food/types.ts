@@ -302,6 +302,75 @@ export interface FoodSearchFuzzyFallbackDebug {
   error?: string;
 }
 
+/**
+ * Cooking methods this pass can name. Grammatical variants collapse onto
+ * one of these values. Steamed is not boiled, and roasted is not baked.
+ */
+export type PreparationMethod =
+  | 'raw'
+  | 'steamed'
+  | 'roasted'
+  | 'boiled'
+  | 'baked'
+  | 'grilled'
+  | 'sauteed'
+  | 'fried';
+
+export type PreparationMatchStatus =
+  | 'exact_preparation'
+  | 'approximate_preparation'
+  | 'unspecified_preparation'
+  | 'conflicting_preparation';
+
+export interface ParsedFoodQuantity {
+  amount: number;
+  unit: string;
+}
+
+/**
+ * How a retrieved record relates to the preparation the user asked for.
+ * The record name, nutrients, and source stay unchanged.
+ */
+export interface FoodPreparationMatch {
+  status: PreparationMatchStatus;
+  requestedMethods: PreparationMethod[];
+  listedMethods: PreparationMethod[];
+  /** What the record itself states. Never a label invented for an unqualified row. */
+  listedLabel: string;
+  additions: string[];
+  exclusions: string[];
+  quantity: ParsedFoodQuantity | null;
+  /** True only when this record has a measure for the requested unit. */
+  quantitySupported: boolean | null;
+  note: string | null;
+}
+
+export type PreparationDemandGap =
+  | 'base_food_not_found'
+  | 'preparation_variant_not_found';
+
+/**
+ * Bounded debug for a preparation-aware search. Absent fields are not a
+ * claim that the catalog lacks the food.
+ */
+export interface FoodSearchPreparationDebug {
+  active: boolean;
+  reliable: boolean;
+  ambiguous: boolean;
+  identityTokens: string[];
+  requestedPreparation: PreparationMethod[];
+  formDescriptors: string[];
+  additions: string[];
+  exclusions: string[];
+  quantity: ParsedFoodQuantity | null;
+  matchTier: PreparationMatchStatus | 'none' | 'not_applicable';
+  retrievalStage: 'existing' | 'identity_recovery' | 'not_applicable';
+  /** Additional retrieval stages beyond the existing path. Capped at 1. */
+  recoveryCalls: number;
+  demandGap: PreparationDemandGap | null;
+  durationMs: number;
+}
+
 export interface FoodSearchDebugInfo {
   rawQuery: string;
   normalizedQuery: string;
@@ -353,6 +422,8 @@ export interface FoodSearchDebugInfo {
   };
   /** Typo fallback. Fired only after normal retrieval is absent or thin. */
   fuzzyFallback?: FoodSearchFuzzyFallbackDebug;
+  /** Preparation interpretation. Present when debug=true. */
+  preparation?: FoodSearchPreparationDebug;
 }
 
 /**
@@ -408,6 +479,11 @@ export interface FoodSearchResult {
    * keep their normal score.
    */
   fuzzySimilarity?: number;
+  /**
+   * Set when the query had a reliable preparation, addition, or exclusion.
+   * Absent for ordinary queries. Does not change the food record.
+   */
+  preparationMatch?: FoodPreparationMatch;
 }
 
 /**

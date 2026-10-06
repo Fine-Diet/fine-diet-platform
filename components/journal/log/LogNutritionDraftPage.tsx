@@ -195,6 +195,14 @@ function DraftEntryRow({
           <h2 className="truncate text-[15px] font-medium leading-5 text-white/90">
             {entry.title}
           </h2>
+          {entry.kind === 'single_item' && (entry.preparationNote || entry.unresolvedQuantityLabel) && (
+            <p className="mt-0.5 break-words text-xs leading-5 text-white/55">
+              {entry.preparationNote}
+              {entry.unresolvedQuantityLabel
+                ? `${entry.preparationNote ? ' ' : ''}Requested amount left as entered: ${entry.unresolvedQuantityLabel}.`
+                : ''}
+            </p>
+          )}
           <p className="mt-0.5 text-xs leading-5 text-white/42">
             {formatNutrition(entry)}
           </p>
@@ -291,6 +299,8 @@ function SearchResultRow({
         : result.kind === 'meal' || result.kind === 'recipe'
           ? `${result.kind === 'meal' ? 'Meal' : 'Recipe'} · ${result.kind === 'meal' ? result.meal.components.length : result.recipe.components.length} items`
           : '';
+  const preparationNote =
+    result.kind === 'food' ? result.food.preparationMatch?.note ?? null : null;
   return (
     <button
       type="button"
@@ -303,6 +313,11 @@ function SearchResultRow({
           {result.title}
         </span>
         <span className="block truncate text-xs text-white/42">{subtitle}</span>
+        {preparationNote && (
+          <span className="mt-0.5 block break-words text-xs leading-5 text-white/55">
+            {preparationNote}
+          </span>
+        )}
       </span>
       <span className="text-xl font-light text-white/38">{disabled ? 'Review' : '+'}</span>
     </button>

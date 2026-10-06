@@ -177,22 +177,18 @@ function getSearchResultBadges(result: FoodSearchResult): SearchBadge[] {
 }
 
 function getSearchResultNote(result: FoodSearchResult): string | null {
+  const preparationNote = result.preparationMatch?.note ?? null;
   const signals = result.rankingSignals;
-  if (!signals) return null;
-
-  if (signals.fallbackState === 'fallback_off') {
-    return 'Lower-trust external data shown because stronger primary matches were limited.';
+  let base: string | null = null;
+  if (signals?.fallbackState === 'fallback_off') {
+    base = 'Lower-trust external data shown because stronger primary matches were limited.';
+  } else if (signals?.fallbackState === 'fallback_promoted_off') {
+    base = 'Reviewed community snapshot surfaced as fallback when primary matches were limited.';
+  } else if (signals?.nutritionQualityTier === 'thin') {
+    base = 'This match is plausible, but it has thinner nutrition detail than stronger results.';
   }
-
-  if (signals.fallbackState === 'fallback_promoted_off') {
-    return 'Reviewed community snapshot surfaced as fallback when primary matches were limited.';
-  }
-
-  if (signals.nutritionQualityTier === 'thin') {
-    return 'This match is plausible, but it has thinner nutrition detail than stronger results.';
-  }
-
-  return null;
+  if (preparationNote && base) return `${preparationNote} ${base}`;
+  return preparationNote ?? base;
 }
 
 export default function JournalLogPage() {

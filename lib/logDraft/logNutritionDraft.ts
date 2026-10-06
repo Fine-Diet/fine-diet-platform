@@ -1,6 +1,7 @@
 import {
   formatFoodName,
   type FoodObject,
+  type FoodPreparationMatch,
   type FoodSearchResult,
   type OffServingNormalization,
 } from '@/lib/food/types';
@@ -53,6 +54,10 @@ export interface LogNutritionSingleItemDraftEntryV1
   foodObjectId: string | null;
   servingSizeG: number | null;
   measures: Array<{ unit: string; grams: number; label?: string }> | null;
+  /** Visible preparation explanation. Not written to the journal payload. */
+  preparationNote?: string | null;
+  /** Requested amount the selected record cannot convert. Not a guessed gram weight. */
+  unresolvedQuantityLabel?: string | null;
 }
 
 export interface LogNutritionMealDraftEntryV1
@@ -196,14 +201,37 @@ function nullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+export function applyPreparationSelection(
+  entry: LogNutritionSingleItemDraftEntryV1,
+  match: FoodPreparationMatch | null | undefined,
+): LogNutritionSingleItemDraftEntryV1 {
+  if (!match) return entry;
+  const quantity = match.quantity;
+  const supported = Boolean(quantity && match.quantitySupported);
+  const next: LogNutritionSingleItemDraftEntryV1 = {
+    ...entry,
+    ...(supported && quantity
+      ? { quantity: quantity.amount, unit: quantity.unit }
+      : {}),
+    ...(match.note ? { preparationNote: match.note } : {}),
+    ...(quantity && !match.quantitySupported
+      ? { unresolvedQuantityLabel: `${quantity.amount} ${quantity.unit}` }
+      : {}),
+  };
+  return next;
+}
+
 export function singleItemDraftEntryFromFoodResult(
   result: FoodSearchResult,
   options?: { id?: string; now?: Date },
 ): LogNutritionSingleItemDraftEntryV1 {
-  return singleItemDraftEntryFromFood(result.food, {
-    ...options,
-    offNormalization: result.offNormalization,
-  });
+  return applyPreparationSelection(
+    singleItemDraftEntryFromFood(result.food, {
+      ...options,
+      offNormalization: result.offNormalization,
+    }),
+    result.preparationMatch,
+  );
 }
 
 export function singleItemDraftEntryFromFood(

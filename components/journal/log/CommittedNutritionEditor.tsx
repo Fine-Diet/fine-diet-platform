@@ -285,6 +285,16 @@ function SingleItemEditor({
         <h2 className="mt-1 text-lg font-medium text-white">
           {replacement?.title ?? payload.name ?? 'Item'}
         </h2>
+        {replacement?.preparationNote && (
+          <p className="mt-1 break-words text-xs leading-5 text-white/55">
+            {replacement.preparationNote}
+          </p>
+        )}
+        {replacement?.unresolvedQuantityLabel && (
+          <p className="mt-1 break-words text-xs leading-5 text-white/55">
+            Requested amount left as entered: {replacement.unresolvedQuantityLabel}.
+          </p>
+        )}
         <p className="mt-1 text-xs text-white/42">{nutritionPreview}</p>
       </div>
 
@@ -359,7 +369,12 @@ function SingleItemEditor({
                 onClick={() => selectReplacement(result)}
                 className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-white/[0.06]"
               >
-                {result.title}
+                <span className="block">{result.title}</span>
+                {result.kind === 'food' && result.food.preparationMatch?.note && (
+                  <span className="mt-0.5 block break-words text-xs leading-5 text-white/55">
+                    {result.food.preparationMatch.note}
+                  </span>
+                )}
               </button>
             ))}
           </div>

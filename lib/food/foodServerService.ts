@@ -31,6 +31,7 @@ import type {
   FoodSearchFuzzyFallbackDebug,
   FoodSearchMode,
   FoodSearchNutritionQualityTier,
+  FoodSearchPreparationDebug,
   FoodSearchRankingSignals,
   FoodSearchReadiness,
   FoodSearchReadinessBasis,
@@ -44,6 +45,7 @@ import type {
   NutrientConfidence,
   NutrientProvenance,
   OffServingNormalization,
+  PreparationDemandGap,
   SearchGroup,
   SearchResultSection,
   SectionKey,
@@ -62,6 +64,7 @@ export type {
   FoodSearchFuzzyFallbackDebug,
   FoodSearchMode,
   FoodSearchNutritionQualityTier,
+  FoodSearchPreparationDebug,
   FoodSearchRankingSignals,
   FoodSearchReadiness,
   FoodSearchReadinessBasis,
@@ -75,6 +78,7 @@ export type {
   NutrientConfidence,
   NutrientProvenance,
   OffServingNormalization,
+  PreparationDemandGap,
   SearchGroup,
   SearchResultSection,
   SectionKey,
@@ -106,6 +110,12 @@ import {
   escapeForLike,
   type TokenGroup,
 } from './searchNormalization';
+import {
+  demoteNonIdentityBrandFlags,
+  interpretFoodQuery,
+  preparationRankBoost,
+  qualifyFoodPreparation,
+} from './preparationInterpretation';
 import {
   areSameItem,
   getUpcVariants,
@@ -854,6 +864,15 @@ function deduplicateRows(rows: FoodObjectRow[]): {
 // Search
 // ============================================================================
 
+function rowCoversIdentity(
+  row: { canonical_name: string; brand_name: string | null },
+  groups: TokenGroup[],
+): boolean {
+  if (groups.length === 0) return false;
+  const text = `${row.canonical_name} ${row.brand_name ?? ''}`;
+  return countTokenGroupMatches(text, groups).matchCount >= groups.length;
+}
+
 /**
  * Search foods by text query.
  * 
@@ -1086,9 +1105,18 @@ export async function searchFoods(
   instr.recordStage({ stage: 'brand_evidence', ms: Date.now() - brandCacheStart });
 
   const normalizeStart = Date.now();
-  const { normalized, tokens, tokenGroups, originalRaw } = normalizeSearchQuery(query, {
+  const preparationStarted = Date.now();
+  const normalizedQuery = normalizeSearchQuery(query, {
     brandTokenSet,
   });
+  const { normalized, tokens, originalRaw } = normalizedQuery;
+  const preparation = interpretFoodQuery(originalRaw);
+  let tokenGroups = preparation.retrieval === 'identity'
+    ? demoteNonIdentityBrandFlags(normalizedQuery.tokenGroups, preparation)
+    : normalizedQuery.tokenGroups;
+  const identityQuery = preparation.retrieval === 'identity'
+    ? normalizeSearchQuery(preparation.identityText, { brandTokenSet })
+    : null;
   instr.recordStage({ stage: 'normalize', ms: Date.now() - normalizeStart });
   
   if (tokens.length === 0) {
@@ -1126,6 +1154,11 @@ export async function searchFoods(
   let phaseBFilter: string | undefined;
   let phaseACount = 0;
   let phaseBCount: number | undefined;
+  let phaseAFailed = false;
+  let recoveryFailed = false;
+  let preparationRecoveryCalls = 0;
+  let preparationRetrievalStage: FoodSearchPreparationDebug['retrievalStage'] =
+    preparation.retrieval === 'identity' ? 'existing' : 'not_applicable';
   
   // Phase A: AND-grouped search (requires match from EACH token group)
   // CRITICAL: Uses dbVariants which have NO apostrophes
@@ -1154,6 +1187,7 @@ export async function searchFoods(
       }>
   );
   if (phaseAOutcome.error) {
+    phaseAFailed = true;
     console.error('[searchFoods] Phase A error:', phaseAOutcome.error.message);
     debugLog('Step 2A: Phase A ERROR', {
       error: phaseAOutcome.error.message,
@@ -1222,8 +1256,13 @@ export async function searchFoods(
       phaseBCount = additionalRows.length;
     }
     
-    // Phase C: Prefix search as last resort (only if still no results)
-    if (foodRows.length === 0) {
+    // Phase C: Prefix search as last resort (only if still no results).
+    // A preparation word is not a food-name prefix, so skip that scan and
+    // leave identity recovery as the single extra retrieval.
+    const firstCanonical = tokenGroups[0]?.canonical || tokens[0];
+    const prefixIsFoodIdentity = preparation.retrieval !== 'identity'
+      || preparation.identityTokens.includes(firstCanonical);
+    if (foodRows.length === 0 && prefixIsFoodIdentity) {
       searchMode = 'fallback_prefix';
       const firstVariant = escapeForLike(tokenGroups[0]?.dbVariants[0] || tokens[0]);
       phaseBFilter = `canonical_name.ilike.${firstVariant}%,brand_name.ilike.${firstVariant}%`;
@@ -1253,12 +1292,24 @@ export async function searchFoods(
     }
   }
 
+  const identityNeedsRecovery = Boolean(
+    preparation.retrieval === 'identity' &&
+    identityQuery &&
+    identityQuery.tokenGroups.length > 0 &&
+    !phaseAFailed &&
+    !foodRows.some((row) => rowCoversIdentity(row, identityQuery.tokenGroups)),
+  );
   const fuzzyDecision = shouldRunFuzzyFallback({
     normalized,
     tokens,
     tokenGroups,
     rows: foodRows,
   });
+  // Typo recovery belongs on the food identity. Skip a second fuzzy pass
+  // over the whole preparation phrase when that identity stage will run.
+  const deferFuzzyToIdentity = identityNeedsRecovery
+    && identityQuery != null
+    && isFuzzyQueryEligible(identityQuery.normalized, identityQuery.tokens);
   let fuzzyFallbackDebug: FoodSearchFuzzyFallbackDebug = {
     fired: false,
     reason: fuzzyDecision.reason,
@@ -1268,7 +1319,7 @@ export async function searchFoods(
     minSimilarity: FUZZY_SQL_MIN_SIMILARITY,
   };
   const fuzzySimilarityById = new Map<string, number>();
-  if (fuzzyDecision.run) {
+  if (fuzzyDecision.run && !deferFuzzyToIdentity) {
     const fuzzy = await retrieveFuzzyFoodRows(normalized, tokens, tokenGroups, instr);
     fuzzyFallbackDebug = {
       fired: fuzzy.invoked,
@@ -1288,6 +1339,72 @@ export async function searchFoods(
     fuzzy.similarities.forEach((similarity, id) => {
       fuzzySimilarityById.set(id, similarity);
     });
+  }
+
+  const identityFuzzyIds = new Set<string>();
+  if (identityNeedsRecovery && identityQuery) {
+    const recoveryStarted = Date.now();
+    preparationRetrievalStage = 'identity_recovery';
+    preparationRecoveryCalls = 1;
+    if (isFuzzyQueryEligible(identityQuery.normalized, identityQuery.tokens)) {
+      const recovered = await retrieveFuzzyFoodRows(
+        identityQuery.normalized,
+        identityQuery.tokens,
+        identityQuery.tokenGroups,
+        instr,
+      );
+      if (recovered.error && recovered.rows.length === 0) recoveryFailed = true;
+      const existingIds = new Set(foodRows.map((row) => row.id));
+      const additional = recovered.rows.filter((row) => !existingIds.has(row.id));
+      if (additional.length > 0 && foodRows.length === 0) searchMode = 'fuzzy_fallback';
+      foodRows = [...foodRows, ...additional];
+      recovered.similarities.forEach((similarity, id) => {
+        identityFuzzyIds.add(id);
+        fuzzySimilarityById.set(id, similarity);
+      });
+    } else {
+      const identityFilter = buildAndGroupedFilter(identityQuery.tokenGroups);
+      const recovered = await withRetrievalTiming<FoodObjectRow[]>(
+        instr,
+        'preparation_identity_recovery',
+        'food_objects',
+        digestFilter(identityFilter),
+        () =>
+          supabaseAdmin
+            .from('food_objects')
+            .select('*')
+            .eq('is_deleted', false)
+            .or(identityFilter)
+            .limit(limit * 4) as unknown as Promise<{
+            data: FoodObjectRow[] | null;
+            error: { message?: string; code?: string } | null;
+          }>,
+      );
+      if (recovered.error) {
+        recoveryFailed = true;
+      } else {
+        const existingIds = new Set(foodRows.map((row) => row.id));
+        const additional = ((recovered.data || []) as FoodObjectRow[])
+          .filter((row) => !existingIds.has(row.id))
+          .filter((row) => rowCoversIdentity(row, identityQuery.tokenGroups));
+        foodRows = [...foodRows, ...additional];
+      }
+    }
+    instr.recordStage({
+      stage: 'preparation_identity_recovery',
+      ms: Date.now() - recoveryStarted,
+      rows: foodRows.length,
+      error: recoveryFailed ? 'identity_recovery_failed' : undefined,
+    });
+  }
+
+  if (preparation.retrieval === 'identity' && identityQuery) {
+    foodRows = foodRows.filter((row) =>
+      rowCoversIdentity(row, identityQuery.tokenGroups) || identityFuzzyIds.has(row.id),
+    );
+    for (const id of Array.from(fuzzySimilarityById.keys())) {
+      if (!foodRows.some((row) => row.id === id)) fuzzySimilarityById.delete(id);
+    }
   }
   
   debugLog('Step 2: Final DB Results', { 
@@ -1358,6 +1475,12 @@ export async function searchFoods(
   // For debug output
   const debugBreakdowns: FoodSearchDebugBreakdown[] = [];
 
+  const matchGroups = identityQuery?.tokenGroups ?? tokenGroups;
+  const matchTokens = identityQuery?.tokens ?? tokens;
+  const matchHasBrandTokens = identityQuery
+    ? matchGroups.some((group) => group.isBrandLike)
+    : hasBrandTokens;
+
   for (const row of deduped) {
     const food = rowToFoodObject(row);
     const prefs = prefsMap.get(food.id) || { isFavorite: false, logCount: 0 };
@@ -1368,7 +1491,7 @@ export async function searchFoods(
     
     // Calculate token group matches with variant awareness
     const combinedText = `${food.canonicalName} ${food.brandName || ''}`;
-    const { matchCount, brandGroupHits, matchedVariants } = countTokenGroupMatches(combinedText, tokenGroups);
+    const { matchCount, brandGroupHits, matchedVariants } = countTokenGroupMatches(combinedText, matchGroups);
     const fuzzySimilarity = fuzzySimilarityById.get(food.id);
     const fuzzyOnly = matchCount === 0 && fuzzySimilarity != null;
 
@@ -1395,7 +1518,7 @@ export async function searchFoods(
     
     // 2. ALL-TOKEN BONUS (200 points if all groups matched)
     let allTokenBonus = 0;
-    if (tokens.length > 1 && matchCount === tokens.length) {
+    if (matchTokens.length > 1 && matchCount === matchTokens.length) {
       allTokenBonus = 200;
       score += allTokenBonus;
     }
@@ -1403,7 +1526,7 @@ export async function searchFoods(
     // 3. BRAND HIT BONUS (150 points if brand-like token matched)
     // This is critical for "barq's root beer" - items with "barq" should rank higher
     let brandBonus = 0;
-    if (hasBrandTokens && brandGroupHits > 0) {
+    if (matchHasBrandTokens && brandGroupHits > 0) {
       brandBonus = brandGroupHits * 150;
       score += brandBonus;
     }
@@ -1436,7 +1559,7 @@ export async function searchFoods(
     // "banana" should beat "banana bread", "banana smoothie", etc.
     let simplicityBonus = 0;
     const nameWords = nameLower.split(/[\s,]+/).filter(Boolean);
-    const queryWords = tokens.length;
+    const queryWords = matchTokens.length;
     if (nameWords.length > 0 && queryWords > 0) {
       const wordRatio = queryWords / nameWords.length;
       if (wordRatio >= 1.0) {
@@ -1486,7 +1609,7 @@ export async function searchFoods(
     
     // 7. BRAND-MISSING PENALTY (if we have brand tokens but this item has 0 brand hits)
     // This prevents generic "root beer" from ranking above "Barq's root beer"
-    if (hasBrandTokens && brandGroupHits === 0) {
+    if (matchHasBrandTokens && brandGroupHits === 0) {
       score -= 100; // Significant penalty
     }
 
@@ -1501,6 +1624,18 @@ export async function searchFoods(
       score = fuzzyOnlyScore(fuzzySimilarity);
     }
 
+    const preparationMatch = preparation.retrieval === 'identity'
+      ? qualifyFoodPreparation(
+          food.canonicalName,
+          preparation,
+          food.measures,
+          food.servingSizeG,
+        )
+      : null;
+    if (preparationMatch) {
+      score += preparationRankBoost(preparationMatch.status);
+    }
+
     // Phase 2: explicit provenance fields
     const result: FoodSearchResult = {
       food,
@@ -1512,6 +1647,7 @@ export async function searchFoods(
       brandGroupHits,
       matchedVariants,
       fuzzySimilarity: fuzzyOnly ? fuzzySimilarity : undefined,
+      preparationMatch: preparationMatch ?? undefined,
       source: resultSource,
       source_rank: resultSource === 'user' ? 1 : 2,
       rankingSignals,
@@ -1551,20 +1687,20 @@ export async function searchFoods(
   
   // === STEP 5b: Filter results when we have multi-token queries ===
   const filterByTokenCount = (results: FoodSearchResult[]): FoodSearchResult[] => {
-    if (tokens.length <= 1 || maxTokenMatches <= 1) {
+    if (matchTokens.length <= 1 || maxTokenMatches <= 1) {
       return results;
     }
     
     // If we have any items matching all tokens, prefer those over
     // partial rows. For specific multi-token queries, partial matches
     // add more noise than value.
-    const fullMatches = results.filter(r => (r.tokenMatchCount || 0) === tokens.length);
+    const fullMatches = results.filter(r => (r.tokenMatchCount || 0) === matchTokens.length);
     if (fullMatches.length > 0) {
       return fullMatches;
     }
     
     // Also filter by brand hit if we have brand tokens
-    if (hasBrandTokens && maxBrandHits > 0) {
+    if (matchHasBrandTokens && maxBrandHits > 0) {
       const brandMatches = results.filter(r => (r.brandGroupHits || 0) > 0);
       if (brandMatches.length >= 3) {
         return brandMatches;
@@ -1596,8 +1732,8 @@ export async function searchFoods(
     ...perSectionFilteredBuckets.other,
   ];
   const globallyPreferredPrimary = pruneAnalyticalRowsForYogurtBrandQuery(
-    narrowResultsForSpecificQuery(primaryCandidates, tokenGroups, hasBrandTokens),
-    tokenGroups
+    narrowResultsForSpecificQuery(primaryCandidates, matchGroups, matchHasBrandTokens),
+    matchGroups
   );
   const allowedPrimaryIds = new Set(globallyPreferredPrimary.map((result) => result.food.id));
 
@@ -1784,7 +1920,7 @@ export async function searchFoods(
     if (result.source !== 'curated') return false;
     if (result.rankingSignals?.nutritionQualityTier !== 'thin') return false;
     if (hasStrongIdentitySignal(result)) return true;
-    return isFallbackPromotionCandidate(result, originalRaw, tokenGroups, hasBrandTokens);
+    return isFallbackPromotionCandidate(result, originalRaw, matchGroups, matchHasBrandTokens);
   });
   // Phase E — the hardcoded same-item OFF registry path was retired in
   // Phase D and removed entirely in Phase E. Same-item OFF rows are now
@@ -1793,11 +1929,17 @@ export async function searchFoods(
   // proofs (UPC, provider+source_id, name+brand) from `lib/food/sameItem`.
   const shouldPreferUsableFallbackOverThinCurated =
     !requestedSection && thinCuratedPromotionCandidates.length > 0;
+  const usablePreparationAlreadyShown = curatedResults.some((result) => {
+    const status = result.preparationMatch?.status;
+    return status === 'exact_preparation'
+      || status === 'approximate_preparation'
+      || status === 'unspecified_preparation';
+  });
   const showFallback =
     !requestedSection &&
     (
       curatedCountForGate === 0 ||
-      (curatedCountForGate < 5 && !nearExactExists) ||
+      (curatedCountForGate < 5 && !nearExactExists && !usablePreparationAlreadyShown) ||
       shouldPreferUsableFallbackOverThinCurated
     );
 
@@ -1822,7 +1964,7 @@ export async function searchFoods(
     let offResults: FoodSearchResult[] = [];
 
     // Layer 1: promoted OFF (higher trust than raw OFF)
-    promotedResults = await searchPromotedOffFoods(tokenGroups, normalized, originalRaw, PROMOTED_OFF_LIMIT, instr);
+    promotedResults = await searchPromotedOffFoods(matchGroups, normalized, originalRaw, PROMOTED_OFF_LIMIT, instr);
     if (promotedResults.length > 0) {
       filteredBuckets.promoted_off = promotedResults;
       const promotedConfig = SECTION_CONFIG.promoted_off;
@@ -1849,7 +1991,7 @@ export async function searchFoods(
       if (shouldPreferUsableFallbackOverThinCurated) {
         const sameItemOffResults = await searchOffSameItemFallbackCandidates(
           thinCuratedPromotionCandidates,
-          tokenGroups,
+          matchGroups,
           normalized,
           originalRaw,
           OFF_FALLBACK_LIMIT,
@@ -1861,7 +2003,7 @@ export async function searchFoods(
         offResults.sort(compareFallbackRanking);
       }
       if (offResults.length === 0) {
-        offResults = await searchOffFallback(tokenGroups, normalized, originalRaw, OFF_FALLBACK_LIMIT, instr);
+        offResults = await searchOffFallback(matchGroups, normalized, originalRaw, OFF_FALLBACK_LIMIT, instr);
       }
       if (offResults.length > 0) {
         filteredBuckets.off = offResults;
@@ -1916,7 +2058,7 @@ export async function searchFoods(
           // Soft name_brand proofs still need the token-coverage guard so we
           // don't accidentally collapse two unrelated rows that share a few
           // generic tokens.
-          if (!isFallbackPromotionCandidate(item, originalRaw, tokenGroups, hasBrandTokens)) {
+          if (!isFallbackPromotionCandidate(item, originalRaw, matchGroups, matchHasBrandTokens)) {
             return true;
           }
           suppressedByPreferredFallback.push(item.food.id);
@@ -1943,7 +2085,7 @@ export async function searchFoods(
 
   // Show More on 'promoted_off' section
   if (requestedSection === 'promoted_off') {
-    const promotedResults = await searchPromotedOffFoods(tokenGroups, normalized, originalRaw, sectionLimit + sectionOffset, instr);
+    const promotedResults = await searchPromotedOffFoods(matchGroups, normalized, originalRaw, sectionLimit + sectionOffset, instr);
     promotedResults.sort(compareFallbackRanking);
     const paginated = promotedResults.slice(sectionOffset, sectionOffset + sectionLimit);
     const promotedConfig = SECTION_CONFIG.promoted_off;
@@ -1963,7 +2105,7 @@ export async function searchFoods(
 
   // Show More on 'off' section, return paginated OFF results
   if (requestedSection === 'off') {
-    const offResults = await searchOffFallback(tokenGroups, normalized, originalRaw, sectionLimit + sectionOffset, instr);
+    const offResults = await searchOffFallback(matchGroups, normalized, originalRaw, sectionLimit + sectionOffset, instr);
     offResults.sort(compareFallbackRanking);
     const paginated = offResults.slice(sectionOffset, sectionOffset + sectionLimit);
     const offConfig = SECTION_CONFIG.off;
@@ -1982,6 +2124,21 @@ export async function searchFoods(
   }
 
   instr.recordStage({ stage: 'sections', ms: Date.now() - sectionsStart });
+
+  if (preparation.retrieval === 'identity') {
+    for (const section of sections) {
+      section.items = section.items.map((item) => {
+        if (item.preparationMatch) return item;
+        const preparationMatch = qualifyFoodPreparation(
+          item.food.canonicalName,
+          preparation,
+          item.food.measures,
+          item.food.servingSizeG,
+        );
+        return preparationMatch ? { ...item, preparationMatch } : item;
+      });
+    }
+  }
 
   // Build flat results list (for backward compatibility)
   const slottedResults: FoodSearchResult[] = [];
@@ -2073,6 +2230,35 @@ export async function searchFoods(
     totalCount,
   };
   
+  const catalogReadFailed = (phaseAFailed && foodRows.length === 0) || recoveryFailed;
+  const shownPreparation = slottedResults
+    .map((result) => result.preparationMatch)
+    .filter((match): match is NonNullable<typeof match> => Boolean(match));
+  const anyExactPreparation = shownPreparation.some((match) => match.status === 'exact_preparation');
+  const identityFound = preparation.retrieval === 'identity' && (
+    shownPreparation.length > 0 ||
+    (identityQuery
+      ? foodRows.some((row) => rowCoversIdentity(row, identityQuery.tokenGroups))
+      : false)
+  );
+  let preparationDemandGap: PreparationDemandGap | null = null;
+  if (preparation.retrieval === 'identity' && !catalogReadFailed) {
+    if (!identityFound) preparationDemandGap = 'base_food_not_found';
+    else if (!anyExactPreparation) preparationDemandGap = 'preparation_variant_not_found';
+  }
+  const preparationMatchTier: FoodSearchPreparationDebug['matchTier'] =
+    preparation.retrieval !== 'identity'
+      ? 'not_applicable'
+      : shownPreparation.length === 0
+        ? 'none'
+        : anyExactPreparation
+          ? 'exact_preparation'
+          : shownPreparation.some((match) => match.status === 'approximate_preparation')
+            ? 'approximate_preparation'
+            : shownPreparation.some((match) => match.status === 'unspecified_preparation')
+              ? 'unspecified_preparation'
+              : 'conflicting_preparation';
+
   // === STEP 8: Phase 5 — Fire-and-forget search event logging ===
   if (!requestedSection) {
     const offSection          = sections.find((s) => s.key === 'off');
@@ -2102,7 +2288,7 @@ export async function searchFoods(
     // after a resultful query is cleared, so completion is inferred here.
     // Recipe import does not go through this branch.
     const demand = evaluateMissingFoodDemand(originalRaw);
-    if (totalShown === 0 && demand.eligible) {
+    if (totalShown === 0 && demand.eligible && !catalogReadFailed) {
       recordMissingItemRequest({
         personId,
         context: 'journal_search',
@@ -2115,6 +2301,14 @@ export async function searchFoods(
           near_exact_match_existed: nearExactExists,
           page_context: pageContext ?? null,
           demand_eligibility: demand.reason,
+          ...(preparation.retrieval === 'identity'
+            ? {
+                demand_gap: preparationDemandGap,
+                requested_preparation: preparation.requestedMethods,
+                identity_text: preparation.identityText,
+                original_input: originalRaw,
+              }
+            : {}),
         },
       }).catch(() => { /* non-fatal */ });
     }
@@ -2175,6 +2369,22 @@ export async function searchFoods(
       consumer: instr.consumer ?? undefined,
       brandEvidenceCacheSummary: getBrandEvidenceCacheSummary(),
       fuzzyFallback: fuzzyFallbackDebug,
+      preparation: {
+        active: preparation.retrieval === 'identity',
+        reliable: preparation.reliable,
+        ambiguous: preparation.ambiguous,
+        identityTokens: preparation.identityTokens,
+        requestedPreparation: preparation.requestedMethods,
+        formDescriptors: preparation.formDescriptors,
+        additions: preparation.additions,
+        exclusions: preparation.exclusions,
+        quantity: preparation.quantity,
+        matchTier: preparationMatchTier,
+        retrievalStage: preparationRetrievalStage,
+        recoveryCalls: preparationRecoveryCalls,
+        demandGap: preparationDemandGap,
+        durationMs: Date.now() - preparationStarted,
+      },
     };
 
     debugLog('Step 7: Final Response', {
@@ -2221,6 +2431,10 @@ export async function searchFoods(
       fuzzyReason: fuzzyFallbackDebug.reason,
       fuzzyAccepted: fuzzyFallbackDebug.acceptedCount,
       fuzzyError: fuzzyFallbackDebug.error ?? null,
+      preparationActive: preparation.retrieval === 'identity',
+      preparationTier: preparationMatchTier,
+      preparationRecovery: preparationRetrievalStage,
+      preparationRecoveryCalls,
       totalMs: instr.totalMs(),
       stageMs: Object.fromEntries(instr.stageTimings.map((s) => [s.stage, s.ms])),
       stageRows: Object.fromEntries(
