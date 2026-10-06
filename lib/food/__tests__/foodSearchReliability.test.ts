@@ -732,7 +732,9 @@ describe('food_search_events schema contract', () => {
     expect(sql).toContain('e.q <<-> canonical_name');
     expect(sql).toContain('brand_name <-> e.q');
     expect(sql).toContain('e.q <<-> brand_name');
-    expect(sql).toContain('LIMIT 12');
+    expect(sql).toContain('LIMIT 16');
+    expect(sql).toContain('p_limit integer DEFAULT 48');
+    expect(sql).toContain('LEAST(GREATEST(coalesce(p_limit, 48), 1), 48)');
     expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v2(text, integer, real) TO service_role');
     expect(sql).not.toContain('TO anon');
     expect(body).toContain('WHERE is_deleted = false');
