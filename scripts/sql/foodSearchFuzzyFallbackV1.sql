@@ -12,22 +12,22 @@
 --   - keep indexed food columns raw inside pg_trgm operators
 --   - canonical_name and brand_name use existing gin_trgm_ops indexes
 --   - avoid lower(column) in the indexed predicate
+--   - bound every candidate stream before combining it
 --
 -- Supabase migration roles cannot set pg_trgm custom GUCs through CREATE
 -- FUNCTION ... SET. Thresholds are therefore applied transaction-locally with
 -- set_config(..., true). The function is VOLATILE because it sets local GUCs.
 --
 -- Retrieval strategy:
---   * single-token typos: use indexed % similarity at a lower candidate
---     threshold plus an adjacent-transposition rescue path. This prevents
---     word_similarity ties from crowding out targets such as:
---       chaqita -> Chiquita
---       amyul   -> Amylu
---       brocolli -> Broccoli
---   * multi-token queries: retain bounded word-similarity retrieval; caller-side
---     token/brand acceptance remains authoritative.
+--   * single-token typos:
+--       1. indexed whole-string similarity at >= 0.30, capped before merge
+--       2. a narrowly bounded adjacent-transposition prefix rescue
+--       3. word-similarity rescue only when whole-string retrieval is sparse
+--   * multi-token queries:
+--       bounded word-similarity retrieval; caller-side token/brand acceptance
+--       remains authoritative.
 --
--- Candidate count is capped at 12. Queries shorter than 5 characters and
+-- Candidate output is capped at 12. Queries shorter than 5 characters and
 -- digit-only barcode queries are rejected inside the function as well as in
 -- the application.
 -- ============================================================================
@@ -37,7 +37,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE OR REPLACE FUNCTION public.search_food_objects_fuzzy_v1(
   p_query text,
   p_limit integer DEFAULT 12,
-  p_min_similarity real DEFAULT 0.20
+  p_min_similarity real DEFAULT 0.30
 )
 RETURNS TABLE (
   id uuid,
@@ -53,8 +53,8 @@ DECLARE
   v_limit integer := LEAST(GREATEST(coalesce(p_limit, 12), 1), 12);
   v_token_count integer;
   v_single_threshold real := GREATEST(
-    0.20::real,
-    LEAST(coalesce(p_min_similarity, 0.20::real), 0.90::real)
+    0.30::real,
+    LEAST(coalesce(p_min_similarity, 0.30::real), 0.90::real)
   );
 BEGIN
   IF char_length(v_query) < 5
@@ -69,6 +69,7 @@ BEGIN
 
   IF v_token_count = 1 AND v_query ~ '^[a-z0-9]+$' THEN
     PERFORM set_config('pg_trgm.similarity_threshold', v_single_threshold::text, true);
+    PERFORM set_config('pg_trgm.word_similarity_threshold', '0.30', true);
 
     RETURN QUERY
     WITH swaps AS (
@@ -80,7 +81,7 @@ BEGIN
       FROM generate_series(1, greatest(char_length(v_query) - 1, 0)) AS g(i)
       WHERE char_length(v_query) BETWEEN 5 AND 32
     ),
-    base_candidates AS (
+    base_candidates AS MATERIALIZED (
       SELECT
         fo.id,
         GREATEST(
@@ -96,22 +97,60 @@ BEGIN
             AND v_query % fo.brand_name
           )
         )
+      ORDER BY GREATEST(
+        similarity(v_query, lower(fo.canonical_name)),
+        similarity(v_query, lower(coalesce(fo.brand_name, '')))
+      ) DESC, fo.id
+      LIMIT 24
     ),
-    transposition_candidates AS (
-      SELECT
-        fo.id,
+    transposition_candidates AS MATERIALIZED (
+      SELECT DISTINCT
+        hit.id,
         0.95::real AS score
       FROM swaps s
-      JOIN public.food_objects fo
-        ON fo.is_deleted = false
-       AND s.variant <> v_query
-       AND (
-         fo.canonical_name ILIKE ('%' || s.variant || '%')
-         OR (
-           fo.brand_name IS NOT NULL
-           AND fo.brand_name ILIKE ('%' || s.variant || '%')
-         )
-       )
+      CROSS JOIN LATERAL (
+        SELECT fo.id
+        FROM public.food_objects fo
+        WHERE fo.is_deleted = false
+          AND s.variant <> v_query
+          AND (
+            fo.canonical_name ILIKE (s.variant || '%')
+            OR (
+              fo.brand_name IS NOT NULL
+              AND fo.brand_name ILIKE (s.variant || '%')
+            )
+          )
+        ORDER BY fo.id
+        LIMIT 24
+      ) AS hit
+      LIMIT 48
+    ),
+    word_candidates AS MATERIALIZED (
+      SELECT
+        fo.id,
+        GREATEST(
+          word_similarity(v_query, lower(fo.canonical_name)),
+          word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
+        )::real AS score
+      FROM public.food_objects fo
+      WHERE (SELECT count(*) FROM base_candidates) < 3
+        AND fo.is_deleted = false
+        AND (
+          v_query <% fo.canonical_name
+          OR (
+            fo.brand_name IS NOT NULL
+            AND v_query <% fo.brand_name
+          )
+        )
+        AND GREATEST(
+          word_similarity(v_query, lower(fo.canonical_name)),
+          word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
+        ) >= 0.30::real
+      ORDER BY GREATEST(
+        word_similarity(v_query, lower(fo.canonical_name)),
+        word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
+      ) DESC, fo.id
+      LIMIT 24
     ),
     combined AS (
       SELECT candidate_id, max(score)::real AS score
@@ -119,6 +158,8 @@ BEGIN
         SELECT base_candidates.id AS candidate_id, base_candidates.score FROM base_candidates
         UNION ALL
         SELECT transposition_candidates.id AS candidate_id, transposition_candidates.score FROM transposition_candidates
+        UNION ALL
+        SELECT word_candidates.id AS candidate_id, word_candidates.score FROM word_candidates
       ) candidates
       GROUP BY candidate_id
     )
@@ -167,4 +208,4 @@ REVOKE ALL ON FUNCTION public.search_food_objects_fuzzy_v1(text, integer, real) 
 GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v1(text, integer, real) TO service_role;
 
 COMMENT ON FUNCTION public.search_food_objects_fuzzy_v1(text, integer, real) IS
-  'Capped pg_trgm fallback for food name/brand typos. Single-token typos use indexed similarity plus adjacent-transposition rescue; multi-token queries use bounded word similarity. Exact and prefix search remain the caller''s first pass. Execute is service_role only.';
+  'Capped pg_trgm fallback for food name/brand typos. Single-token typos use bounded indexed similarity, adjacent-transposition prefix rescue, and sparse-result word-similarity rescue. Exact and prefix search remain the caller''s first pass. Execute is service_role only.';
