@@ -26,7 +26,7 @@ export const FUZZY_SQL_MIN_SIMILARITY = 0.2;
 export const FUZZY_ACCEPT_SIMILARITY = 0.42;
 /** Stays below one lexical token-match point (100). */
 export const FUZZY_ONLY_SCORE_CAP = 89;
-export const FUZZY_RPC_NAME = 'search_food_objects_fuzzy_v1';
+export const FUZZY_RPC_NAME = 'search_food_objects_fuzzy_v2';
 
 export interface FuzzyFoodNameRow {
   canonical_name: string;
