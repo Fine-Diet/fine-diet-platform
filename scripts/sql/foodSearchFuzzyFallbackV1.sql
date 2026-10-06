@@ -116,9 +116,9 @@ BEGIN
     combined AS (
       SELECT candidate_id, max(score)::real AS score
       FROM (
-        SELECT id AS candidate_id, score FROM base_candidates
+        SELECT base_candidates.id AS candidate_id, base_candidates.score FROM base_candidates
         UNION ALL
-        SELECT id AS candidate_id, score FROM transposition_candidates
+        SELECT transposition_candidates.id AS candidate_id, transposition_candidates.score FROM transposition_candidates
       ) candidates
       GROUP BY candidate_id
     )
@@ -154,7 +154,10 @@ BEGIN
       word_similarity(v_query, lower(fo.canonical_name)),
       word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
     ) >= 0.30::real
-  ORDER BY similarity DESC, fo.id
+  ORDER BY GREATEST(
+    word_similarity(v_query, lower(fo.canonical_name)),
+    word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
+  ) DESC, fo.id
   LIMIT v_limit;
 END;
 $$;
