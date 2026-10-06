@@ -740,7 +740,7 @@ describe('food_search_events schema contract', () => {
     expect(sql).toContain('LEAST(GREATEST(coalesce(p_limit, 48), 1), 48)');
     expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v2(text, integer, real) TO service_role');
     expect(sql).not.toContain('TO anon');
-    expect(body).toContain('WHERE is_deleted = false');
+    expect(body).toContain('WHERE fo.is_deleted = false');
     expect(body).toContain('brand_name IS NOT NULL');
     expect(sql).toContain('p_min_similarity real DEFAULT 0.20');
   });
