@@ -11,7 +11,7 @@
  * handles substitutions, insertions/deletions, and adjacent transpositions
  * such as "amyul" -> "amylu". This is never a catalog scan: Postgres
  * `pg_trgm` still performs candidate retrieval through
- * `search_food_objects_fuzzy_v1`.
+ * `search_food_objects_fuzzy_v2`.
  */
 
 import {
