@@ -83,16 +83,23 @@ jest.mock('@/lib/supabaseServerClient', () => {
     return builder;
   };
 
-  return {
-    supabaseAdmin: {
-      from: jest.fn((table: string) => buildQueryBuilder(table)),
-      rpc: jest.fn(async (_fn: string, args: { p_query?: string }) => {
-        rpcCalls += 1;
-        const hit = TYPO_HITS[String(args?.p_query ?? '')];
-        return { data: hit ? [hit] : [], error: null };
-      }),
-    },
+  const supabaseAdmin = {
+    from: jest.fn((table: string) => buildQueryBuilder(table)),
+    rpc: jest.fn(async function (
+      this: { from?: unknown },
+      _fn: string,
+      args: { p_query?: string },
+    ) {
+      if (typeof this?.from !== 'function') {
+        throw new Error('rpc lost Supabase client binding');
+      }
+      rpcCalls += 1;
+      const hit = TYPO_HITS[String(args?.p_query ?? '')];
+      return { data: hit ? [hit] : [], error: null };
+    }),
   };
+
+  return { supabaseAdmin };
 });
 
 jest.mock('@/lib/missingItems/missingItemRequestServerService', () => ({
