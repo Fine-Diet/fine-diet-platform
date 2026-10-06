@@ -1,30 +1,34 @@
 -- ============================================================================
 -- Bounded trigram fallback for food search.
 --
--- NOT APPLIED by Food Search Reliability v1. Production DDL is a separate
--- gate. The application calls public.search_food_objects_fuzzy_v1 and
--- treats a missing function as a non-fatal skip.
+-- Production DDL is a separate gate. The application calls
+-- public.search_food_objects_fuzzy_v1 and treats a missing function as a
+-- non-fatal skip.
 --
--- pg_trgm 1.6 is already installed in production. This script still
--- creates the extension if a fresh database does not have it.
+-- pg_trgm 1.6 is already installed in production. This script still creates
+-- the extension if a fresh database does not have it.
+--
 -- Performance contract: <% must use the raw indexed columns.
 -- scripts/sql/addFoodSearchIndexes.sql defines
 --   idx_food_objects_canonical_name_trgm ON canonical_name gin_trgm_ops
 --   idx_food_objects_brand_name_trgm ON brand_name gin_trgm_ops
 --   (partial: WHERE brand_name IS NOT NULL)
 -- Independent read-only EXPLAIN:
---   '<query>' <% lower(canonical_name)  → Seq Scan
---   '<query>' <% canonical_name          → Bitmap Index Scan on the trigram index
--- Do not wrap canonical_name or brand_name in lower() inside the <%
--- predicate. Do not add a functional index on lower(column).
--- The brand <% predicate keeps "brand_name IS NOT NULL" so the partial
--- brand index remains usable. word_similarity() may still case-fold for
--- the score; that expression is a residual filter, not the index predicate.
+--   '<query>' <% lower(canonical_name)  -> Seq Scan
+--   '<query>' <% canonical_name         -> Bitmap Index Scan on the trigram index
+-- Do not wrap canonical_name or brand_name in lower() inside the <% predicate.
+-- Do not add a functional index on lower(column).
 --
--- Retrieval stays in Postgres. The application never loads the catalog
--- to score typos. Candidate count is capped at 12. Queries shorter than
--- 5 characters and digit-only barcode queries are rejected inside the
--- function as well as in the application.
+-- Supabase migration roles cannot set pg_trgm custom GUCs through CREATE
+-- FUNCTION ... SET. The function therefore applies transaction-local pg_trgm
+-- thresholds at runtime with set_config(..., true). service_role was verified
+-- to be allowed to set these transaction-local values. Because set_config is
+-- session-affecting, the function is VOLATILE rather than STABLE.
+--
+-- Retrieval stays in Postgres. The application never loads the catalog to
+-- score typos. Candidate count is capped at 12. Queries shorter than 5
+-- characters and digit-only barcode queries are rejected inside the function
+-- as well as in the application.
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -38,13 +42,16 @@ RETURNS TABLE (
   id uuid,
   similarity real
 )
-LANGUAGE sql
-STABLE
+LANGUAGE plpgsql
+VOLATILE
 SECURITY INVOKER
 SET search_path = public
-SET pg_trgm.similarity_threshold = 0.30
-SET pg_trgm.word_similarity_threshold = 0.30
 AS $$
+BEGIN
+  PERFORM set_config('pg_trgm.similarity_threshold', '0.30', true);
+  PERFORM set_config('pg_trgm.word_similarity_threshold', '0.30', true);
+
+  RETURN QUERY
   SELECT
     fo.id,
     GREATEST(
@@ -71,6 +78,7 @@ AS $$
     )
   ORDER BY similarity DESC
   LIMIT LEAST(GREATEST(coalesce(p_limit, 12), 1), 12);
+END;
 $$;
 
 REVOKE ALL ON FUNCTION public.search_food_objects_fuzzy_v1(text, integer, real) FROM PUBLIC;
