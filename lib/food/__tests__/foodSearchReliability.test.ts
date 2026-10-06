@@ -720,24 +720,23 @@ describe('food_search_events schema contract', () => {
     ]);
   });
 
-  it('prepares a capped service-role trigram RPC with production-shape typo rescue', () => {
-    const sql = read('scripts/sql/foodSearchFuzzyFallbackV1.sql');
+  it('prepares a capped service-role GiST nearest-neighbor fuzzy RPC', () => {
+    const sql = read('scripts/sql/foodSearchFuzzyKnnV2.sql');
     const body = sql.slice(sql.indexOf('AS $'), sql.lastIndexOf('$'));
     expect(sql).toContain('CREATE EXTENSION IF NOT EXISTS pg_trgm');
-    expect(sql).toContain('search_food_objects_fuzzy_v1');
-    expect(sql).toContain('word_similarity');
-    expect(sql).toContain('similarity(v_query');
-    expect(sql).toContain('generate_series');
-    expect(sql).toContain('transposition_candidates');
-    expect(sql).toContain('set_config');
-    expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v1(text, integer, real) TO service_role');
+    expect(sql).toContain('idx_food_objects_canonical_name_gist_trgm_active');
+    expect(sql).toContain('idx_food_objects_brand_name_gist_trgm_active');
+    expect(sql).toContain('gist_trgm_ops(siglen=64)');
+    expect(sql).toContain('search_food_objects_fuzzy_v2');
+    expect(sql).toContain('canonical_name <-> e.q');
+    expect(sql).toContain('e.q <<-> canonical_name');
+    expect(sql).toContain('brand_name <-> e.q');
+    expect(sql).toContain('e.q <<-> brand_name');
+    expect(sql).toContain('LIMIT 12');
+    expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v2(text, integer, real) TO service_role');
     expect(sql).not.toContain('TO anon');
-    expect(body).toMatch(/v_query\s+%\s+fo\.canonical_name\b/);
-    expect(body).toMatch(/v_query\s+%\s+fo\.brand_name\b/);
-    expect(body).toMatch(/v_query\s+<%\s+fo\.canonical_name\b/);
-    expect(body).toMatch(/v_query\s+<%\s+fo\.brand_name\b/);
-    expect(body).not.toMatch(/[%<]\s+lower\s*\(/);
-    expect(body).toContain('fo.brand_name IS NOT NULL');
+    expect(body).toContain('WHERE is_deleted = false');
+    expect(body).toContain('brand_name IS NOT NULL');
     expect(sql).toContain('p_min_similarity real DEFAULT 0.20');
   });
 });
