@@ -92,23 +92,26 @@ BEGIN
 
         CONTINUE WHEN v_variant = v_query;
 
-        SELECT coalesce(array_agg(hit.id), ARRAY[]::uuid[])
-        INTO v_hits
-        FROM (
-          SELECT fo.id
-          FROM public.food_objects fo
-          WHERE fo.is_deleted = false
-            AND NOT (fo.id = ANY(v_seen))
-            AND (
-              fo.canonical_name ILIKE ('%' || v_variant || '%')
-              OR (
-                fo.brand_name IS NOT NULL
-                AND fo.brand_name ILIKE ('%' || v_variant || '%')
+        EXECUTE $sql$
+          SELECT coalesce(array_agg(hit.id), ARRAY[]::uuid[])
+          FROM (
+            SELECT fo.id
+            FROM public.food_objects fo
+            WHERE fo.is_deleted = false
+              AND NOT (fo.id = ANY($2))
+              AND (
+                fo.canonical_name ILIKE ('%' || $1 || '%')
+                OR (
+                  fo.brand_name IS NOT NULL
+                  AND fo.brand_name ILIKE ('%' || $1 || '%')
+                )
               )
-            )
-          ORDER BY fo.id
-          LIMIT v_remaining
-        ) AS hit;
+            ORDER BY fo.id
+            LIMIT $3
+          ) AS hit
+        $sql$
+        INTO v_hits
+        USING v_variant, v_seen, v_remaining;
 
         IF cardinality(v_hits) > 0 THEN
           v_seen := v_seen || v_hits;
@@ -123,28 +126,30 @@ BEGIN
       END IF;
 
       IF v_remaining > 0 THEN
-        RETURN QUERY
-        SELECT
-          fo.id,
-          GREATEST(
-            similarity(v_query, lower(fo.canonical_name)),
-            similarity(v_query, lower(coalesce(fo.brand_name, '')))
-          )::real AS similarity
-        FROM public.food_objects fo
-        WHERE fo.is_deleted = false
-          AND NOT (fo.id = ANY(v_seen))
-          AND (
-            v_query % fo.canonical_name
-            OR (
-              fo.brand_name IS NOT NULL
-              AND v_query % fo.brand_name
+        RETURN QUERY EXECUTE $sql$
+          SELECT
+            fo.id,
+            GREATEST(
+              similarity($1, lower(fo.canonical_name)),
+              similarity($1, lower(coalesce(fo.brand_name, '')))
+            )::real AS similarity
+          FROM public.food_objects fo
+          WHERE fo.is_deleted = false
+            AND NOT (fo.id = ANY($2))
+            AND (
+              $1 % fo.canonical_name
+              OR (
+                fo.brand_name IS NOT NULL
+                AND $1 % fo.brand_name
+              )
             )
-          )
-        ORDER BY GREATEST(
-          similarity(v_query, lower(fo.canonical_name)),
-          similarity(v_query, lower(coalesce(fo.brand_name, '')))
-        ) DESC, fo.id
-        LIMIT v_remaining;
+          ORDER BY GREATEST(
+            similarity($1, lower(fo.canonical_name)),
+            similarity($1, lower(coalesce(fo.brand_name, '')))
+          ) DESC, fo.id
+          LIMIT $3
+        $sql$
+        USING v_query, v_seen, v_remaining;
 
         GET DIAGNOSTICS v_base_added = ROW_COUNT;
         v_remaining := v_remaining - v_base_added;
@@ -152,31 +157,33 @@ BEGIN
 
       -- Sparse whole-string retrieval gets one bounded word-similarity rescue.
       IF cardinality(v_seen) = 0 AND v_base_added < 3 AND v_remaining > 0 THEN
-        RETURN QUERY
-        SELECT
-          fo.id,
-          GREATEST(
-            word_similarity(v_query, lower(fo.canonical_name)),
-            word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
-          )::real AS similarity
-        FROM public.food_objects fo
-        WHERE fo.is_deleted = false
-          AND (
-            v_query <% fo.canonical_name
-            OR (
-              fo.brand_name IS NOT NULL
-              AND v_query <% fo.brand_name
+        RETURN QUERY EXECUTE $sql$
+          SELECT
+            fo.id,
+            GREATEST(
+              word_similarity($1, lower(fo.canonical_name)),
+              word_similarity($1, lower(coalesce(fo.brand_name, '')))
+            )::real AS similarity
+          FROM public.food_objects fo
+          WHERE fo.is_deleted = false
+            AND (
+              $1 <% fo.canonical_name
+              OR (
+                fo.brand_name IS NOT NULL
+                AND $1 <% fo.brand_name
+              )
             )
-          )
-          AND GREATEST(
-            word_similarity(v_query, lower(fo.canonical_name)),
-            word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
-          ) >= 0.30::real
-        ORDER BY GREATEST(
-          word_similarity(v_query, lower(fo.canonical_name)),
-          word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
-        ) DESC, fo.id
-        LIMIT v_remaining;
+            AND GREATEST(
+              word_similarity($1, lower(fo.canonical_name)),
+              word_similarity($1, lower(coalesce(fo.brand_name, '')))
+            ) >= 0.30::real
+          ORDER BY GREATEST(
+            word_similarity($1, lower(fo.canonical_name)),
+            word_similarity($1, lower(coalesce(fo.brand_name, '')))
+          ) DESC, fo.id
+          LIMIT $2
+        $sql$
+        USING v_query, v_remaining;
       END IF;
 
       RETURN;
