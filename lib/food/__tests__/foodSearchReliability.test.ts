@@ -731,6 +731,6 @@ describe('food_search_events schema contract', () => {
     expect(body).toMatch(/v_query\s+<%\s+fo\.brand_name\b/);
     expect(body).not.toMatch(/[%<]\s+lower\s*\(/);
     expect(body).toContain('fo.brand_name IS NOT NULL');
-    expect(body).toContain("DEFAULT 0.20");
+    expect(sql).toContain('p_min_similarity real DEFAULT 0.20');
   });
 });
