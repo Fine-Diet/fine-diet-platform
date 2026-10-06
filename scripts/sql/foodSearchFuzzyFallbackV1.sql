@@ -20,8 +20,8 @@
 --
 -- Retrieval strategy:
 --   * single-token typos:
---       1. indexed whole-string similarity at >= 0.30, capped before merge
---       2. a narrowly bounded adjacent-transposition prefix rescue
+--       1. independently bounded adjacent-transposition substring rescue
+--       2. indexed whole-string similarity at >= 0.30
 --       3. word-similarity rescue only when whole-string retrieval is sparse
 --   * multi-token queries:
 --       bounded word-similarity retrieval; caller-side token/brand acceptance
@@ -71,106 +71,116 @@ BEGIN
     PERFORM set_config('pg_trgm.similarity_threshold', v_single_threshold::text, true);
     PERFORM set_config('pg_trgm.word_similarity_threshold', '0.30', true);
 
-    RETURN QUERY
-    WITH swaps AS (
-      SELECT
-        substring(v_query from 1 for i - 1)
-        || substring(v_query from i + 1 for 1)
-        || substring(v_query from i for 1)
-        || substring(v_query from i + 2) AS variant
-      FROM generate_series(1, greatest(char_length(v_query) - 1, 0)) AS g(i)
-      WHERE char_length(v_query) BETWEEN 5 AND 32
-    ),
-    base_candidates AS MATERIALIZED (
-      SELECT
-        fo.id,
-        GREATEST(
-          similarity(v_query, lower(fo.canonical_name)),
-          similarity(v_query, lower(coalesce(fo.brand_name, '')))
-        )::real AS score
-      FROM public.food_objects fo
-      WHERE fo.is_deleted = false
-        AND (
-          v_query % fo.canonical_name
-          OR (
-            fo.brand_name IS NOT NULL
-            AND v_query % fo.brand_name
-          )
-        )
-      ORDER BY GREATEST(
-        similarity(v_query, lower(fo.canonical_name)),
-        similarity(v_query, lower(coalesce(fo.brand_name, '')))
-      ) DESC, fo.id
-      LIMIT 24
-    ),
-    transposition_candidates AS MATERIALIZED (
-      SELECT DISTINCT
-        hit.id,
-        0.95::real AS score
-      FROM swaps s
-      CROSS JOIN LATERAL (
-        SELECT fo.id
+    DECLARE
+      v_seen uuid[] := ARRAY[]::uuid[];
+      v_hits uuid[];
+      v_variant text;
+      v_remaining integer := v_limit;
+      v_base_added integer := 0;
+    BEGIN
+      -- Adjacent-transposition rescue. Each query is independently bounded so
+      -- the existing trigram indexes can be used without building a huge
+      -- combined candidate relation.
+      FOR i IN 1..greatest(char_length(v_query) - 1, 0) LOOP
+        EXIT WHEN v_remaining <= 0;
+
+        v_variant :=
+          substring(v_query from 1 for i - 1)
+          || substring(v_query from i + 1 for 1)
+          || substring(v_query from i for 1)
+          || substring(v_query from i + 2);
+
+        CONTINUE WHEN v_variant = v_query;
+
+        SELECT coalesce(array_agg(hit.id), ARRAY[]::uuid[])
+        INTO v_hits
+        FROM (
+          SELECT fo.id
+          FROM public.food_objects fo
+          WHERE fo.is_deleted = false
+            AND NOT (fo.id = ANY(v_seen))
+            AND (
+              fo.canonical_name ILIKE ('%' || v_variant || '%')
+              OR (
+                fo.brand_name IS NOT NULL
+                AND fo.brand_name ILIKE ('%' || v_variant || '%')
+              )
+            )
+          ORDER BY fo.id
+          LIMIT v_remaining
+        ) AS hit;
+
+        IF cardinality(v_hits) > 0 THEN
+          v_seen := v_seen || v_hits;
+          v_remaining := v_limit - cardinality(v_seen);
+        END IF;
+      END LOOP;
+
+      IF cardinality(v_seen) > 0 THEN
+        RETURN QUERY
+        SELECT candidate_id, 0.95::real
+        FROM unnest(v_seen) AS candidate_id;
+      END IF;
+
+      IF v_remaining > 0 THEN
+        RETURN QUERY
+        SELECT
+          fo.id,
+          GREATEST(
+            similarity(v_query, lower(fo.canonical_name)),
+            similarity(v_query, lower(coalesce(fo.brand_name, '')))
+          )::real AS similarity
         FROM public.food_objects fo
         WHERE fo.is_deleted = false
-          AND s.variant <> v_query
+          AND NOT (fo.id = ANY(v_seen))
           AND (
-            fo.canonical_name ILIKE (s.variant || '%')
+            v_query % fo.canonical_name
             OR (
               fo.brand_name IS NOT NULL
-              AND fo.brand_name ILIKE (s.variant || '%')
+              AND v_query % fo.brand_name
             )
           )
-        ORDER BY fo.id
-        LIMIT 24
-      ) AS hit
-      LIMIT 48
-    ),
-    word_candidates AS MATERIALIZED (
-      SELECT
-        fo.id,
-        GREATEST(
-          word_similarity(v_query, lower(fo.canonical_name)),
-          word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
-        )::real AS score
-      FROM public.food_objects fo
-      WHERE (SELECT count(*) FROM base_candidates) < 3
-        AND fo.is_deleted = false
-        AND (
-          v_query <% fo.canonical_name
-          OR (
-            fo.brand_name IS NOT NULL
-            AND v_query <% fo.brand_name
-          )
-        )
-        AND GREATEST(
-          word_similarity(v_query, lower(fo.canonical_name)),
-          word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
-        ) >= 0.30::real
-      ORDER BY GREATEST(
-        word_similarity(v_query, lower(fo.canonical_name)),
-        word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
-      ) DESC, fo.id
-      LIMIT 24
-    ),
-    combined AS (
-      SELECT candidate_id, max(score)::real AS score
-      FROM (
-        SELECT base_candidates.id AS candidate_id, base_candidates.score FROM base_candidates
-        UNION ALL
-        SELECT transposition_candidates.id AS candidate_id, transposition_candidates.score FROM transposition_candidates
-        UNION ALL
-        SELECT word_candidates.id AS candidate_id, word_candidates.score FROM word_candidates
-      ) candidates
-      GROUP BY candidate_id
-    )
-    SELECT
-      combined.candidate_id AS id,
-      combined.score AS similarity
-    FROM combined
-    ORDER BY combined.score DESC, combined.candidate_id
-    LIMIT v_limit;
+        ORDER BY GREATEST(
+          similarity(v_query, lower(fo.canonical_name)),
+          similarity(v_query, lower(coalesce(fo.brand_name, '')))
+        ) DESC, fo.id
+        LIMIT v_remaining;
 
-    RETURN;
+        GET DIAGNOSTICS v_base_added = ROW_COUNT;
+        v_remaining := v_remaining - v_base_added;
+      END IF;
+
+      -- Sparse whole-string retrieval gets one bounded word-similarity rescue.
+      IF cardinality(v_seen) = 0 AND v_base_added < 3 AND v_remaining > 0 THEN
+        RETURN QUERY
+        SELECT
+          fo.id,
+          GREATEST(
+            word_similarity(v_query, lower(fo.canonical_name)),
+            word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
+          )::real AS similarity
+        FROM public.food_objects fo
+        WHERE fo.is_deleted = false
+          AND (
+            v_query <% fo.canonical_name
+            OR (
+              fo.brand_name IS NOT NULL
+              AND v_query <% fo.brand_name
+            )
+          )
+          AND GREATEST(
+            word_similarity(v_query, lower(fo.canonical_name)),
+            word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
+          ) >= 0.30::real
+        ORDER BY GREATEST(
+          word_similarity(v_query, lower(fo.canonical_name)),
+          word_similarity(v_query, lower(coalesce(fo.brand_name, '')))
+        ) DESC, fo.id
+        LIMIT v_remaining;
+      END IF;
+
+      RETURN;
+    END;
   END IF;
 
   PERFORM set_config('pg_trgm.word_similarity_threshold', '0.30', true);
