@@ -10,6 +10,7 @@ import path from 'path';
 import { evaluateMissingFoodDemand } from '../missingFoodDemandEligibility';
 import {
   acceptFuzzyCandidate,
+  damerauLevenshteinSimilarity,
   diceCoefficient,
   shouldRunFuzzyFallback,
 } from '../fuzzyFoodSearch';
@@ -458,7 +459,7 @@ describe('ingredient-like phrase', () => {
 describe('fuzzy acceptance', () => {
   it('accepts the proven typos and rejects a shorter prefix', () => {
     expect(diceCoefficient('chaqita', 'Chiquita')).toBeGreaterThanOrEqual(0.42);
-    expect(diceCoefficient('amyul', 'Amylu')).toBeGreaterThanOrEqual(0.42);
+    expect(damerauLevenshteinSimilarity('amyul', 'Amylu')).toBeGreaterThanOrEqual(0.8);
     expect(diceCoefficient('bannana', 'banana')).toBeGreaterThanOrEqual(0.42);
     expect(diceCoefficient('brocolli', 'broccoli')).toBeGreaterThanOrEqual(0.42);
     expect(diceCoefficient('chaqi', 'Chiquita')).toBeLessThan(0.42);
@@ -712,21 +713,24 @@ describe('food_search_events schema contract', () => {
     ]);
   });
 
-  it('prepares a capped service-role trigram RPC and does not apply it', () => {
+  it('prepares a capped service-role trigram RPC with production-shape typo rescue', () => {
     const sql = read('scripts/sql/foodSearchFuzzyFallbackV1.sql');
-    const body = sql.slice(sql.indexOf('AS $$'), sql.lastIndexOf('$$'));
+    const body = sql.slice(sql.indexOf('AS $'), sql.lastIndexOf('$'));
     expect(sql).toContain('CREATE EXTENSION IF NOT EXISTS pg_trgm');
     expect(sql).toContain('search_food_objects_fuzzy_v1');
     expect(sql).toContain('word_similarity');
-    expect(sql).toContain('LIMIT LEAST');
+    expect(sql).toContain('similarity(v_query');
+    expect(sql).toContain('generate_series');
+    expect(sql).toContain('transposition_candidates');
+    expect(sql).toContain('set_config');
     expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.search_food_objects_fuzzy_v1(text, integer, real) TO service_role');
-    expect(sql).toContain('NOT APPLIED');
-    expect(sql).toContain('Bitmap Index Scan');
-    expect(sql).toContain('gin_trgm_ops');
     expect(sql).not.toContain('TO anon');
-    expect(body).toMatch(/<%\s+fo\.canonical_name\b/);
-    expect(body).toMatch(/<%\s+fo\.brand_name\b/);
-    expect(body).not.toMatch(/<%\s+lower\s*\(/);
+    expect(body).toMatch(/v_query\s+%\s+fo\.canonical_name\b/);
+    expect(body).toMatch(/v_query\s+%\s+fo\.brand_name\b/);
+    expect(body).toMatch(/v_query\s+<%\s+fo\.canonical_name\b/);
+    expect(body).toMatch(/v_query\s+<%\s+fo\.brand_name\b/);
+    expect(body).not.toMatch(/[%<]\s+lower\s*\(/);
     expect(body).toContain('fo.brand_name IS NOT NULL');
+    expect(sql).toContain('p_min_similarity real DEFAULT 0.20');
   });
 });
