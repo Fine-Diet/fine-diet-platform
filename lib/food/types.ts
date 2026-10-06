@@ -282,6 +282,26 @@ export interface FoodSearchConsumerEcho {
   sessionId: string | null;
 }
 
+export type FoodSearchMode =
+  | 'and_grouped'
+  | 'brand_gated_fallback'
+  | 'fallback_prefix'
+  | 'fuzzy_fallback';
+
+/**
+ * Present when debug=true. `fired` means the trigram RPC was attempted.
+ * Exact/prefix retrieval still runs first; fuzzy rows are score-capped.
+ */
+export interface FoodSearchFuzzyFallbackDebug {
+  fired: boolean;
+  reason: string;
+  eligible: boolean;
+  candidateCount: number;
+  acceptedCount: number;
+  minSimilarity: number;
+  error?: string;
+}
+
 export interface FoodSearchDebugInfo {
   rawQuery: string;
   normalizedQuery: string;
@@ -292,7 +312,7 @@ export interface FoodSearchDebugInfo {
     displayVariants: string[];
     isBrandLike: boolean;
   }>;
-  searchMode: 'and_grouped' | 'brand_gated_fallback' | 'fallback_prefix';
+  searchMode: FoodSearchMode;
   phaseAFilter: string;
   phaseBFilter?: string;
   phaseACount: number;
@@ -331,6 +351,8 @@ export interface FoodSearchDebugInfo {
     ageMs: number | null;
     source: 'food_objects' | 'food_objects+off' | 'injected' | 'empty' | null;
   };
+  /** Typo fallback. Fired only after normal retrieval is absent or thin. */
+  fuzzyFallback?: FoodSearchFuzzyFallbackDebug;
 }
 
 /**
@@ -380,6 +402,12 @@ export interface FoodSearchResult {
   tokenMatchCount?: number;
   brandGroupHits?: number;
   matchedVariants?: string[];
+  /**
+   * Set when this row was accepted from the trigram fallback and did not
+   * also match the query lexically. Lexical matches leave this unset and
+   * keep their normal score.
+   */
+  fuzzySimilarity?: number;
 }
 
 /**

@@ -28,6 +28,8 @@ import type {
   FoodSearchFallbackDebug,
   FoodSearchFallbackGateReason,
   FoodSearchFallbackState,
+  FoodSearchFuzzyFallbackDebug,
+  FoodSearchMode,
   FoodSearchNutritionQualityTier,
   FoodSearchRankingSignals,
   FoodSearchReadiness,
@@ -57,6 +59,8 @@ export type {
   FoodSearchFallbackDebug,
   FoodSearchFallbackGateReason,
   FoodSearchFallbackState,
+  FoodSearchFuzzyFallbackDebug,
+  FoodSearchMode,
   FoodSearchNutritionQualityTier,
   FoodSearchRankingSignals,
   FoodSearchReadiness,
@@ -76,6 +80,19 @@ export type {
   SectionKey,
 };
 import { recordMissingItemRequest } from '@/lib/missingItems/missingItemRequestServerService';
+import { evaluateMissingFoodDemand } from './missingFoodDemandEligibility';
+import { isVerifiedCanonicalCommonFood } from './canonicalCommonPlacement';
+import { buildFoodSearchEventRow } from './foodSearchEventSchema';
+import {
+  acceptFuzzyCandidate,
+  bestFuzzySimilarity,
+  FUZZY_CANDIDATE_CAP,
+  FUZZY_RPC_NAME,
+  FUZZY_SQL_MIN_SIMILARITY,
+  fuzzyOnlyScore,
+  shouldRunFuzzyFallback,
+  isFuzzyQueryEligible,
+} from './fuzzyFoodSearch';
 import {
   normalizeSearchQuery,
   normalizeForDedupe,
@@ -325,6 +342,11 @@ function determineSectionKey(
     }
     if (food.sourceType === 'provisional') {
       return 'scanned';
+    }
+    // Legacy verified staples: source_provider NULL, source_type common,
+    // is_verified true. Named providers and unverified rows stay put.
+    if (isVerifiedCanonicalCommonFood(food)) {
+      return 'common';
     }
     // Unverified fine_diet foods and other non-USDA go to 'other'
     return 'other';
@@ -846,6 +868,142 @@ function deduplicateRows(rows: FoodObjectRow[]): {
  * - Deduplicates near-identical results
  * - Falls back to brand-gated OR matching if AND returns too few
  */
+interface FuzzyRpcRow {
+  id: string;
+  similarity: number;
+}
+
+/**
+ * Trigram fallback. Missing RPC is a skip, not a search failure: production
+ * DDL is a separate gate, and tests that do not mock `rpc` keep today's path.
+ */
+async function retrieveFuzzyFoodRows(
+  normalized: string,
+  tokens: string[],
+  tokenGroups: TokenGroup[],
+  instr: SearchInstrumentation,
+): Promise<{
+  invoked: boolean;
+  rows: FoodObjectRow[];
+  candidateCount: number;
+  acceptedCount: number;
+  similarities: Map<string, number>;
+  error?: string;
+}> {
+  const similarities = new Map<string, number>();
+  const empty = {
+    invoked: false,
+    rows: [] as FoodObjectRow[],
+    candidateCount: 0,
+    acceptedCount: 0,
+    similarities,
+  };
+  const rpc = (supabaseAdmin as unknown as {
+    rpc?: (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => PromiseLike<{ data: FuzzyRpcRow[] | null; error: { message?: string } | null }>;
+  }).rpc;
+  if (typeof rpc !== 'function') {
+    return { ...empty, error: 'rpc_unavailable' };
+  }
+
+  const outcome = await withRetrievalTiming<FuzzyRpcRow[]>(
+    instr,
+    'fuzzy_food_objects',
+    'food_objects',
+    `${FUZZY_RPC_NAME}:${digestFilter(normalized)}`,
+    async () => {
+      const result = await rpc(FUZZY_RPC_NAME, {
+        p_query: normalized,
+        p_limit: FUZZY_CANDIDATE_CAP,
+        p_min_similarity: FUZZY_SQL_MIN_SIMILARITY,
+      });
+      return { data: result.data, error: result.error };
+    },
+  );
+  if (outcome.error) {
+    return {
+      ...empty,
+      invoked: true,
+      error: outcome.error.message ?? 'fuzzy_rpc_error',
+    };
+  }
+
+  const candidates = (outcome.data ?? []).slice(0, FUZZY_CANDIDATE_CAP);
+  const ids = candidates.map((row) => row.id).filter((id) => typeof id === 'string' && id.length > 0);
+  if (ids.length === 0) {
+    return { ...empty, invoked: true };
+  }
+
+  const hydrated = await withRetrievalTiming<FoodObjectRow[]>(
+    instr,
+    'fuzzy_food_objects_hydrate',
+    'food_objects',
+    `ids=${ids.length}`,
+    () =>
+      supabaseAdmin
+        .from('food_objects')
+        .select('*')
+        .in('id', ids)
+        .eq('is_deleted', false) as unknown as Promise<{
+        data: FoodObjectRow[] | null;
+        error: { message?: string; code?: string } | null;
+      }>,
+  );
+  if (hydrated.error) {
+    return {
+      ...empty,
+      invoked: true,
+      candidateCount: candidates.length,
+      error: hydrated.error.message ?? 'fuzzy_hydrate_error',
+    };
+  }
+
+  const allowed = new Set(ids);
+  const byId = new Map(
+    (hydrated.data ?? [])
+      .filter((row) => allowed.has(row.id))
+      .map((row) => [row.id, row]),
+  );
+  const accepted: FoodObjectRow[] = [];
+  for (const candidate of candidates) {
+    const row = byId.get(candidate.id);
+    if (!row) continue;
+    const rpcSimilarity = Number(candidate.similarity);
+    const safeSimilarity = Number.isFinite(rpcSimilarity) ? rpcSimilarity : 0;
+    if (!acceptFuzzyCandidate({
+      query: normalized,
+      tokens,
+      tokenGroups,
+      canonicalName: row.canonical_name,
+      brandName: row.brand_name,
+      rpcSimilarity: safeSimilarity,
+    })) {
+      continue;
+    }
+    similarities.set(
+      row.id,
+      bestFuzzySimilarity({
+        query: normalized,
+        tokens,
+        canonicalName: row.canonical_name,
+        brandName: row.brand_name,
+        rpcSimilarity: safeSimilarity,
+      }),
+    );
+    accepted.push(row);
+  }
+
+  return {
+    invoked: true,
+    rows: accepted,
+    candidateCount: candidates.length,
+    acceptedCount: accepted.length,
+    similarities,
+  };
+}
+
 /**
  * Search options with pagination support
  */
@@ -955,7 +1113,7 @@ export async function searchFoods(
   
   // === STEP 2: Build and execute query ===
   let foodRows: FoodObjectRow[] = [];
-  let searchMode: 'and_grouped' | 'brand_gated_fallback' | 'fallback_prefix' = 'and_grouped';
+  let searchMode: FoodSearchMode = 'and_grouped';
   let phaseAFilter = '';
   let phaseBFilter: string | undefined;
   let phaseACount = 0;
@@ -1086,6 +1244,43 @@ export async function searchFoods(
       phaseBCount = foodRows.length;
     }
   }
+
+  const fuzzyDecision = shouldRunFuzzyFallback({
+    normalized,
+    tokens,
+    tokenGroups,
+    rows: foodRows,
+  });
+  let fuzzyFallbackDebug: FoodSearchFuzzyFallbackDebug = {
+    fired: false,
+    reason: fuzzyDecision.reason,
+    eligible: isFuzzyQueryEligible(normalized, tokens),
+    candidateCount: 0,
+    acceptedCount: 0,
+    minSimilarity: FUZZY_SQL_MIN_SIMILARITY,
+  };
+  const fuzzySimilarityById = new Map<string, number>();
+  if (fuzzyDecision.run) {
+    const fuzzy = await retrieveFuzzyFoodRows(normalized, tokens, tokenGroups, instr);
+    fuzzyFallbackDebug = {
+      fired: fuzzy.invoked,
+      reason: fuzzyDecision.reason,
+      eligible: true,
+      candidateCount: fuzzy.candidateCount,
+      acceptedCount: fuzzy.acceptedCount,
+      minSimilarity: FUZZY_SQL_MIN_SIMILARITY,
+      error: fuzzy.error,
+    };
+    if (fuzzy.rows.length > 0) {
+      const existingIds = new Set(foodRows.map((row) => row.id));
+      const additional = fuzzy.rows.filter((row) => !existingIds.has(row.id));
+      if (foodRows.length === 0) searchMode = 'fuzzy_fallback';
+      foodRows = [...foodRows, ...additional];
+    }
+    fuzzy.similarities.forEach((similarity, id) => {
+      fuzzySimilarityById.set(id, similarity);
+    });
+  }
   
   debugLog('Step 2: Final DB Results', { 
     totalCount: foodRows.length, 
@@ -1166,8 +1361,10 @@ export async function searchFoods(
     // Calculate token group matches with variant awareness
     const combinedText = `${food.canonicalName} ${food.brandName || ''}`;
     const { matchCount, brandGroupHits, matchedVariants } = countTokenGroupMatches(combinedText, tokenGroups);
+    const fuzzySimilarity = fuzzySimilarityById.get(food.id);
+    const fuzzyOnly = matchCount === 0 && fuzzySimilarity != null;
 
-    if (matchCount === 0) continue;
+    if (matchCount === 0 && !fuzzyOnly) continue;
     
     // Track max for later filtering
     if (matchCount > maxTokenMatches) {
@@ -1291,6 +1488,11 @@ export async function searchFoods(
     const analyticalNamePenalty = isAnalyticalCommonName(food.canonicalName) ? 60 : 0;
     score -= analyticalNamePenalty;
 
+    // Fuzzy-only rows stay below any real token match (100 points).
+    if (fuzzyOnly && fuzzySimilarity != null) {
+      score = fuzzyOnlyScore(fuzzySimilarity);
+    }
+
     // Phase 2: explicit provenance fields
     const result: FoodSearchResult = {
       food,
@@ -1301,6 +1503,7 @@ export async function searchFoods(
       tokenMatchCount: matchCount,
       brandGroupHits,
       matchedVariants,
+      fuzzySimilarity: fuzzyOnly ? fuzzySimilarity : undefined,
       source: resultSource,
       source_rank: resultSource === 'user' ? 1 : 2,
       rankingSignals,
@@ -1361,7 +1564,9 @@ export async function searchFoods(
     }
     
     const minTokens = Math.max(1, maxTokenMatches - 1);
-    return results.filter(r => (r.tokenMatchCount || 0) >= minTokens);
+    return results.filter(
+      (r) => (r.tokenMatchCount || 0) >= minTokens || r.fuzzySimilarity != null,
+    );
   };
   
   // Apply filtering to each section bucket (fallback buckets are populated later)
@@ -1885,7 +2090,11 @@ export async function searchFoods(
     // Packet 14: enqueue a missing-item request when the search truly
     // produced zero results (no curated, no promoted OFF, no raw OFF).
     // Fire-and-forget; any failure must not affect the search response.
-    if (totalShown === 0 && (originalRaw ?? '').trim().length >= 2) {
+    // Zero-result keystrokes are not demand. search_abandoned only fires
+    // after a resultful query is cleared, so completion is inferred here.
+    // Recipe import does not go through this branch.
+    const demand = evaluateMissingFoodDemand(originalRaw);
+    if (totalShown === 0 && demand.eligible) {
       recordMissingItemRequest({
         personId,
         context: 'journal_search',
@@ -1897,6 +2106,7 @@ export async function searchFoods(
           token_count: tokens.length,
           near_exact_match_existed: nearExactExists,
           page_context: pageContext ?? null,
+          demand_eligibility: demand.reason,
         },
       }).catch(() => { /* non-fatal */ });
     }
@@ -1956,6 +2166,7 @@ export async function searchFoods(
       winnerRationale: instr.winnerRationale,
       consumer: instr.consumer ?? undefined,
       brandEvidenceCacheSummary: getBrandEvidenceCacheSummary(),
+      fuzzyFallback: fuzzyFallbackDebug,
     };
 
     debugLog('Step 7: Final Response', {
@@ -1998,6 +2209,10 @@ export async function searchFoods(
       pageContext: pageContext ?? null,
       requestedSection: requestedSection ?? null,
       searchMode,
+      fuzzyFired: fuzzyFallbackDebug.fired,
+      fuzzyReason: fuzzyFallbackDebug.reason,
+      fuzzyAccepted: fuzzyFallbackDebug.acceptedCount,
+      fuzzyError: fuzzyFallbackDebug.error ?? null,
       totalMs: instr.totalMs(),
       stageMs: Object.fromEntries(instr.stageTimings.map((s) => [s.stage, s.ms])),
       stageRows: Object.fromEntries(
@@ -2651,22 +2866,24 @@ interface SearchEventArgs {
 
 export async function logSearchEvent(args: SearchEventArgs): Promise<void> {
   try {
-    await supabaseAdmin.from('food_search_events').insert({
-      event_type: args.eventType,
-      person_id: args.personId ?? null,
-      session_id: args.sessionId ?? null,
-      query: args.query ?? null,
-      normalized_query: args.normalizedQuery ?? null,
-      total_result_count: args.totalResultCount ?? null,
-      curated_result_count: args.curatedResultCount ?? null,
-      off_result_count: args.offResultCount ?? null,
-      off_fallback_shown: args.offFallbackShown ?? null,
-      near_exact_match_existed: args.nearExactMatchExisted ?? null,
-      selected_food_id: args.selectedFoodId ?? null,
-      selected_food_source: args.selectedFoodSource ?? null,
-      selected_result_position: args.selectedResultPosition ?? null,
-      page_context: args.pageContext ?? null,
-    });
+    await supabaseAdmin.from('food_search_events').insert(
+      buildFoodSearchEventRow({
+        eventType: args.eventType,
+        personId: args.personId,
+        sessionId: args.sessionId,
+        query: args.query,
+        normalizedQuery: args.normalizedQuery,
+        totalResultCount: args.totalResultCount,
+        curatedResultCount: args.curatedResultCount,
+        offResultCount: args.offResultCount,
+        offFallbackShown: args.offFallbackShown,
+        nearExactMatchExisted: args.nearExactMatchExisted,
+        selectedFoodId: args.selectedFoodId,
+        selectedFoodSource: args.selectedFoodSource,
+        selectedResultPosition: args.selectedResultPosition,
+        pageContext: args.pageContext,
+      }),
+    );
   } catch (err) {
     console.error('[logSearchEvent] Error (non-fatal):', err);
   }

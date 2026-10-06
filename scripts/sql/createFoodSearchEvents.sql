@@ -1,9 +1,10 @@
 -- ============================================================================
 -- food_search_events — Phase 2 Search Analytics
--- Run in Supabase Dashboard → SQL Editor
 --
--- Captures search behavior for future search quality improvement.
--- Does NOT affect any existing search tables.
+-- Historical base table. The current idempotent schema, including Phase 3
+-- telemetry, the near_exact_match_existed column the application writes,
+-- indexes, and service-role RLS, is scripts/sql/foodSearchEventsCurrent.sql.
+-- Do not apply this file alone to production.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.food_search_events (
