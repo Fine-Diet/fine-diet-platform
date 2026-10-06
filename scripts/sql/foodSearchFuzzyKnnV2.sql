@@ -82,8 +82,8 @@ BEGIN
 
   IF v_token_count = 1 AND v_query ~ '^[a-z0-9]+$' THEN
     -- Adjacent-transposition rescue, e.g. amyul -> amylu.
-    -- Each variant is independently bounded and uses the existing trigram
-    -- indexes for bounded prefix lookup.
+    -- Each variant is independently bounded and uses the dedicated active
+    -- lower(text) prefix indexes for bounded prefix lookup.
     FOR i IN 1..greatest(char_length(v_query) - 1, 0) LOOP
       EXIT WHEN v_remaining <= 0;
 
