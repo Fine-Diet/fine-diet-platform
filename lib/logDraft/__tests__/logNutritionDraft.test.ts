@@ -377,4 +377,132 @@ describe('LogNutritionDraftV1', () => {
     expect(saved.unit).toBe('g');
     expect(JSON.stringify(saved)).not.toContain('Original requested amount');
   });
+
+  it.each([
+    ['1 cup roasted broccoli with butter', '1 cup'],
+    ['0.5 cup roasted broccoli with butter', '0.5 cup'],
+    ['1.5 cups roasted broccoli with butter', '1.5 cup'],
+    ['1/2 cup roasted broccoli with butter', '0.5 cup'],
+  ])(
+    'keeps the source explanation when %s cannot be converted',
+    (queryText, requestedAmount) => {
+      const sourceExplanation =
+        'Requested: roasted, with butter. Listed as: roasted. Butter is not stated on this record.';
+      const match = qualifyFoodPreparation(
+        'Broccoli, roasted',
+        interpretFoodQuery(queryText),
+        null,
+        91,
+      );
+      const result = foodResult('broccoli-roasted', 'Broccoli, roasted');
+      result.food.measures = null;
+      result.food.servingSizeG = 91;
+      result.food.servingUnit = 'g';
+      result.food.calories = 47;
+      result.food.proteinG = 3;
+      result.food.fatG = 0.5;
+      result.preparationMatch = match ?? undefined;
+
+      const selected = singleItemDraftEntryFromFoodResult(result, {
+        id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        now: NOW,
+      });
+      expect(selected.quantity).toBe(91);
+      expect(selected.unit).toBe('g');
+      expect(selected.unresolvedQuantityLabel).toBe(requestedAmount);
+      expect(selected.preparationNote).toBe(sourceExplanation);
+      expect(selected.preparationNote).not.toContain('Requested amount:');
+      expect(selected.preparationNote).not.toMatch(/(^|\s)5 cup/);
+      expect(selected.title).toBe('Broccoli, roasted');
+      expect(selected.foodObjectId).toBe('broccoli-roasted');
+      expect(selected.calories).toBe(47);
+      expect(selected.macros).toEqual({ protein: 3, carbs: 10, fat: 0.5 });
+
+      const original = `Original requested amount: ${requestedAmount}.`;
+      const draft = addLogNutritionDraftEntry(
+        createLogNutritionDraft(CONTEXT, { now: NOW }),
+        selected,
+        NOW,
+      ).draft;
+      const draftEdited = updateLogNutritionDraftEntry(
+        draft,
+        selected.id,
+        { quantity: 2, unit: 'g' },
+        NOW,
+      );
+      const draftEntry = draftEdited.entries[0];
+      expect(draftEntry.kind).toBe('single_item');
+      if (draftEntry.kind !== 'single_item') return;
+      expect(draftEntry.quantity).toBe(2);
+      expect(draftEntry.unit).toBe('g');
+      expect(draftEntry.unresolvedQuantityLabel).toBeNull();
+      expect(draftEntry.preparationNote).toBe(`${sourceExplanation} ${original}`);
+      expect(draftEntry.preparationNote?.split('Original requested amount:')).toHaveLength(2);
+      expect(draftEntry.calories).toBe(47);
+      expect(draftEntry.foodObjectId).toBe('broccoli-roasted');
+      const draftPayload = buildJournalPayloadForDraftEntry(draftEntry);
+      expect(draftPayload).not.toHaveProperty('preparationNote');
+      expect(draftPayload).not.toHaveProperty('unresolvedQuantityLabel');
+      expect(draftPayload.name).toBe('Broccoli, roasted');
+      expect(draftPayload.calories).toBe(47);
+      expect(JSON.stringify(draftPayload)).not.toContain(requestedAmount);
+
+      const quantityEdited = applyDisplayedAmountToReplacement(selected, {
+        quantity: '2',
+        unit: 'g',
+      });
+      const unitEdited = applyDisplayedAmountToReplacement(selected, {
+        quantity: '1',
+        unit: 'serving',
+      });
+      for (const edited of [quantityEdited, unitEdited]) {
+        expect(edited.unresolvedQuantityLabel).toBeNull();
+        expect(edited.preparationNote).toBe(`${sourceExplanation} ${original}`);
+        expect(edited.preparationNote?.split('Original requested amount:')).toHaveLength(2);
+        expect(edited.preparationNote).not.toMatch(/(^|\s)5 cup/);
+        expect(edited.title).toBe('Broccoli, roasted');
+        expect(edited.calories).toBe(47);
+        expect(edited.macros.fat).toBe(0.5);
+        expect(edited.foodObjectId).toBe('broccoli-roasted');
+      }
+      const saved = buildCommittedSingleItemPayload({
+        current: { name: 'Previous item', quantity: 1, unit: 'serving', calories: 10 },
+        replacement: quantityEdited,
+        quantity: quantityEdited.quantity,
+        unit: quantityEdited.unit,
+      });
+      expect(saved).not.toHaveProperty('preparationNote');
+      expect(saved).not.toHaveProperty('unresolvedQuantityLabel');
+      expect(saved.name).toBe('Broccoli, roasted');
+      expect(saved.calories).toBe(47);
+      expect(saved.foodObjectId).toBe('broccoli-roasted');
+      expect(JSON.stringify(saved)).not.toContain('Original requested amount');
+      expect(JSON.stringify(saved)).not.toContain(requestedAmount);
+    },
+  );
+
+  it('still applies a supported decimal cup without an unresolved amount', () => {
+    const match = qualifyFoodPreparation(
+      'Broccoli, roasted',
+      interpretFoodQuery('1.5 cups roasted broccoli with butter'),
+      [{ unit: 'cup', grams: 156 }],
+      91,
+    );
+    const result = foodResult('broccoli-roasted', 'Broccoli, roasted');
+    result.food.calories = 47;
+    result.food.fatG = 0.5;
+    result.preparationMatch = match ?? undefined;
+    const selected = singleItemDraftEntryFromFoodResult(result, {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      now: NOW,
+    });
+    expect(selected.quantity).toBe(1.5);
+    expect(selected.unit).toBe('cup');
+    expect(selected.unresolvedQuantityLabel ?? null).toBeNull();
+    expect(selected.preparationNote).toBe(
+      'Requested: roasted, with butter. Listed as: roasted. Butter is not stated on this record.',
+    );
+    expect(selected.calories).toBe(47);
+    expect(selected.title).toBe('Broccoli, roasted');
+  });
 });

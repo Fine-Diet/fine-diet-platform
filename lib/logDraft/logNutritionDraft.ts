@@ -211,11 +211,13 @@ function nullableNumber(value: unknown): number | null {
 
 function sourcePreparationNote(note: string | null | undefined): string | null {
   if (!note) return null;
-  const source = note
-    .replace(/Requested amount: [^.]+\./g, '')
-    .replace(/\s*No [^.]+\smeasure on this record\./g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // formatPreparationMatchNote appends this exact suffix. The amount can
+  // contain a decimal point, so the period after the unit is the boundary.
+  const generatedAmountWarning = new RegExp(
+    '\\s*Requested amount: .+?\\. No \\S+ measure on this record\\.',
+    'g',
+  );
+  const source = note.replace(generatedAmountWarning, '').replace(/\s+/g, ' ').trim();
   return source || null;
 }
 
