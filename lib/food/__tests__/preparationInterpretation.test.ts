@@ -151,6 +151,77 @@ describe('preparation interpretation', () => {
     expect(neither?.status).toBe('exact_preparation');
   });
 
+  it('keeps requested constraints visible for method and ingredient states', () => {
+    const rows: Array<{
+      query: string;
+      name: string;
+      status: string;
+      note: string | null;
+      absent?: string;
+    }> = [
+      {
+        query: 'roasted broccoli with butter',
+        name: 'Broccoli, roasted',
+        status: 'exact_preparation',
+        note: 'Requested: roasted, with butter. Listed as: roasted. Butter is not stated on this record.',
+        absent: 'Amount not specified.',
+      },
+      {
+        query: 'roasted broccoli without oil and butter',
+        name: 'Broccoli, roasted, without oil and butter',
+        status: 'exact_preparation',
+        note: null,
+        absent: 'with butter',
+      },
+      {
+        query: 'roasted broccoli without oil and butter',
+        name: 'Broccoli, roasted, without oil, with butter',
+        status: 'conflicting_preparation',
+        note: 'Requested: roasted, without oil and butter. Listed as: roasted, without oil; with butter.',
+      },
+      {
+        query: 'roasted broccoli without oil and butter',
+        name: 'Broccoli, roasted, without oil and with butter',
+        status: 'conflicting_preparation',
+        note: 'Requested: roasted, without oil and butter. Listed as: roasted, without oil; with butter.',
+      },
+      {
+        query: 'broccoli with butter',
+        name: 'Broccoli, steamed, with butter',
+        status: 'unspecified_preparation',
+        note: 'Requested: with butter. Listed as: steamed, with butter. Amount not specified.',
+      },
+      {
+        query: 'broccoli with butter',
+        name: 'Broccoli, without butter',
+        status: 'conflicting_preparation',
+        note: 'Requested: with butter. Listed as: without butter.',
+        absent: 'Without .',
+      },
+      {
+        query: 'broccoli with butter',
+        name: 'Broccoli',
+        status: 'unspecified_preparation',
+        note: 'Requested: with butter. Listed as: preparation unspecified.',
+        absent: 'Amount not specified.',
+      },
+      {
+        query: 'fried broccoli',
+        name: 'Broccoli, not fried',
+        status: 'conflicting_preparation',
+        note: 'Requested: fried. Listed as: not fried.',
+      },
+    ];
+
+    for (const row of rows) {
+      const match = qualifyFoodPreparation(row.name, interpretFoodQuery(row.query));
+      expect(match?.status).toBe(row.status);
+      expect(match?.note).toBe(row.note);
+      if (row.absent) expect(match?.note ?? '').not.toContain(row.absent);
+      expect(match?.listedLabel ?? '').not.toContain('With .');
+    }
+  });
+
   it('parses decimals and fractions before punctuation is destroyed and rejects negatives', () => {
     const one = interpretFoodQuery('1 cup steamed broccoli');
     const decimal = interpretFoodQuery('1.5 cups steamed broccoli');

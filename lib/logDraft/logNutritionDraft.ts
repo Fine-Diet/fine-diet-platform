@@ -183,16 +183,13 @@ export function updateLogNutritionDraftEntry(
     }
     const unit = typeof patch.unit === 'string' && patch.unit.trim() ? patch.unit : entry.unit;
     changed = quantity !== entry.quantity || unit !== entry.unit;
-    const unresolvedQuantityLabel = !changed || !entry.unresolvedQuantityLabel
-      ? entry.unresolvedQuantityLabel
-      : entry.unresolvedQuantityLabel === `${quantity} ${unit}`
-        ? entry.unresolvedQuantityLabel
-        : null;
+    const revised = changed
+      ? reviseSingleItemAmountWarning(entry, { quantity, unit })
+      : entry;
     return {
-      ...entry,
+      ...revised,
       quantity,
       unit,
-      unresolvedQuantityLabel,
       updatedAt: nowIso(now),
     };
   });
@@ -212,6 +209,67 @@ function nullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function sourcePreparationNote(note: string | null | undefined): string | null {
+  if (!note) return null;
+  const source = note
+    .replace(/Requested amount: [^.]+\./g, '')
+    .replace(/\s*No [^.]+\smeasure on this record\./g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return source || null;
+}
+
+/**
+ * The live unsupported-amount warning lives on unresolvedQuantityLabel.
+ * preparationNote keeps the preparation and source sentences. After the
+ * displayed amount changes, any retained original request is labeled as
+ * original so it is not read as the current amount.
+ */
+export function reviseSingleItemAmountWarning<T extends {
+  quantity: number;
+  unit: string;
+  preparationNote?: string | null;
+  unresolvedQuantityLabel?: string | null;
+}>(entry: T, next: { quantity: number; unit: string }): T {
+  const quantity = Number.isFinite(next.quantity) ? next.quantity : entry.quantity;
+  const unit = next.unit.trim() ? next.unit : entry.unit;
+  const changed = quantity !== entry.quantity || unit !== entry.unit;
+  if (!changed || !entry.unresolvedQuantityLabel) {
+    return { ...entry, quantity, unit };
+  }
+  if (entry.unresolvedQuantityLabel === `${quantity} ${unit}`) {
+    return { ...entry, quantity, unit };
+  }
+  const original = `Original requested amount: ${entry.unresolvedQuantityLabel}.`;
+  const source = sourcePreparationNote(entry.preparationNote);
+  const alreadyOriginal = source?.includes('Original requested amount:') ?? false;
+  const preparationNote = alreadyOriginal
+    ? source
+    : source
+      ? `${source} ${original}`
+      : original;
+  return {
+    ...entry,
+    quantity,
+    unit,
+    unresolvedQuantityLabel: null,
+    preparationNote,
+  };
+}
+
+/** Replacement editor quantity and unit edits. Invalid text leaves the warning unchanged. */
+export function applyDisplayedAmountToReplacement(
+  replacement: LogNutritionSingleItemDraftEntryV1,
+  displayed: { quantity: string; unit: string },
+): LogNutritionSingleItemDraftEntryV1 {
+  const amount = Number(displayed.quantity);
+  if (!Number.isFinite(amount)) return replacement;
+  return reviseSingleItemAmountWarning(replacement, {
+    quantity: amount,
+    unit: displayed.unit,
+  });
+}
+
 export function applyPreparationSelection(
   entry: LogNutritionSingleItemDraftEntryV1,
   match: FoodPreparationMatch | null | undefined,
@@ -219,12 +277,13 @@ export function applyPreparationSelection(
   if (!match) return entry;
   const quantity = match.quantity;
   const supported = Boolean(quantity && match.quantitySupported);
+  const preparationNote = sourcePreparationNote(match.note);
   const next: LogNutritionSingleItemDraftEntryV1 = {
     ...entry,
     ...(supported && quantity
       ? { quantity: quantity.amount, unit: quantity.unit }
       : {}),
-    ...(match.note ? { preparationNote: match.note } : {}),
+    ...(preparationNote ? { preparationNote } : {}),
     ...(quantity && !match.quantitySupported
       ? { unresolvedQuantityLabel: `${quantity.amount} ${quantity.unit}` }
       : {}),

@@ -1,6 +1,9 @@
+import { interpretFoodQuery, qualifyFoodPreparation } from '@/lib/food/preparationInterpretation';
 import type { FoodSearchResult } from '@/lib/food/types';
+import { buildCommittedSingleItemPayload } from '@/lib/journal/committedNutritionEdit';
 import {
   addLogNutritionDraftEntry,
+  applyDisplayedAmountToReplacement,
   buildJournalPayloadForDraftEntry,
   buildMealDocumentFromLogDraft,
   createLogNutritionDraft,
@@ -145,8 +148,14 @@ describe('LogNutritionDraftV1', () => {
     };
     const cleared = updateLogNutritionDraftEntry(withUnresolved, food.id, { quantity: 2 }, NOW);
     expect(cleared.entries[0].kind === 'single_item' && cleared.entries[0].unresolvedQuantityLabel).toBeNull();
+    expect(cleared.entries[0].kind === 'single_item' && cleared.entries[0].preparationNote).toBe(
+      'Original requested amount: 1 cup.',
+    );
     const unitCleared = updateLogNutritionDraftEntry(withUnresolved, food.id, { unit: 'g' }, NOW);
     expect(unitCleared.entries[0].kind === 'single_item' && unitCleared.entries[0].unresolvedQuantityLabel).toBeNull();
+    expect(unitCleared.entries[0].kind === 'single_item' && unitCleared.entries[0].preparationNote).toBe(
+      'Original requested amount: 1 cup.',
+    );
     const kept = updateLogNutritionDraftEntry(withUnresolved, food.id, { quantity: 1, unit: 'cup' }, NOW);
     expect(kept.entries[0].kind === 'single_item' && kept.entries[0].unresolvedQuantityLabel).toBe('1 cup');
     expect(kept.entries[0].quantity).toBe(1);
@@ -281,5 +290,91 @@ describe('LogNutritionDraftV1', () => {
     expect(document.title).toBe('Reusable lunch');
     expect(document.components).toHaveLength(1);
     expect(serializeLogNutritionDraft(draft)).toBe(snapshot);
+  });
+
+  it('clears the current amount warning in the draft and the replacement editor without dropping source notes', () => {
+    const query = interpretFoodQuery('1 cup roasted broccoli with butter');
+    const match = qualifyFoodPreparation(
+      'Broccoli, roasted',
+      query,
+      null,
+      91,
+    );
+    const result = foodResult('broccoli-roasted', 'Broccoli, roasted');
+    result.food.measures = null;
+    result.food.servingSizeG = 91;
+    result.food.calories = 47;
+    result.food.fatG = 0.5;
+    result.preparationMatch = match ?? undefined;
+
+    const selected = singleItemDraftEntryFromFoodResult(result, {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      now: NOW,
+    });
+    expect(selected.quantity).toBe(91);
+    expect(selected.unit).toBe('g');
+    expect(selected.unresolvedQuantityLabel).toBe('1 cup');
+    expect(selected.preparationNote).toContain('Butter is not stated on this record.');
+    expect(selected.preparationNote).not.toContain('Requested amount:');
+    expect(selected.calories).toBe(47);
+    expect(selected.title).toBe('Broccoli, roasted');
+
+    const draft = addLogNutritionDraftEntry(
+      createLogNutritionDraft(CONTEXT, { now: NOW }),
+      selected,
+      NOW,
+    ).draft;
+    const draftEdited = updateLogNutritionDraftEntry(draft, selected.id, { quantity: 2, unit: 'g' }, NOW);
+    const draftEntry = draftEdited.entries[0];
+    expect(draftEntry.kind).toBe('single_item');
+    if (draftEntry.kind !== 'single_item') return;
+    expect(draftEntry.unresolvedQuantityLabel).toBeNull();
+    expect(draftEntry.preparationNote).toContain('Butter is not stated on this record.');
+    expect(draftEntry.preparationNote).toContain('Original requested amount: 1 cup.');
+    expect(draftEntry.preparationNote).not.toContain('Requested amount: 1 cup');
+    expect(draftEntry.calories).toBe(47);
+    expect(draftEntry.foodObjectId).toBe('broccoli-roasted');
+    const draftPayload = buildJournalPayloadForDraftEntry(draftEntry);
+    expect(draftPayload).not.toHaveProperty('preparationNote');
+    expect(draftPayload).not.toHaveProperty('unresolvedQuantityLabel');
+    expect(draftPayload.name).toBe('Broccoli, roasted');
+    expect(draftPayload.calories).toBe(47);
+    expect(draftPayload.quantity).toBe(2);
+    expect(draftPayload.unit).toBe('g');
+
+    const quantityEdited = applyDisplayedAmountToReplacement(selected, {
+      quantity: '2',
+      unit: 'g',
+    });
+    expect(quantityEdited.unresolvedQuantityLabel).toBeNull();
+    expect(quantityEdited.preparationNote).toContain('Butter is not stated on this record.');
+    expect(quantityEdited.preparationNote).toContain('Original requested amount: 1 cup.');
+    expect(quantityEdited.preparationNote).not.toContain('Requested amount: 1 cup');
+    expect(quantityEdited.title).toBe('Broccoli, roasted');
+    expect(quantityEdited.calories).toBe(47);
+    expect(quantityEdited.macros.fat).toBe(0.5);
+
+    const unitEdited = applyDisplayedAmountToReplacement(selected, {
+      quantity: '1',
+      unit: 'serving',
+    });
+    expect(unitEdited.unresolvedQuantityLabel).toBeNull();
+    expect(unitEdited.preparationNote).toContain('Original requested amount: 1 cup.');
+    expect(unitEdited.preparationNote).toContain('Butter is not stated on this record.');
+    expect(unitEdited.calories).toBe(47);
+
+    const saved = buildCommittedSingleItemPayload({
+      current: { name: 'Previous item', quantity: 1, unit: 'serving' },
+      replacement: quantityEdited,
+      quantity: quantityEdited.quantity,
+      unit: quantityEdited.unit,
+    });
+    expect(saved).not.toHaveProperty('preparationNote');
+    expect(saved).not.toHaveProperty('unresolvedQuantityLabel');
+    expect(saved.name).toBe('Broccoli, roasted');
+    expect(saved.calories).toBe(47);
+    expect(saved.quantity).toBe(2);
+    expect(saved.unit).toBe('g');
+    expect(JSON.stringify(saved)).not.toContain('Original requested amount');
   });
 });

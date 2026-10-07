@@ -23,6 +23,7 @@ import {
   type JournalEntry,
 } from '@/lib/journal';
 import {
+  applyDisplayedAmountToReplacement,
   singleItemDraftEntryFromFoodResult,
   singleItemDraftEntryFromRecent,
   type LogNutritionSingleItemDraftEntryV1,
@@ -232,6 +233,14 @@ function SingleItemEditor({
     }
     setQuantity(String(converted.quantity));
     setUnit(converted.unit);
+    setReplacement((current) =>
+      current
+        ? applyDisplayedAmountToReplacement(current, {
+            quantity: String(converted.quantity),
+            unit: converted.unit,
+          })
+        : current,
+    );
     setError(null);
   };
 
@@ -307,7 +316,16 @@ function SingleItemEditor({
             step="any"
             value={quantity}
             onChange={(event) => {
-              setQuantity(event.target.value);
+              const nextQuantity = event.target.value;
+              setQuantity(nextQuantity);
+              setReplacement((current) =>
+                current
+                  ? applyDisplayedAmountToReplacement(current, {
+                      quantity: nextQuantity,
+                      unit,
+                    })
+                  : current,
+              );
               setError(null);
             }}
             className="w-full rounded-xl border border-white/15 bg-black/20 px-3 py-2.5 text-xl outline-none"

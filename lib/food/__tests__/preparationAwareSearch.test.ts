@@ -438,6 +438,15 @@ describe('preparation-aware search pipeline', () => {
     const fried = await searchFoods('broccoli not fried', null, { debug: true, limit: 80, sectionLimit: 40 });
     expect(fried.results.find((result) => result.food.id === 'broccoli-fried')?.preparationMatch?.status).toBe('conflicting_preparation');
     expect(fried.results.find((result) => result.food.id === 'broccoli-fried')?.preparationMatch?.note).toContain('Without fried.');
+
+    const roastedButter = await searchFoods('roasted broccoli with butter', null, { debug: true, limit: 80, sectionLimit: 40 });
+    const roasted = roastedButter.results.find((result) => result.food.id === 'broccoli-roasted');
+    expect(roasted?.preparationMatch?.status).toBe('exact_preparation');
+    expect(roasted?.preparationMatch?.note).toContain('with butter');
+    expect(roasted?.preparationMatch?.note).toContain('Butter is not stated on this record.');
+    expect(roasted?.preparationMatch?.note).not.toContain('Amount not specified.');
+    expect(roasted?.food.canonicalName).toBe('Broccoli, roasted');
+    expect(roasted?.food.calories).toBe(47);
   });
 
   it('carries one cup only when the selected record supports it and does not save', async () => {

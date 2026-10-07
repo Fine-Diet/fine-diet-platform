@@ -52,6 +52,17 @@ describe('Packet 15 shared committed nutrition editor boundary', () => {
     expect(editor).not.toContain('Rename item');
   });
 
+  it('revises replacement amount warnings from both quantity and unit edits', () => {
+    expect(editor).toMatch(
+      /const changeUnit = \(nextUnit: string\) => \{[\s\S]*?applyDisplayedAmountToReplacement\(/,
+    );
+    const quantityHandler = editor.slice(
+      editor.indexOf('<span className="mb-1 block text-[11px] text-white/45">Quantity</span>'),
+      editor.indexOf('<span className="mb-1 block text-[11px] text-white/45">Unit</span>'),
+    );
+    expect(quantityHandler).toContain('applyDisplayedAmountToReplacement');
+  });
+
   it('converts Single Item display quantity atomically and previews local nutrition', () => {
     expect(editor).toContain('convertCommittedSingleItemQuantity({');
     expect(editor).toContain('setQuantity(String(converted.quantity))');

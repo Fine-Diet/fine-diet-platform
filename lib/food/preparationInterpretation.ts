@@ -265,7 +265,9 @@ export function qualifyFoodPreparation(
   const listed = readListedPreparation(canonicalName);
   const requested = interpretation.requestedMethods;
   const requestedSet = new Set(requested);
-  const differentMethod = listed.methods.some((method) => !requestedSet.has(method));
+  // A listed method is a conflict only when the query asked for a method.
+  const differentMethod =
+    requested.length > 0 && listed.methods.some((method) => !requestedSet.has(method));
   const requestedMethodAbsent = requested.some((method) => listed.absentMethods.includes(method));
   const allRequestedPresent =
     requested.length > 0 && requested.every((method) => listed.methods.includes(method));
@@ -315,19 +317,31 @@ export function formatPreparationMatchNote(
   const unstated = listed
     ? match.exclusions.filter((exclusion) => constraintState(listed, exclusion) === 'unknown')
     : match.exclusions;
+  const unknownAdditions = listed
+    ? match.additions.filter((addition) => constraintState(listed, addition) === 'unknown')
+    : match.additions;
   const statedAdditions = listed
     ? match.additions.filter((addition) => constraintState(listed, addition) === 'present')
     : [];
+  const unconfirmed = [
+    ...unknownAdditions.map((addition) => `${capitalize(addition)} is not stated on this record.`),
+    ...unstated.map((exclusion) => `${capitalize(exclusion)} is not stated on this record.`),
+  ];
 
   if (match.status === 'exact_preparation') {
-    if (unstated.length > 0) {
+    if (unconfirmed.length > 0) {
       parts.push(
-        `Requested: ${requested}. Listed as: ${match.listedMethods.join(', ') || match.listedLabel}. ${capitalize(unstated.join(' and '))} is not stated on this record.`,
+        `Requested: ${requested}. Listed as: ${match.listedMethods.join(', ') || match.listedLabel}. ${unconfirmed.join(' ')}`,
       );
     } else if (statedAdditions.length > 0) {
       parts.push(`Requested: ${requested}. Listed as: ${match.listedLabel}. Amount not specified.`);
     }
-  } else if (match.status === 'conflicting_preparation' && match.requestedMethods.length === 0) {
+  } else if (
+    match.status === 'conflicting_preparation' &&
+    match.requestedMethods.length === 0 &&
+    match.additions.length === 0 &&
+    match.exclusions.length > 0
+  ) {
     parts.push(`Without ${match.exclusions.join(', ')}. Listed as: ${match.listedLabel}.`);
   } else if (match.requestedMethods.length > 0 || match.additions.length > 0 || match.exclusions.length > 0) {
     parts.push(`Requested: ${requested}. Listed as: ${match.listedLabel}.`);
@@ -374,24 +388,25 @@ function readListedPreparation(name: string): ListedPreparation {
   for (let index = 0; index < tokens.length; index += 1) {
     if (protectedIndexes.has(index)) continue;
     const token = tokens[index];
-    if (token === 'not' || token === 'no' || token === 'without') {
+    if (token === 'not' || token === 'no' || token === 'without' || token === 'with') {
       const target = readConstraintTarget(tokens, index + 1, protectedIndexes);
       if (!target) continue;
-      if (target.method && !absentSeen.has(target.method)) {
-        absentSeen.add(target.method);
-        absentMethods.push(target.method);
+      const polarity = token === 'with' ? 'present' : 'absent';
+      for (const method of target.methods) {
+        if (polarity === 'absent') {
+          if (absentSeen.has(method)) continue;
+          absentSeen.add(method);
+          absentMethods.push(method);
+          continue;
+        }
+        if (seen.has(method) || absentSeen.has(method)) continue;
+        seen.add(method);
+        methods.push(method);
       }
-      if (target.ingredient) setIngredient(target.ingredient, 'absent');
-      if (target.ingredient && !detail) detail = `without ${target.phrase}`;
-      index += target.consumed;
-      continue;
-    }
-    if (token === 'with') {
-      const target = readConstraintTarget(tokens, index + 1, protectedIndexes);
-      if (!target) continue;
-      if (target.ingredient) {
-        setIngredient(target.ingredient, 'present');
-        detail = `with ${target.phrase}`;
+      for (const ingredient of target.ingredients) setIngredient(ingredient, polarity);
+      if (target.ingredients.length > 0) {
+        const clause = `${polarity === 'present' ? 'with' : 'without'} ${target.phrase}`;
+        detail = detail ? `${detail}; ${clause}` : clause;
       }
       index += target.consumed;
       continue;
@@ -418,17 +433,56 @@ function readConstraintTarget(
   tokens: string[],
   start: number,
   protectedIndexes: Set<number>,
-): { method: PreparationMethod | null; ingredient: string | null; phrase: string; consumed: number } | null {
+): { methods: PreparationMethod[]; ingredients: string[]; phrase: string; consumed: number } | null {
   if (start >= tokens.length || protectedIndexes.has(start)) return null;
+  const methods: PreparationMethod[] = [];
+  const ingredients: string[] = [];
+  const phrase: string[] = [];
   let cursor = start;
-  if (tokens[cursor] === 'olive' && tokens[cursor + 1] === 'oil' && !protectedIndexes.has(cursor + 1)) {
-    return { method: null, ingredient: 'oil', phrase: 'olive oil', consumed: 2 };
+
+  const take = (): boolean => {
+    if (cursor >= tokens.length || protectedIndexes.has(cursor)) return false;
+    if (tokens[cursor] === 'olive' && tokens[cursor + 1] === 'oil' && !protectedIndexes.has(cursor + 1)) {
+      if (!ingredients.includes('oil')) ingredients.push('oil');
+      phrase.push('olive oil');
+      cursor += 2;
+      return true;
+    }
+    const token = tokens[cursor];
+    const method = VARIANT_TO_METHOD.get(token) ?? null;
+    const ingredient = LISTED_INGREDIENTS.has(token) ? token : null;
+    if (!method && !ingredient) return false;
+    if (method && !methods.includes(method)) methods.push(method);
+    if (ingredient && !ingredients.includes(ingredient)) ingredients.push(ingredient);
+    phrase.push(token);
+    cursor += 1;
+    return true;
+  };
+
+  if (!take()) return null;
+  while (cursor < tokens.length && (tokens[cursor] === 'and' || tokens[cursor] === 'or')) {
+    const joiner = tokens[cursor];
+    const next = tokens[cursor + 1];
+    if (
+      !next ||
+      next === 'with' ||
+      next === 'without' ||
+      next === 'not' ||
+      next === 'no' ||
+      protectedIndexes.has(cursor)
+    ) {
+      break;
+    }
+    const before = cursor;
+    cursor += 1;
+    if (!take()) {
+      cursor = before;
+      break;
+    }
+    phrase.splice(phrase.length - 1, 0, joiner);
   }
-  const token = tokens[cursor];
-  const method = VARIANT_TO_METHOD.get(token) ?? null;
-  const ingredient = LISTED_INGREDIENTS.has(token) ? token : null;
-  if (!method && !ingredient) return null;
-  return { method, ingredient, phrase: token, consumed: 1 };
+
+  return { methods, ingredients, phrase: phrase.join(' '), consumed: cursor - start };
 }
 
 function constraintState(listed: ListedPreparation, phrase: string): 'present' | 'absent' | 'unknown' {
@@ -471,8 +525,8 @@ function listedLabelFor(listed: ListedPreparation, status: PreparationMatchStatu
   const described = describeListed(listed);
   const hasIngredientFact = Object.keys(listed.ingredients).length > 0 || listed.absentMethods.length > 0 || Boolean(listed.detail);
   if (status === 'approximate_preparation' && !hasIngredientFact) return 'cooked, preparation unspecified';
-  if (status === 'unspecified_preparation' && !hasIngredientFact) return 'preparation unspecified';
-  return described || 'preparation unspecified';
+  if (described) return described;
+  return 'preparation unspecified';
 }
 
 function requestedPhrase(match: FoodPreparationMatch): string {
@@ -598,6 +652,7 @@ function collectConstraintPhrase(
     if (token === 'and' || token === 'or') {
       const next = tokens[i + 1];
       if (next && (ADDITION_WORDS.has(next) || VARIANT_TO_METHOD.has(next))) {
+        words.push(token);
         indexes.push(i);
         continue;
       }
