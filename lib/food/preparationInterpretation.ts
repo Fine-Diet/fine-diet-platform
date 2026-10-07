@@ -110,10 +110,25 @@ const PROTECTED_PHRASES: readonly (readonly string[])[] = [
   ['peanut', 'butter'],
 ];
 
-const QUANTITY_RE =
-  /^(\d+(?:\.\d+)?)\s+(cups?|tablespoons?|teaspoons?|tbsp|tsp|ounces?|oz|grams?|g|servings?|pieces?|slices?)\b\s*/i;
+const QUANTITY_UNIT =
+  'cups?|tablespoons?|teaspoons?|tbsp|tsp|ounces?|oz|grams?|g|servings?|pieces?|slices?';
+const QUANTITY_NUMBER = '\\d+(?:\\.\\d+)?|\\d+\\s*/\\s*\\d+';
 
 const GENERIC_COOKED = 'cooked';
+const LISTED_INGREDIENTS = new Set(['oil', 'butter', 'sauce']);
+
+export function preparationAcceptanceRank(status: PreparationMatchStatus): number {
+  switch (status) {
+    case 'exact_preparation':
+      return 4;
+    case 'approximate_preparation':
+      return 3;
+    case 'unspecified_preparation':
+      return 2;
+    case 'conflicting_preparation':
+      return 1;
+  }
+}
 
 export function preparationRankBoost(status: PreparationMatchStatus): number {
   switch (status) {
@@ -130,9 +145,13 @@ export function preparationRankBoost(status: PreparationMatchStatus): number {
 
 export function interpretFoodQuery(raw: string): FoodQueryInterpretation {
   const original = raw ?? '';
-  const folded = foldText(original);
-  const quantity = parseLeadingQuantity(folded);
-  const remainder = quantity ? folded.slice(quantity.consumed).trim() : folded;
+  const leading = parseLeadingQuantity(original);
+  const rest = leading ? original.slice(leading.consumed).trim() : original;
+  const folded = foldText(rest);
+  const quantity = leading?.valid
+    ? { amount: leading.amount, unit: leading.unit, consumed: leading.consumed }
+    : null;
+  const remainder = folded;
   const tokens = remainder.split(' ').filter((token) => token.length >= 2);
   const protectedIndexes = protectedTokenIndexes(tokens);
 
@@ -247,20 +266,18 @@ export function qualifyFoodPreparation(
   const requested = interpretation.requestedMethods;
   const requestedSet = new Set(requested);
   const differentMethod = listed.methods.some((method) => !requestedSet.has(method));
+  const requestedMethodAbsent = requested.some((method) => listed.absentMethods.includes(method));
   const allRequestedPresent =
     requested.length > 0 && requested.every((method) => listed.methods.includes(method));
-  const exclusionConflict = interpretation.exclusions.some((exclusion) =>
-    listed.mentions.some((mention) => mentionsConstraint(mention, exclusion)) ||
-    exclusion.split(' ').some((word) => {
-      const method = VARIANT_TO_METHOD.get(word);
-      return method ? listed.methods.includes(method) : false;
-    }),
+  const exclusionConflict = interpretation.exclusions.some(
+    (exclusion) => constraintState(listed, exclusion) === 'present',
+  );
+  const additionConflict = interpretation.additions.some(
+    (addition) => constraintState(listed, addition) === 'absent',
   );
 
   let status: PreparationMatchStatus;
-  if (requested.length > 0 && differentMethod) {
-    status = 'conflicting_preparation';
-  } else if (exclusionConflict && (allRequestedPresent || requested.length === 0)) {
+  if (requestedMethodAbsent || differentMethod || exclusionConflict || additionConflict) {
     status = 'conflicting_preparation';
   } else if (requested.length > 0 && allRequestedPresent) {
     status = 'exact_preparation';
@@ -295,26 +312,28 @@ export function formatPreparationMatchNote(
   if (!match) return null;
   const requested = requestedPhrase(match);
   const parts: string[] = [];
+  const unstated = listed
+    ? match.exclusions.filter((exclusion) => constraintState(listed, exclusion) === 'unknown')
+    : match.exclusions;
+  const statedAdditions = listed
+    ? match.additions.filter((addition) => constraintState(listed, addition) === 'present')
+    : [];
 
   if (match.status === 'exact_preparation') {
-    if (match.exclusions.length > 0 && listed && !listedStatesExclusion(listed, match.exclusions)) {
+    if (unstated.length > 0) {
       parts.push(
-        `Requested: ${requested}. Listed as: ${match.listedMethods.join(', ') || match.listedLabel}. ${capitalize(match.exclusions.join(', '))} is not stated on this record.`,
+        `Requested: ${requested}. Listed as: ${match.listedMethods.join(', ') || match.listedLabel}. ${capitalize(unstated.join(' and '))} is not stated on this record.`,
       );
-    } else if (match.additions.length > 0) {
-      parts.push(`With ${match.additions.join(', ')}. Amount not specified.`);
+    } else if (statedAdditions.length > 0) {
+      parts.push(`Requested: ${requested}. Listed as: ${match.listedLabel}. Amount not specified.`);
     }
   } else if (match.status === 'conflicting_preparation' && match.requestedMethods.length === 0) {
     parts.push(`Without ${match.exclusions.join(', ')}. Listed as: ${match.listedLabel}.`);
-  } else if (match.requestedMethods.length > 0) {
+  } else if (match.requestedMethods.length > 0 || match.additions.length > 0 || match.exclusions.length > 0) {
     parts.push(`Requested: ${requested}. Listed as: ${match.listedLabel}.`);
-    if (match.additions.length > 0) {
-      parts.push(`Added ${match.additions.join(', ')} amount is not specified.`);
+    if (statedAdditions.length > 0 && match.status !== 'conflicting_preparation') {
+      parts.push('Amount not specified.');
     }
-  } else if (match.additions.length > 0) {
-    parts.push(`With ${match.additions.join(', ')}. Amount not specified.`);
-  } else if (match.exclusions.length > 0) {
-    parts.push(`Without ${match.exclusions.join(', ')}.`);
   }
 
   if (match.quantity && match.quantitySupported === false) {
@@ -328,52 +347,132 @@ export function formatPreparationMatchNote(
 
 interface ListedPreparation {
   methods: PreparationMethod[];
+  absentMethods: PreparationMethod[];
   genericCooked: boolean;
-  mentions: string[];
+  ingredients: Record<string, 'present' | 'absent'>;
   detail: string | null;
 }
 
 function readListedPreparation(name: string): ListedPreparation {
-  const tokens = foldText(name).split(' ').filter(Boolean);
+  const folded = foldText(name);
+  const tokens = folded.split(' ').filter(Boolean);
   const protectedIndexes = protectedTokenIndexes(tokens);
   const methods: PreparationMethod[] = [];
+  const absentMethods: PreparationMethod[] = [];
   const seen = new Set<PreparationMethod>();
+  const absentSeen = new Set<PreparationMethod>();
+  const ingredients: Record<string, 'present' | 'absent'> = {};
   let genericCooked = false;
+  let detail: string | null = null;
 
-  tokens.forEach((token, index) => {
-    if (protectedIndexes.has(index)) return;
+  const setIngredient = (ingredient: string, state: 'present' | 'absent') => {
+    const current = ingredients[ingredient];
+    if (current === 'absent' && state === 'present') return;
+    ingredients[ingredient] = state;
+  };
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (protectedIndexes.has(index)) continue;
+    const token = tokens[index];
+    if (token === 'not' || token === 'no' || token === 'without') {
+      const target = readConstraintTarget(tokens, index + 1, protectedIndexes);
+      if (!target) continue;
+      if (target.method && !absentSeen.has(target.method)) {
+        absentSeen.add(target.method);
+        absentMethods.push(target.method);
+      }
+      if (target.ingredient) setIngredient(target.ingredient, 'absent');
+      if (target.ingredient && !detail) detail = `without ${target.phrase}`;
+      index += target.consumed;
+      continue;
+    }
+    if (token === 'with') {
+      const target = readConstraintTarget(tokens, index + 1, protectedIndexes);
+      if (!target) continue;
+      if (target.ingredient) {
+        setIngredient(target.ingredient, 'present');
+        detail = `with ${target.phrase}`;
+      }
+      index += target.consumed;
+      continue;
+    }
+    if (LISTED_INGREDIENTS.has(token) && tokens[index + 1] === 'free' && !protectedIndexes.has(index + 1)) {
+      setIngredient(token, 'absent');
+      detail = detail ?? `${token} free`;
+      index += 1;
+      continue;
+    }
     const method = VARIANT_TO_METHOD.get(token);
-    if (method && !seen.has(method)) {
+    if (method && !seen.has(method) && !absentSeen.has(method)) {
       seen.add(method);
       methods.push(method);
     }
     if (token === GENERIC_COOKED) genericCooked = true;
+    if (LISTED_INGREDIENTS.has(token)) setIngredient(token, 'present');
+  }
+
+  return { methods, absentMethods, genericCooked, ingredients, detail };
+}
+
+function readConstraintTarget(
+  tokens: string[],
+  start: number,
+  protectedIndexes: Set<number>,
+): { method: PreparationMethod | null; ingredient: string | null; phrase: string; consumed: number } | null {
+  if (start >= tokens.length || protectedIndexes.has(start)) return null;
+  let cursor = start;
+  if (tokens[cursor] === 'olive' && tokens[cursor + 1] === 'oil' && !protectedIndexes.has(cursor + 1)) {
+    return { method: null, ingredient: 'oil', phrase: 'olive oil', consumed: 2 };
+  }
+  const token = tokens[cursor];
+  const method = VARIANT_TO_METHOD.get(token) ?? null;
+  const ingredient = LISTED_INGREDIENTS.has(token) ? token : null;
+  if (!method && !ingredient) return null;
+  return { method, ingredient, phrase: token, consumed: 1 };
+}
+
+function constraintState(listed: ListedPreparation, phrase: string): 'present' | 'absent' | 'unknown' {
+  const targets = phrase
+    .split(' ')
+    .filter((word) => word !== 'and' && word !== 'olive' && word !== 'extra' && word !== 'virgin');
+  const states = targets.map((target) => {
+    const method = VARIANT_TO_METHOD.get(target);
+    if (method) {
+      if (listed.methods.includes(method)) return 'present' as const;
+      if (listed.absentMethods.includes(method)) return 'absent' as const;
+      return 'unknown' as const;
+    }
+    if (LISTED_INGREDIENTS.has(target)) return listed.ingredients[target] ?? 'unknown';
+    return 'unknown' as const;
   });
+  if (states.length === 0) return 'unknown';
+  if (states.some((state) => state === 'present')) return 'present';
+  if (states.every((state) => state === 'absent')) return 'absent';
+  return 'unknown';
+}
 
-  const folded = foldText(name);
-  const mentions: string[] = [];
-  const oil = folded.match(/\b(?:olive oil|oil)\b/);
-  const butter = folded.match(/\bbutter\b/);
-  const sauce = folded.match(/\bsauce\b/);
-  if (oil) mentions.push(oil[0]);
-  if (butter && !protectedIndexesCoverPhrase(tokens, ['peanut', 'butter'])) mentions.push('butter');
-  if (sauce) mentions.push('sauce');
-
-  let detail: string | null = null;
-  const withOil = folded.match(/\bwith (?:olive )?oil\b/);
-  const withButter = folded.match(/\bwith butter\b/);
-  if (withOil) detail = withOil[0];
-  else if (withButter) detail = withButter[0];
-
-  return { methods, genericCooked, mentions, detail };
+function describeListed(listed: ListedPreparation): string {
+  const parts: string[] = [...listed.methods];
+  if (listed.genericCooked && listed.methods.length === 0) parts.push('cooked');
+  if (listed.detail && (listed.detail.startsWith('with ') || listed.detail.startsWith('without '))) {
+    parts.push(listed.detail);
+  }
+  for (const method of listed.absentMethods) parts.push(`not ${method}`);
+  for (const ingredient of Object.keys(listed.ingredients)) {
+    const state = listed.ingredients[ingredient];
+    const already = parts.some((part) => part.includes(ingredient));
+    if (already) continue;
+    parts.push(state === 'absent' ? `without ${ingredient}` : `with ${ingredient}`);
+  }
+  return parts.join(', ');
 }
 
 function listedLabelFor(listed: ListedPreparation, status: PreparationMatchStatus): string {
-  if (status === 'approximate_preparation') return 'cooked, preparation unspecified';
-  if (status === 'unspecified_preparation') return 'preparation unspecified';
-  const parts: string[] = [...listed.methods];
-  if (listed.detail) parts.push(listed.detail);
-  return parts.join(', ') || 'preparation unspecified';
+  const described = describeListed(listed);
+  const hasIngredientFact = Object.keys(listed.ingredients).length > 0 || listed.absentMethods.length > 0 || Boolean(listed.detail);
+  if (status === 'approximate_preparation' && !hasIngredientFact) return 'cooked, preparation unspecified';
+  if (status === 'unspecified_preparation' && !hasIngredientFact) return 'preparation unspecified';
+  return described || 'preparation unspecified';
 }
 
 function requestedPhrase(match: FoodPreparationMatch): string {
@@ -383,16 +482,36 @@ function requestedPhrase(match: FoodPreparationMatch): string {
   return parts.join(', ');
 }
 
-function listedStatesExclusion(listed: ListedPreparation, exclusions: string[]): boolean {
-  return exclusions.some((exclusion) =>
-    listed.mentions.some((mention) => mentionsConstraint(mention, exclusion)),
-  );
-}
-
-function mentionsConstraint(mention: string, exclusion: string): boolean {
-  const left = mention.toLowerCase();
-  const right = exclusion.toLowerCase();
-  return left.includes(right) || right.includes(left);
+function parseLeadingQuantity(raw: string): (ParsedQuantity & { valid: boolean }) | null {
+  const leading = raw.match(/^\s*/)?.[0].length ?? 0;
+  const body = raw.slice(leading);
+  const negative = body.match(new RegExp(`^-\\s*(?:${QUANTITY_NUMBER})\\s+(?:${QUANTITY_UNIT})\\b`, 'i'));
+  if (negative) {
+    return { valid: false, amount: 0, unit: '', consumed: leading + negative[0].length };
+  }
+  const fraction = body.match(new RegExp(`^(\\d+)\\s*/\\s*(\\d+)\\s+(${QUANTITY_UNIT})\\b`, 'i'));
+  if (fraction) {
+    const numerator = Number(fraction[1]);
+    const denominator = Number(fraction[2]);
+    const consumed = leading + fraction[0].length;
+    if (!(denominator > 0) || !(numerator >= 0) || !Number.isFinite(numerator / denominator)) {
+      return { valid: false, amount: 0, unit: '', consumed };
+    }
+    return {
+      valid: true,
+      amount: numerator / denominator,
+      unit: canonicalUnit(fraction[3]),
+      consumed,
+    };
+  }
+  const decimal = body.match(new RegExp(`^(\\d+(?:\\.\\d+)?)\\s+(${QUANTITY_UNIT})\\b`, 'i'));
+  if (!decimal) return null;
+  const amount = Number(decimal[1]);
+  const consumed = leading + decimal[0].length;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { valid: false, amount: 0, unit: '', consumed };
+  }
+  return { valid: true, amount, unit: canonicalUnit(decimal[2]), consumed };
 }
 
 function measureSupported(
@@ -422,18 +541,6 @@ function capitalize(value: string): string {
 
 interface ParsedQuantity extends ParsedFoodQuantity {
   consumed: number;
-}
-
-function parseLeadingQuantity(folded: string): ParsedQuantity | null {
-  const match = QUANTITY_RE.exec(folded);
-  if (!match) return null;
-  const amount = Number(match[1]);
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-  return {
-    amount,
-    unit: canonicalUnit(match[2]),
-    consumed: match[0].length,
-  };
 }
 
 function canonicalUnit(unit: string): string {
@@ -476,16 +583,6 @@ function protectedTokenIndexes(tokens: string[]): Set<number> {
     }
   }
   return indexes;
-}
-
-function protectedIndexesCoverPhrase(tokens: string[], phrase: readonly string[]): boolean {
-  const indexes = protectedTokenIndexes(tokens);
-  for (let start = 0; start <= tokens.length - phrase.length; start += 1) {
-    const matches = phrase.every((word, offset) => tokens[start + offset] === word);
-    if (!matches) continue;
-    if (phrase.every((_, offset) => indexes.has(start + offset))) return true;
-  }
-  return false;
 }
 
 function collectConstraintPhrase(

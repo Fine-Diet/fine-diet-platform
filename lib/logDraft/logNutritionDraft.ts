@@ -183,7 +183,18 @@ export function updateLogNutritionDraftEntry(
     }
     const unit = typeof patch.unit === 'string' && patch.unit.trim() ? patch.unit : entry.unit;
     changed = quantity !== entry.quantity || unit !== entry.unit;
-    return { ...entry, quantity, unit, updatedAt: nowIso(now) };
+    const unresolvedQuantityLabel = !changed || !entry.unresolvedQuantityLabel
+      ? entry.unresolvedQuantityLabel
+      : entry.unresolvedQuantityLabel === `${quantity} ${unit}`
+        ? entry.unresolvedQuantityLabel
+        : null;
+    return {
+      ...entry,
+      quantity,
+      unit,
+      unresolvedQuantityLabel,
+      updatedAt: nowIso(now),
+    };
   });
   return changed ? touchDraft(draft, entries, now) : draft;
 }

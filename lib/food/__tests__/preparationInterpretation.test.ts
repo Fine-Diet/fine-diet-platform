@@ -101,7 +101,13 @@ describe('preparation interpretation', () => {
       'Requested: roasted, without oil. Listed as: roasted, with olive oil.',
     );
     const butter = qualifyFoodPreparation('Broccoli', interpretFoodQuery('broccoli with butter'));
-    expect(butter?.note).toBe('With butter. Amount not specified.');
+    expect(butter?.status).toBe('unspecified_preparation');
+    expect(butter?.note).toBe('Requested: with butter. Listed as: preparation unspecified.');
+    expect(butter?.note).not.toContain('Amount not specified.');
+
+    const statedButter = qualifyFoodPreparation('Broccoli with butter', interpretFoodQuery('broccoli with butter'));
+    expect(statedButter?.note).toContain('Listed as: with butter.');
+    expect(statedButter?.note).toContain('Amount not specified.');
   });
 
   it('uses a cup measure only when the record has one', () => {
@@ -117,5 +123,50 @@ describe('preparation interpretation', () => {
     expect(unsupported?.quantitySupported).toBe(false);
     expect(unsupported?.note).toContain('Requested amount: 1 cup.');
     expect(unsupported?.note).toContain('No cup measure on this record.');
+  });
+
+  it('distinguishes stated absence, stated presence, and unknown ingredients', () => {
+    const withoutOil = interpretFoodQuery('roasted broccoli without oil');
+    const statedAbsence = qualifyFoodPreparation('Broccoli, roasted, without oil', withoutOil);
+    expect(statedAbsence?.status).toBe('exact_preparation');
+
+    const notFried = qualifyFoodPreparation('Broccoli, not fried', interpretFoodQuery('fried broccoli'));
+    expect(notFried?.status).not.toBe('exact_preparation');
+    expect(notFried?.status).toBe('conflicting_preparation');
+    expect(notFried?.note).toContain('Listed as: not fried.');
+
+    const cookedWithOil = qualifyFoodPreparation('Broccoli, cooked, with olive oil', withoutOil);
+    expect(cookedWithOil?.status).toBe('conflicting_preparation');
+    expect(cookedWithOil?.note).toContain('with olive oil');
+    expect(cookedWithOil?.listedMethods).not.toContain('roasted');
+
+    const both = interpretFoodQuery('roasted broccoli without oil and butter');
+    expect(both.exclusions.join(' ')).toContain('oil');
+    expect(both.exclusions.join(' ')).toContain('butter');
+    const butterOnly = qualifyFoodPreparation('Broccoli, roasted, with butter', both);
+    const oilOnly = qualifyFoodPreparation('Broccoli, roasted, with olive oil', both);
+    const neither = qualifyFoodPreparation('Broccoli, roasted, without oil, without butter', both);
+    expect(butterOnly?.status).toBe('conflicting_preparation');
+    expect(oilOnly?.status).toBe('conflicting_preparation');
+    expect(neither?.status).toBe('exact_preparation');
+  });
+
+  it('parses decimals and fractions before punctuation is destroyed and rejects negatives', () => {
+    const one = interpretFoodQuery('1 cup steamed broccoli');
+    const decimal = interpretFoodQuery('1.5 cups steamed broccoli');
+    const halfWord = interpretFoodQuery('0.5 cup steamed broccoli');
+    const fraction = interpretFoodQuery('1/2 cup steamed broccoli');
+    const negative = interpretFoodQuery('-1 cup steamed broccoli');
+    expect(one.quantity).toEqual({ amount: 1, unit: 'cup' });
+    expect(decimal.quantity).toEqual({ amount: 1.5, unit: 'cup' });
+    expect(halfWord.quantity).toEqual({ amount: 0.5, unit: 'cup' });
+    expect(fraction.quantity).toEqual({ amount: 0.5, unit: 'cup' });
+    expect(negative.quantity).toBeNull();
+    expect(negative.quantity?.amount).not.toBe(1);
+    for (const parsed of [one, decimal, halfWord, fraction, negative]) {
+      expect(parsed.identityTokens).toEqual(['broccoli']);
+      expect(parsed.requestedMethods).toEqual(['steamed']);
+      expect(parsed.identityTokens).not.toContain('cup');
+    }
   });
 });

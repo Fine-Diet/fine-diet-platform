@@ -135,6 +135,23 @@ describe('LogNutritionDraftV1', () => {
     expect(edited.entries).toHaveLength(1);
     expect(edited.entries[0].quantity).toBe(3);
 
+    const withUnresolved = {
+      ...added,
+      entries: added.entries.map((entry) =>
+        entry.kind === 'single_item'
+          ? { ...entry, unresolvedQuantityLabel: '1 cup' }
+          : entry,
+      ),
+    };
+    const cleared = updateLogNutritionDraftEntry(withUnresolved, food.id, { quantity: 2 }, NOW);
+    expect(cleared.entries[0].kind === 'single_item' && cleared.entries[0].unresolvedQuantityLabel).toBeNull();
+    const unitCleared = updateLogNutritionDraftEntry(withUnresolved, food.id, { unit: 'g' }, NOW);
+    expect(unitCleared.entries[0].kind === 'single_item' && unitCleared.entries[0].unresolvedQuantityLabel).toBeNull();
+    const kept = updateLogNutritionDraftEntry(withUnresolved, food.id, { quantity: 1, unit: 'cup' }, NOW);
+    expect(kept.entries[0].kind === 'single_item' && kept.entries[0].unresolvedQuantityLabel).toBe('1 cup');
+    expect(kept.entries[0].quantity).toBe(1);
+    expect(kept.entries[0].unit).toBe('cup');
+
     const removed = removeLogNutritionDraftEntry(edited, food.id, NOW);
     expect(removed.entries).toHaveLength(0);
   });

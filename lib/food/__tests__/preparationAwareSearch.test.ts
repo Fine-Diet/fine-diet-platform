@@ -21,6 +21,10 @@ interface RpcHit {
 
 let foodRows: FoodRow[] = [];
 let failFoodObjects = false;
+let failFoodObjectCall: number | null = null;
+let failRpc = false;
+let failHydrate = false;
+let foodObjectCalls = 0;
 let rpcCalls: Array<{ fn: string; query: string }> = [];
 const rpcByQuery = new Map<string, RpcHit[]>();
 
@@ -43,6 +47,12 @@ function splitTop(input: string, separator: string): string[] {
 }
 
 function conditionMatches(row: FoodRow, condition: string): boolean {
+  const neq = condition.match(/^([a-z_]+)\.neq\.(.+)$/);
+  if (neq) return String(row[neq[1]] ?? '') !== neq[2];
+  const isNull = condition.match(/^([a-z_]+)\.is\.null$/);
+  if (isNull) return row[isNull[1]] == null;
+  const eq = condition.match(/^([a-z_]+)\.eq\.(.+)$/);
+  if (eq) return String(row[eq[1]] ?? '') === eq[2];
   const like = condition.match(/^(canonical_name|brand_name)\.ilike\.(.+)$/);
   if (like) {
     const field = like[1] === 'canonical_name' ? row.canonical_name : row.brand_name ?? '';
@@ -75,14 +85,28 @@ jest.mock('@/lib/supabaseServerClient', () => {
   const buildQueryBuilder = (table: string) => {
     const orFilters: string[] = [];
     const inFilters: Array<[string, unknown[]]> = [];
+    const eqs: Array<[string, unknown]> = [];
+    let rowLimit: number | null = null;
     const builder: Record<string, unknown> = {};
     const ret = () => builder;
     builder.select = jest.fn(ret);
-    builder.eq = jest.fn(ret);
-    builder.not = jest.fn(ret);
-    builder.is = jest.fn(ret);
+    builder.eq = jest.fn((col: string, val: unknown) => {
+      eqs.push([col, val]);
+      return builder;
+    });
+    builder.not = jest.fn((col: string, op: string, val: unknown) => {
+      if (op === 'eq') eqs.push([`${col}__neq`, val]);
+      return builder;
+    });
+    builder.is = jest.fn((col: string, val: unknown) => {
+      eqs.push([col, val]);
+      return builder;
+    });
     builder.order = jest.fn(ret);
-    builder.limit = jest.fn(ret);
+    builder.limit = jest.fn((count: number) => {
+      rowLimit = count;
+      return builder;
+    });
     builder.or = jest.fn((expr: string) => {
       orFilters.push(expr);
       return builder;
@@ -102,8 +126,17 @@ jest.mock('@/lib/supabaseServerClient', () => {
     builder.then = (
       resolve: (value: { data: unknown[] | null; error: { message: string } | null }) => void,
     ) => {
+      if (table === 'food_objects') foodObjectCalls += 1;
       if (table === 'food_objects' && failFoodObjects) {
         resolve({ data: null, error: { message: 'simulated timeout' } });
+        return;
+      }
+      if (table === 'food_objects' && failFoodObjectCall === foodObjectCalls) {
+        resolve({ data: null, error: { message: 'simulated phase timeout' } });
+        return;
+      }
+      if (table === 'food_objects' && failHydrate && inFilters.some(([col]) => col === 'id')) {
+        resolve({ data: null, error: { message: 'simulated hydrate timeout' } });
         return;
       }
       if (table !== 'food_objects') {
@@ -111,13 +144,25 @@ jest.mock('@/lib/supabaseServerClient', () => {
         return;
       }
       const idFilter = inFilters.find(([col]) => col === 'id');
-      let rows = foodRows.filter((row) => row.is_deleted !== true);
+      let rows = foodRows.slice();
+      for (const [col, val] of eqs) {
+        if (col.endsWith('__neq')) {
+          const field = col.replace(/__neq$/, '');
+          rows = rows.filter((row) => row[field] !== val);
+        } else if (val === null) {
+          rows = rows.filter((row) => row[col] == null);
+        } else {
+          rows = rows.filter((row) => row[col] === val);
+        }
+      }
       if (idFilter) {
         const ids = new Set(idFilter[1] as string[]);
         rows = rows.filter((row) => ids.has(row.id));
-      } else if (orFilters.length > 0) {
-        rows = rows.filter((row) => orFilters.some((filter) => matchesFilter(row, filter)));
       }
+      if (orFilters.length > 0) {
+        rows = rows.filter((row) => orFilters.every((filter) => matchesFilter(row, filter)));
+      }
+      if (rowLimit != null) rows = rows.slice(0, rowLimit);
       resolve({ data: rows, error: null });
     };
     return builder;
@@ -129,6 +174,7 @@ jest.mock('@/lib/supabaseServerClient', () => {
       rpc: jest.fn(async (fn: string, args: { p_query?: string }) => {
         const query = String(args?.p_query ?? '');
         rpcCalls.push({ fn, query });
+        if (failRpc) return { data: null, error: { message: 'simulated rpc timeout' } };
         return { data: rpcByQuery.get(query) ?? [], error: null };
       }),
     },
@@ -279,6 +325,10 @@ function statuses(response: Awaited<ReturnType<typeof searchFoods>>) {
 beforeEach(() => {
   foodRows = catalog();
   failFoodObjects = false;
+  failFoodObjectCall = null;
+  failRpc = false;
+  failHydrate = false;
+  foodObjectCalls = 0;
   rpcCalls = [];
   rpcByQuery.clear();
   rpcByQuery.set('roasted brocoli', [
@@ -371,8 +421,12 @@ describe('preparation-aware search pipeline', () => {
   it('preserves butter, oil, and not-fried without inventing a fat amount', async () => {
     const butter = await searchFoods('broccoli with butter', null, { debug: true, limit: 80, sectionLimit: 40 });
     expect(butter.results.map((result) => result.food.id)).not.toContain('peanut-butter');
-    expect(butter.results[0]?.preparationMatch?.note).toContain('Amount not specified.');
-    expect(butter.results.find((result) => result.food.id === 'broccoli-plain')?.food.fatG).toBe(0.3);
+    const plain = butter.results.find((result) => result.food.id === 'broccoli-plain');
+    expect(plain?.preparationMatch?.note).toBe(
+      'Requested: with butter. Listed as: preparation unspecified.',
+    );
+    expect(plain?.preparationMatch?.note).not.toContain('Amount not specified.');
+    expect(plain?.food.fatG).toBe(0.3);
 
     const oil = await searchFoods('roasted broccoli without oil', null, { debug: true, limit: 80, sectionLimit: 40 });
     expect(oil.results.find((result) => result.food.id === 'broccoli-oil')?.preparationMatch?.status).toBe('conflicting_preparation');
@@ -487,16 +541,163 @@ describe('preparation-aware search pipeline', () => {
     expect(page.results[0]?.food.id).toBe('broccoli-steamed');
   });
 
-  it('keeps user ownership and source on the selected record', async () => {
-    const owned = await searchFoods('steamed broccoli', 'person-a', { debug: true });
-    const mine = owned.results.find((result) => result.food.id === 'user-steamed');
-    const theirs = owned.results.find((result) => result.food.id === 'other-user');
-    expect(mine?.food.personId).toBe('person-a');
-    expect(mine?.food.sourceType).toBe('user');
-    expect(owned.sections.find((section) => section.key === 'my_foods')?.items.map((item) => item.food.id)).toContain('user-steamed');
-    expect(theirs?.food.personId).toBe('person-b');
-    expect(theirs?.food.id).not.toBe(mine?.food.id);
-    expect(owned.results.find((result) => result.food.id === 'brand-florets')?.food.sourceDataset).toBe('branded');
+  it('keeps a viewer on their own foods and public foods', async () => {
+    const unscoped = foodRows.filter((row) =>
+      row.is_deleted !== true && String(row.canonical_name).toLowerCase().includes('broccoli'),
+    );
+    expect(unscoped.map((row) => row.id)).toEqual(expect.arrayContaining(['user-steamed', 'other-user']));
+
+    const anon = await searchFoods('steamed broccoli', null, { debug: true });
+    expect(anon.results.map((result) => result.food.id)).not.toContain('user-steamed');
+    expect(anon.results.map((result) => result.food.id)).not.toContain('other-user');
+    expect(anon.results.map((result) => result.food.id)).toContain('broccoli-steamed');
+    expect(anon.results.map((result) => result.food.id)).toContain('brand-florets');
+    expect(JSON.stringify(anon)).not.toContain('person-b');
+    expect(JSON.stringify(anon)).not.toContain('other-user');
+
+    const mine = await searchFoods('steamed broccoli', 'person-a', { debug: true });
+    expect(mine.results.map((result) => result.food.id)).toContain('user-steamed');
+    expect(mine.results.find((result) => result.food.id === 'user-steamed')?.food.personId).toBe('person-a');
+    expect(mine.results.find((result) => result.food.id === 'user-steamed')?.food.sourceType).toBe('user');
+    expect(mine.results.map((result) => result.food.id)).not.toContain('other-user');
+    expect(mine.sections.find((section) => section.key === 'my_foods')?.items.map((item) => item.food.id)).toContain('user-steamed');
+    expect(JSON.stringify(mine)).not.toContain('other-user');
+    expect(mine.results.find((result) => result.food.id === 'brand-florets')?.food.sourceDataset).toBe('branded');
+
+    const theirs = await searchFoods('steamed broccoli', 'person-b', { debug: true });
+    expect(theirs.results.map((result) => result.food.id)).toContain('other-user');
+    expect(theirs.results.map((result) => result.food.id)).not.toContain('user-steamed');
+    expect(theirs.results.map((result) => result.food.id)).toContain('broccoli-steamed');
+
+    rpcByQuery.set('brocoli', [
+      { id: 'other-user', similarity: 0.92 },
+      { id: 'broccoli-roasted', similarity: 0.7 },
+    ]);
+    const recovered = await searchFoods('roasted brocoli', 'person-a', { debug: true });
+    expect(recovered.results.map((result) => result.food.id)).not.toContain('other-user');
+    expect(recovered.results.map((result) => result.food.id)).toContain('broccoli-roasted');
+    expect(JSON.stringify(recovered.debug)).not.toContain('other-user');
+  });
+
+  it('keeps an exact method discoverable under a small limit without reordering sections', async () => {
+    foodRows = foodRows.filter((row) => row.id !== 'user-steamed');
+    foodRows.unshift(food({
+      id: 'user-boiled',
+      canonical_name: 'My boiled broccoli',
+      source_type: 'user',
+      source_provider: null,
+      source_dataset: null,
+      person_id: 'person-a',
+      calories: 44,
+    }));
+    const response = await searchFoods('steamed broccoli', 'person-a', {
+      limit: 1,
+      sectionLimit: 12,
+      debug: true,
+    });
+    const keys = response.sections.map((section) => section.key);
+    expect(keys.indexOf('my_foods')).toBeGreaterThanOrEqual(0);
+    expect(keys.indexOf('common')).toBeGreaterThan(keys.indexOf('my_foods'));
+    expect(response.results.map((result) => result.food.id)).toContain('broccoli-steamed');
+    expect(response.results.find((result) => result.food.id === 'broccoli-steamed')?.preparationMatch?.status).toBe('exact_preparation');
+    expect(response.results.find((result) => result.food.id === 'broccoli-steamed')?.food.calories).toBe(39);
+  });
+
+  it('keeps the requested method inside the 12 accepted fuzzy rows', async () => {
+    const pack = Array.from({ length: 13 }, (_, index) => {
+      const row = food({
+        id: `boiled-pack-${index}`,
+        canonical_name: `Broccoli, boiled, pack ${index}`,
+        calories: 35,
+      });
+      foodRows.push(row);
+      return { id: row.id, similarity: 0.95 - index * 0.01 };
+    });
+    rpcByQuery.set('brocoli', [
+      { id: 'other-0', similarity: 0.99 },
+      ...pack,
+      { id: 'broccoli-steamed', similarity: 0.45 },
+    ]);
+    const response = await searchFoods('steamed brocoli', null, { debug: true });
+    expect(response.results.map((result) => result.food.id)).toContain('broccoli-steamed');
+    expect(response.results.find((result) => result.food.id === 'broccoli-steamed')?.preparationMatch?.status).toBe('exact_preparation');
+    expect(response.results.map((result) => result.food.id)).not.toContain('other-0');
+    expect(response.results.filter((result) => result.food.id.startsWith('boiled-pack-')).length).toBeLessThanOrEqual(11);
+    expect(response.debug?.preparation?.recoveryCalls).toBe(1);
+  });
+
+  it('does not treat a single failed retrieval stage as a missing food', async () => {
+    failFoodObjectCall = 2;
+    const phaseB = await searchFoods('steamed xylocarp', null, { debug: true });
+    expect(phaseB.debug?.preparation?.demandGap).toBeNull();
+    expect(phaseB.results.every((result) => result.preparationMatch?.status !== 'approximate_preparation')).toBe(true);
+    expect(recordDemand).not.toHaveBeenCalled();
+
+    failFoodObjectCall = null;
+    failRpc = true;
+    recordDemand.mockClear();
+    const rpc = await searchFoods('roasted brocoli', null, { debug: true });
+    expect(rpc.debug?.preparation?.demandGap).toBeNull();
+    expect(rpc.results.every((result) => result.preparationMatch?.status !== 'approximate_preparation')).toBe(true);
+    expect(recordDemand).not.toHaveBeenCalled();
+
+    failRpc = false;
+    failHydrate = true;
+    recordDemand.mockClear();
+    const hydrate = await searchFoods('roasted brocoli', null, { debug: true });
+    expect(hydrate.debug?.preparation?.demandGap).toBeNull();
+    expect(hydrate.debug?.retrieval?.some((call) => call.error === 'simulated hydrate timeout')).toBe(true);
+    expect(recordDemand).not.toHaveBeenCalled();
+  });
+
+  it('hands decimal and fraction amounts to the draft only when the measure exists', async () => {
+    const decimal = await searchFoods('1.5 cups steamed broccoli', null, { debug: true });
+    const supported = decimal.results.find((result) => result.food.id === 'broccoli-steamed');
+    expect(supported?.preparationMatch?.quantity).toEqual({ amount: 1.5, unit: 'cup' });
+    expect(supported?.preparationMatch?.quantitySupported).toBe(true);
+    expect(supported?.food.calories).toBe(39);
+    const draft = applyPreparationSelection(
+      {
+        id: 'draft-decimal',
+        sourceKey: 'food:broccoli-steamed',
+        kind: 'single_item',
+        title: supported!.food.canonicalName,
+        quantity: 1,
+        unit: 'serving',
+        calories: supported!.food.calories,
+        macros: { protein: supported!.food.proteinG, carbs: supported!.food.carbsG, fat: supported!.food.fatG },
+        foodObjectId: supported!.food.id,
+        servingSizeG: supported!.food.servingSizeG,
+        measures: supported!.food.measures,
+        createdAt: '2026-10-06T00:00:00.000Z',
+        updatedAt: '2026-10-06T00:00:00.000Z',
+      },
+      supported?.preparationMatch,
+    );
+    expect(draft.quantity).toBe(1.5);
+    expect(draft.unit).toBe('cup');
+    expect(draft.calories).toBe(39);
+
+    const fraction = await searchFoods('1/2 cup steamed broccoli', null, { debug: true });
+    const half = fraction.results.find((result) => result.food.id === 'broccoli-steamed');
+    const halfDraft = applyPreparationSelection(
+      { ...draft, quantity: 1, unit: 'serving' },
+      half?.preparationMatch,
+    );
+    expect(half?.preparationMatch?.quantity).toEqual({ amount: 0.5, unit: 'cup' });
+    expect(halfDraft.quantity).toBe(0.5);
+    expect(halfDraft.unit).toBe('cup');
+
+    const negative = await searchFoods('-1 cup steamed broccoli', null, { debug: true });
+    const negated = negative.results.find((result) => result.food.id === 'broccoli-steamed');
+    expect(negated?.preparationMatch?.quantity).toBeNull();
+    const negativeDraft = applyPreparationSelection(
+      { ...draft, quantity: 1, unit: 'serving' },
+      negated?.preparationMatch,
+    );
+    expect(negativeDraft.quantity).toBe(1);
+    expect(negativeDraft.unit).toBe('serving');
+    expect(negativeDraft.calories).toBe(39);
   });
 
   it('does not turn a database timeout into demand or an approximate match', async () => {

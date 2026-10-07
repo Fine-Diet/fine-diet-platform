@@ -113,9 +113,11 @@ import {
 import {
   demoteNonIdentityBrandFlags,
   interpretFoodQuery,
+  preparationAcceptanceRank,
   preparationRankBoost,
   qualifyFoodPreparation,
 } from './preparationInterpretation';
+import { foodViewerOrFilter, foodVisibleToViewer } from './foodVisibility';
 import {
   areSameItem,
   getUpcVariants,
@@ -902,6 +904,8 @@ async function retrieveFuzzyFoodRows(
   tokens: string[],
   tokenGroups: TokenGroup[],
   instr: SearchInstrumentation,
+  viewerPersonId: string | null,
+  rankRow?: (row: FoodObjectRow) => number,
 ): Promise<{
   invoked: boolean;
   rows: FoodObjectRow[];
@@ -967,7 +971,8 @@ async function retrieveFuzzyFoodRows(
         .from('food_objects')
         .select('*')
         .in('id', ids)
-        .eq('is_deleted', false) as unknown as Promise<{
+        .eq('is_deleted', false)
+        .or(foodViewerOrFilter(viewerPersonId)) as unknown as Promise<{
         data: FoodObjectRow[] | null;
         error: { message?: string; code?: string } | null;
       }>,
@@ -984,7 +989,7 @@ async function retrieveFuzzyFoodRows(
   const allowed = new Set(ids);
   const byId = new Map(
     (hydrated.data ?? [])
-      .filter((row) => allowed.has(row.id))
+      .filter((row) => allowed.has(row.id) && foodVisibleToViewer(row, viewerPersonId))
       .map((row) => [row.id, row]),
   );
   const accepted = candidates
@@ -1003,8 +1008,11 @@ async function retrieveFuzzyFoodRows(
       })) {
         return null;
       }
+      const rank = rankRow?.(row) ?? 0;
+      if (rank < 0) return null;
       return {
         row,
+        rank,
         similarity: bestFuzzySimilarity({
           query: normalized,
           tokens,
@@ -1014,8 +1022,8 @@ async function retrieveFuzzyFoodRows(
         }),
       };
     })
-    .filter((item): item is { row: FoodObjectRow; similarity: number } => item !== null)
-    .sort((a, b) => b.similarity - a.similarity || a.row.id.localeCompare(b.row.id))
+    .filter((item): item is { row: FoodObjectRow; rank: number; similarity: number } => item !== null)
+    .sort((a, b) => b.rank - a.rank || b.similarity - a.similarity || a.row.id.localeCompare(b.row.id))
     .slice(0, FUZZY_ACCEPTED_CAP);
 
   for (const item of accepted) {
@@ -1025,7 +1033,7 @@ async function retrieveFuzzyFoodRows(
   return {
     invoked: true,
     rows: accepted.map((item) => item.row),
-    candidateCount: candidates.length,
+    candidateCount: byId.size,
     acceptedCount: accepted.length,
     similarities,
   };
@@ -1155,6 +1163,7 @@ export async function searchFoods(
   let phaseACount = 0;
   let phaseBCount: number | undefined;
   let phaseAFailed = false;
+  let primaryReadFailed = false;
   let recoveryFailed = false;
   let preparationRecoveryCalls = 0;
   let preparationRetrievalStage: FoodSearchPreparationDebug['retrievalStage'] =
@@ -1181,6 +1190,7 @@ export async function searchFoods(
         .select('*')
         .eq('is_deleted', false)
         .or(phaseAFilter)
+        .or(foodViewerOrFilter(personId))
         .limit(limit * 10) as unknown as Promise<{
         data: FoodObjectRow[] | null;
         error: { message?: string; code?: string } | null;
@@ -1188,6 +1198,7 @@ export async function searchFoods(
   );
   if (phaseAOutcome.error) {
     phaseAFailed = true;
+    primaryReadFailed = true;
     console.error('[searchFoods] Phase A error:', phaseAOutcome.error.message);
     debugLog('Step 2A: Phase A ERROR', {
       error: phaseAOutcome.error.message,
@@ -1226,6 +1237,7 @@ export async function searchFoods(
           .select('*')
           .eq('is_deleted', false)
           .or(phaseBFilter!)
+          .or(foodViewerOrFilter(personId))
           .limit(limit * 6) as unknown as Promise<{
           data: FoodObjectRow[] | null;
           error: { message?: string; code?: string } | null;
@@ -1233,6 +1245,7 @@ export async function searchFoods(
     );
     const orError = phaseBOutcome.error;
     const orResults = phaseBOutcome.data;
+    if (orError) primaryReadFailed = true;
     if (!orError && orResults) {
       // Apply brand-gating: if we have brand tokens, filter to items matching brand
       let filteredOrResults = orResults as FoodObjectRow[];
@@ -1262,7 +1275,7 @@ export async function searchFoods(
     const firstCanonical = tokenGroups[0]?.canonical || tokens[0];
     const prefixIsFoodIdentity = preparation.retrieval !== 'identity'
       || preparation.identityTokens.includes(firstCanonical);
-    if (foodRows.length === 0 && prefixIsFoodIdentity) {
+    if (foodRows.length === 0 && prefixIsFoodIdentity && !primaryReadFailed) {
       searchMode = 'fallback_prefix';
       const firstVariant = escapeForLike(tokenGroups[0]?.dbVariants[0] || tokens[0]);
       phaseBFilter = `canonical_name.ilike.${firstVariant}%,brand_name.ilike.${firstVariant}%`;
@@ -1282,12 +1295,18 @@ export async function searchFoods(
             .select('*')
             .eq('is_deleted', false)
             .or(phaseBFilter!)
+            .or(foodViewerOrFilter(personId))
             .limit(limit * 2) as unknown as Promise<{
             data: FoodObjectRow[] | null;
             error: { message?: string; code?: string } | null;
           }>
       );
-      foodRows = (phaseCOutcome.data || []) as FoodObjectRow[];
+      if (phaseCOutcome.error) {
+        primaryReadFailed = true;
+        foodRows = [];
+      } else {
+        foodRows = (phaseCOutcome.data || []) as FoodObjectRow[];
+      }
       phaseBCount = foodRows.length;
     }
   }
@@ -1297,6 +1316,7 @@ export async function searchFoods(
     identityQuery &&
     identityQuery.tokenGroups.length > 0 &&
     !phaseAFailed &&
+    !primaryReadFailed &&
     !foodRows.some((row) => rowCoversIdentity(row, identityQuery.tokenGroups)),
   );
   const fuzzyDecision = shouldRunFuzzyFallback({
@@ -1320,7 +1340,8 @@ export async function searchFoods(
   };
   const fuzzySimilarityById = new Map<string, number>();
   if (fuzzyDecision.run && !deferFuzzyToIdentity) {
-    const fuzzy = await retrieveFuzzyFoodRows(normalized, tokens, tokenGroups, instr);
+    const fuzzy = await retrieveFuzzyFoodRows(normalized, tokens, tokenGroups, instr, personId);
+    if (fuzzy.error && foodRows.length === 0) primaryReadFailed = true;
     fuzzyFallbackDebug = {
       fired: fuzzy.invoked,
       reason: fuzzyDecision.reason,
@@ -1352,6 +1373,16 @@ export async function searchFoods(
         identityQuery.tokens,
         identityQuery.tokenGroups,
         instr,
+        personId,
+        (row) => {
+          const match = qualifyFoodPreparation(
+            row.canonical_name,
+            preparation,
+            Array.isArray(row.measures) ? row.measures as Array<{ unit: string; grams: number }> : null,
+            typeof row.serving_size_g === 'number' ? row.serving_size_g : null,
+          );
+          return match ? preparationAcceptanceRank(match.status) : 0;
+        },
       );
       if (recovered.error && recovered.rows.length === 0) recoveryFailed = true;
       const existingIds = new Set(foodRows.map((row) => row.id));
@@ -1375,6 +1406,7 @@ export async function searchFoods(
             .select('*')
             .eq('is_deleted', false)
             .or(identityFilter)
+            .or(foodViewerOrFilter(personId))
             .limit(limit * 4) as unknown as Promise<{
             data: FoodObjectRow[] | null;
             error: { message?: string; code?: string } | null;
@@ -1406,6 +1438,7 @@ export async function searchFoods(
       if (!foodRows.some((row) => row.id === id)) fuzzySimilarityById.delete(id);
     }
   }
+  foodRows = foodRows.filter((row) => foodVisibleToViewer(row, personId));
   
   debugLog('Step 2: Final DB Results', { 
     totalCount: foodRows.length, 
@@ -1816,8 +1849,12 @@ export async function searchFoods(
   
   let totalShown = 0;
   const sections: SearchResultSection[] = [];
+  const sectionHasExact = (key: SectionKey) =>
+    filteredBuckets[key].some((item) => item.preparationMatch?.status === 'exact_preparation');
+  let exactAlreadyShown = false;
   
-  for (const key of sectionsToProcess) {
+  for (let sectionIndex = 0; sectionIndex < sectionsToProcess.length; sectionIndex += 1) {
+    const key = sectionsToProcess[sectionIndex];
     const items = filteredBuckets[key];
     const config = SECTION_CONFIG[key];
     
@@ -1833,7 +1870,12 @@ export async function searchFoods(
     const budgetForSection = key === 'branded'
       ? (limit - totalShown) // Branded gets all remaining (including reserved)
       : (effectiveTotalLimit - totalShown);
-    const remainingTotal = budgetForSection;
+    const laterExact = preparation.retrieval === 'identity'
+      && !requestedSection
+      && !exactAlreadyShown
+      && !sectionHasExact(key)
+      && sectionsToProcess.slice(sectionIndex + 1).some((later) => sectionHasExact(later));
+    const remainingTotal = Math.max(0, budgetForSection - (laterExact ? 1 : 0));
     
     // If we've hit the overall limit and no specific section requested, include metadata only
     if (remainingTotal <= 0 && !requestedSection) {
@@ -1881,6 +1923,9 @@ export async function searchFoods(
     });
     
     totalShown += shownItems.length;
+    if (shownItems.some((item) => item.preparationMatch?.status === 'exact_preparation')) {
+      exactAlreadyShown = true;
+    }
   }
   
   // === STEP 7b: Phase 5 — Trust-ordered fallback (promoted_off → raw OFF) ===
@@ -2230,7 +2275,7 @@ export async function searchFoods(
     totalCount,
   };
   
-  const catalogReadFailed = (phaseAFailed && foodRows.length === 0) || recoveryFailed;
+  const catalogReadFailed = primaryReadFailed || recoveryFailed || (phaseAFailed && foodRows.length === 0);
   const shownPreparation = slottedResults
     .map((result) => result.preparationMatch)
     .filter((match): match is NonNullable<typeof match> => Boolean(match));
