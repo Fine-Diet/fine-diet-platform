@@ -292,6 +292,18 @@ export function calculateCurrentProgramDay(args: {
   return Math.max(1, rawDay - Math.max(args.pausedDaysTotal ?? 0, 0));
 }
 
+function calculateProgramDayAtDateKey(
+  selectedStartDate: string,
+  dateKey: string,
+  pausedDaysTotal = 0,
+): number {
+  const start = assertDateKey(selectedStartDate, 'selectedStartDate');
+  const date = assertDateKey(dateKey, 'dateKey');
+  const rawDay = dateKeyToEpochDay(date) - dateKeyToEpochDay(start) + 1;
+  if (rawDay <= 0) return 0;
+  return Math.max(1, rawDay - Math.max(pausedDaysTotal, 0));
+}
+
 /** Stored statuses that count as open (unique-open-enrollment constraint). */
 const OPEN_STORED_ENROLLMENT_STATUSES: readonly ProgramEnrollmentStatus[] = [
   'pre_start',
@@ -434,6 +446,17 @@ async function getLatestPublishedVersion(
     .maybeSingle();
   if (error) throw new Error(`program version lookup failed: ${error.message}`);
   return data ? rowToVersion(data as ProgramVersionRow) : null;
+}
+
+/** Resolve the current published version for a program slug. Used only for
+ * the authorized pre-enrollment Day 0 preview; enrolled members must use the
+ * immutable version recorded on their enrollment. */
+export async function getLatestPublishedProgramVersionForSlug(
+  programSlug: string,
+): Promise<ProgramVersion | null> {
+  const program = await getProgramBySlug(programSlug);
+  if (!program) return null;
+  return getLatestPublishedVersion(program.id);
 }
 
 async function verifyEnrollmentSource(input: {
@@ -838,22 +861,41 @@ export async function getProgramRuntimeSummary(
   ]);
   if (!program || !version) return null;
 
-  const currentDay = calculateCurrentProgramDay({
-    selectedStartDate: enrollment.selected_start_date,
-    timezone: enrollment.timezone,
-    pausedDaysTotal: enrollment.paused_days_total,
-  });
+  const now = new Date();
+  const resolvedStatus = resolveEnrollmentStatus(enrollment, now, version.duration_days);
+  const pauseStartedAt =
+    typeof enrollment.metadata?.pause_started_at === 'string'
+      ? enrollment.metadata.pause_started_at
+      : null;
+  const completedAt = enrollment.completed_at;
+  const currentDay = resolvedStatus === 'paused' && pauseStartedAt
+    ? calculateProgramDayAtDateKey(
+        enrollment.selected_start_date,
+        pauseStartedAt,
+        enrollment.paused_days_total,
+      )
+    : resolvedStatus === 'completed' && completedAt
+      ? Math.min(
+          version.duration_days ?? Number.MAX_SAFE_INTEGER,
+          calculateProgramDayAtDateKey(
+            enrollment.selected_start_date,
+            dateKeyInTimeZone(new Date(completedAt), enrollment.timezone || 'UTC'),
+            enrollment.paused_days_total,
+          ),
+        )
+    : calculateCurrentProgramDay({
+        selectedStartDate: enrollment.selected_start_date,
+        timezone: enrollment.timezone,
+        pausedDaysTotal: enrollment.paused_days_total,
+        now,
+      });
   const nextTemplate = await getCheckinTemplateForDay(version.id, currentDay);
 
   return {
     enrollment,
     version,
     program,
-    resolved_status: resolveEnrollmentStatus(
-      enrollment,
-      new Date(),
-      version.duration_days,
-    ),
+    resolved_status: resolvedStatus,
     current_day: currentDay,
     timezone: enrollment.timezone,
     next_checkin_template: nextTemplate,
@@ -930,12 +972,40 @@ export async function respondToProgramCheckin(
     throw err;
   }
 
+  const version = await getVersionById(enrollment.program_version_id);
+  if (!version || version.status !== 'published') {
+    const err = new Error('The enrolled program version is unavailable.');
+    (err as Error & { code?: string }).code = 'PROGRAM_CHECKIN_NOT_AVAILABLE';
+    throw err;
+  }
+  const now = new Date();
+  const currentDay = calculateCurrentProgramDay({
+    selectedStartDate: enrollment.selected_start_date,
+    timezone: enrollment.timezone,
+    pausedDaysTotal: enrollment.paused_days_total,
+    now,
+  });
+  const resolvedStatus = resolveEnrollmentStatus(
+    enrollment,
+    now,
+    version.duration_days,
+  );
+  if (resolvedStatus !== 'active') {
+    const err = new Error('Check-ins are unavailable in this enrollment state.');
+    (err as Error & { code?: string }).code = 'PROGRAM_CHECKIN_NOT_AVAILABLE';
+    throw err;
+  }
+
   let template: ProgramCheckinTemplate | null = null;
   let checkinDay = input.checkinDay ?? null;
 
   if (input.checkinTemplateId) {
     template = await getCheckinTemplateById(input.checkinTemplateId);
-    if (!template || template.program_version_id !== enrollment.program_version_id) {
+    if (
+      !template ||
+      template.program_version_id !== enrollment.program_version_id ||
+      template.status !== 'published'
+    ) {
       const err = new Error('Check-in template does not belong to this enrollment.');
       (err as Error & { code?: string }).code = 'PROGRAM_CHECKIN_TEMPLATE_DENIED';
       throw err;
@@ -949,10 +1019,20 @@ export async function respondToProgramCheckin(
       enrollment.program_version_id,
       checkinDay,
     );
+    if (!template) {
+      const err = new Error('No published check-in template is available for this program day.');
+      (err as Error & { code?: string }).code = 'PROGRAM_CHECKIN_TEMPLATE_DENIED';
+      throw err;
+    }
   }
 
   if (checkinDay == null) {
     throw new Error('Either checkin_template_id or checkin_day is required.');
+  }
+  if (checkinDay > currentDay) {
+    const err = new Error('Future-day check-ins are not available yet.');
+    (err as Error & { code?: string }).code = 'PROGRAM_CHECKIN_NOT_AVAILABLE';
+    throw err;
   }
 
   const nowIso = new Date().toISOString();

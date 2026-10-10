@@ -35,12 +35,24 @@ export default async function handler(
     });
   }
 
+  const rawVersion = req.query.version_id;
+  const versionId = Array.isArray(rawVersion) ? rawVersion[0] : rawVersion;
+  if (typeof versionId !== 'string' || !versionId) {
+    return res.status(400).json({ error: 'version_id is required' });
+  }
+  const scope = versionId === 'unversioned' ? null : versionId;
+
   try {
-    const rows = await reorderDeliveryModules(id, parsed.data.ordered_ids);
+    const rows = await reorderDeliveryModules(id, parsed.data.ordered_ids, scope);
     return res.status(200).json(rows);
   } catch (err) {
     console.error('[admin/programs/:id/delivery-modules-reorder] error:', err);
-    return res.status(500).json({
+    const code = (err as { code?: string } | undefined)?.code;
+    const status =
+      code === 'VERSION_SCOPE_MISMATCH' || code === 'VERSION_PROGRAM_MISMATCH'
+        ? 400
+        : 500;
+    return res.status(status).json({
       error: err instanceof Error ? err.message : 'Server error',
     });
   }

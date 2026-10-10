@@ -15,6 +15,7 @@ import { clearPersistedAuthContext } from '@/lib/auth/authContext';
 import { bindNdsAuthContext } from '@/lib/nds/ndsDayStore';
 import { startNdsClientLifecycle } from '@/lib/nds/ndsClientLifecycle';
 import { isAppShellRoute } from '@/lib/routes/appRoutes';
+import { isCompositionPreviewDevIsolation } from '@/lib/routes/compositionPreviewDevIsolation';
 import Link from 'next/link';
 
 interface MyAppProps extends AppProps {
@@ -31,6 +32,10 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
 function MyApp({ Component, pageProps, navigation, footerContent, globalContent }: MyAppProps) {
   const router = useRouter();
   const [authError, setAuthError] = useState<string | null>(null);
+  const isolateCompositionPreview = isCompositionPreviewDevIsolation(
+    process.env.NODE_ENV,
+    router.pathname,
+  );
 
   // Surface OAuth error from ?auth_error= query param and clear it from the URL
   useEffect(() => {
@@ -41,10 +46,14 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
     }
   }, [router.query]);
 
-  useEffect(() => startNdsClientLifecycle(), []);
+  useEffect(() => {
+    if (isolateCompositionPreview) return;
+    return startNdsClientLifecycle();
+  }, [isolateCompositionPreview]);
 
   // Post-OAuth assessment claim: fire once when a SIGNED_IN event fires (covers OAuth redirect)
   useEffect(() => {
+    if (isolateCompositionPreview) return;
     const unsubscribe = onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
         bindNdsAuthContext({ authUserId: null, epochChanged: true });
@@ -78,7 +87,7 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
       }
     });
     return unsubscribe;
-  }, []);
+  }, [isolateCompositionPreview]);
 
   // Check if current route is an admin route
   const isAdminRoute = router.pathname.startsWith('/admin') || router.asPath.startsWith('/admin');

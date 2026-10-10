@@ -63,7 +63,7 @@ describe('delivery fallback generalizes beyond Baseline', () => {
     mockFrom.mockReset();
   });
 
-  test('a non-Baseline program with published DB modules uses source "admin" and version filtering', async () => {
+  test('returns only exact-version published modules and excludes unversioned and other versions', async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'programs') {
         return query({
@@ -81,6 +81,9 @@ describe('delivery fallback generalizes beyond Baseline', () => {
           ],
         });
       }
+      if (table === 'program_versions') {
+        return query({ data: [{ id: 'v2', program_id: 'program-2', version_key: 'second-v2', status: 'published' }] });
+      }
       return query({ data: [] });
     });
 
@@ -91,8 +94,7 @@ describe('delivery fallback generalizes beyond Baseline', () => {
 
     const expectedSource: DeliveryModuleSource = 'admin';
     expect(result.source).toBe(expectedSource);
-    // null-version (shared) + matching v2; v9 filtered out
-    expect(result.modules.map((m) => m.id)).toEqual(['m-null', 'm-v2']);
+    expect(result.modules.map((m) => m.id)).toEqual(['m-v2']);
   });
 
   test('an unregistered program with no DB modules returns source "none" (no Baseline leakage)', async () => {
@@ -120,12 +122,15 @@ describe('delivery fallback generalizes beyond Baseline', () => {
     expect(result.modules).toHaveLength(0);
   });
 
-  test('Baseline still falls back to the code-owned set when DB is empty', async () => {
+  test('preserves code-owned Baseline modules for the exact seeded baseline-v1 only', async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'programs') {
         return query({
           data: [{ id: 'program-1', slug: 'baseline', status: 'published' }],
         });
+      }
+      if (table === 'program_versions') {
+        return query({ data: [{ id: 'version-1', program_id: 'program-1', version_key: 'baseline-v1', status: 'published' }] });
       }
       return query({ data: [] });
     });
@@ -136,6 +141,57 @@ describe('delivery fallback generalizes beyond Baseline', () => {
     });
 
     expect(result.source).toBe('baseline_code');
-    expect(result.modules.map((m) => m.id)).toContain('baseline-prep-overview');
+    expect(result.modules.length).toBeGreaterThan(0);
+    expect(result.modules.some((module) => module.moduleType === 'prep')).toBe(true);
+  });
+
+  test('does not apply the Baseline fallback to later or unpublished versions', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'programs') {
+        return query({ data: [{ id: 'program-1', slug: 'baseline', status: 'published' }] });
+      }
+      if (table === 'program_versions') {
+        return query({ data: [{ id: 'version-2', program_id: 'program-1', version_key: 'v2-1234', status: 'published' }] });
+      }
+      return query({ data: [] });
+    });
+    const laterVersion = await getDeliveryModulesForProgramWithFallback({
+      programSlug: 'baseline', programVersionId: 'version-2',
+    });
+    expect(laterVersion).toEqual({ source: 'none', modules: [] });
+
+    mockFrom.mockImplementation((table: string) => table === 'programs'
+      ? query({ data: [{ id: 'program-1', slug: 'baseline', status: 'published' }] })
+      : table === 'program_versions'
+        ? query({ data: [{ id: 'version-1', program_id: 'program-1', version_key: 'baseline-v1', status: 'draft' }] })
+        : query({ data: [] }));
+    const draft = await getDeliveryModulesForProgramWithFallback({
+      programSlug: 'baseline', programVersionId: 'version-1',
+    });
+    expect(draft).toEqual({ source: 'none', modules: [] });
+  });
+
+  test('a database read error fails closed instead of returning fallback content', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'programs') {
+        return query({
+          data: [{ id: 'program-1', slug: 'baseline', status: 'published' }],
+        });
+      }
+      if (table === 'program_versions') {
+        return query({ data: [{ id: 'version-1', program_id: 'program-1', version_key: 'baseline-v1', status: 'published' }] });
+      }
+      if (table === 'program_delivery_modules') {
+        return query({ error: { message: 'read denied' } });
+      }
+      return query({ data: [] });
+    });
+
+    await expect(
+      getDeliveryModulesForProgramWithFallback({
+        programSlug: 'baseline',
+        programVersionId: 'version-1',
+      }),
+    ).rejects.toThrow('delivery modules lookup failed: read denied');
   });
 });

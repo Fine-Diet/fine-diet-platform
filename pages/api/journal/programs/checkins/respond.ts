@@ -130,6 +130,8 @@ export default async function handler(
         ? 404
         : code === 'PROGRAM_CHECKIN_TEMPLATE_DENIED'
           ? 403
+          : code === 'PROGRAM_CHECKIN_NOT_AVAILABLE'
+            ? 403
           : 500;
     console.error('[journal/programs/checkins/respond] error:', err);
     return res.status(status).json({

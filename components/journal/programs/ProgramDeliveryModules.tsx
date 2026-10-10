@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import type { ProgramProgressSummary } from '@/lib/programs/progressTypes';
 import type { ProgramRuntimeSummary } from '@/lib/programs/runtimeTypes';
+import { shouldPreserveAuthoredOrder } from '@/lib/programs/deliveryComposition';
 import {
   filterVisibleDeliveryModules,
   resolveDeliveryModuleCopy,
@@ -21,6 +22,7 @@ interface ProgramDeliveryModulesProps {
   presentation?: 'default' | 'light' | 'dark' | 'deep' | 'prep-workflow';
   checkinDue?: boolean;
   day21Handled?: boolean;
+  viewedDay?: number;
   anchors?: Record<string, string>;
 }
 
@@ -284,6 +286,34 @@ function BlockRenderer({
           currentDay={runtimeSummary?.current_day ?? null}
         />
       );
+    case 'audio':
+      return (
+        <figure className="max-w-2xl">
+          <figcaption className="text-sm font-semibold">{block.title}</figcaption>
+          {block.description && (
+            <p className="mt-1 text-xs leading-relaxed opacity-70">
+              {block.description}
+            </p>
+          )}
+          <audio className="mt-3 w-full" controls preload="none" src={block.url}>
+            {block.title}
+          </audio>
+        </figure>
+      );
+    case 'video':
+      return (
+        <p className="text-sm">
+          <a
+            href={block.url}
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+          >
+            {block.title}
+          </a>
+          {block.description ? ` — ${block.description}` : ''}
+        </p>
+      );
   }
 }
 
@@ -388,7 +418,9 @@ function DeliveryCard({
   ctx: ProgramDeliveryRuntimeContext;
   presentation: ProgramDeliveryModulesProps['presentation'];
 }) {
-  const copy = resolveDeliveryModuleCopy(module, runtimeSummary);
+  const copy = resolveDeliveryModuleCopy(module, runtimeSummary, {
+    viewedDay: ctx.viewedDay,
+  });
   const isLight = presentation === 'light';
   const isEditorial = presentation !== 'default';
   const defaultLightSurface =
@@ -518,7 +550,18 @@ function PrepWorkflow({
   const activeState =
     states.find((module) => module.id === activeStateId) ?? states[0];
 
-  if (!frame || states.length === 0) return null;
+  if (!frame || states.length === 0) {
+    return (
+      <OrderedModules
+        modules={modules}
+        runtimeSummary={ctx.runtimeSummary}
+        progressSummary={undefined}
+        anchors={anchors}
+        ctx={ctx}
+        presentation="default"
+      />
+    );
+  }
 
   return (
     <section className="overflow-hidden rounded-[2rem] border border-white/35 bg-black/10">
@@ -595,6 +638,38 @@ function PrepWorkflow({
   );
 }
 
+function OrderedModules({
+  modules,
+  runtimeSummary,
+  progressSummary,
+  anchors,
+  ctx,
+  presentation,
+}: {
+  modules: ProgramDeliveryModuleDefinition[];
+  runtimeSummary: ProgramRuntimeSummary | null;
+  progressSummary: ProgramProgressSummary | null | undefined;
+  anchors: Record<string, string> | undefined;
+  ctx: ProgramDeliveryRuntimeContext;
+  presentation: ProgramDeliveryModulesProps['presentation'];
+}) {
+  return (
+    <div className="space-y-6">
+      {modules.map((module) => (
+        <DeliveryCard
+          key={module.id}
+          module={module}
+          runtimeSummary={runtimeSummary}
+          progressSummary={progressSummary}
+          anchors={anchors}
+          ctx={ctx}
+          presentation={presentation === 'prep-workflow' ? 'default' : presentation}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ProgramDeliveryModules({
   runtimeSummary,
   progressSummary,
@@ -602,15 +677,30 @@ export function ProgramDeliveryModules({
   presentation = 'default',
   checkinDue = false,
   day21Handled = false,
+  viewedDay,
   anchors,
 }: ProgramDeliveryModulesProps) {
   const ctx: ProgramDeliveryRuntimeContext = {
     runtimeSummary,
     checkinDue,
     day21Handled,
+    viewedDay,
   };
   const visibleModules = filterVisibleDeliveryModules(modules, ctx);
   if (visibleModules.length === 0) return null;
+
+  if (shouldPreserveAuthoredOrder(visibleModules)) {
+    return (
+      <OrderedModules
+        modules={visibleModules}
+        runtimeSummary={runtimeSummary}
+        progressSummary={progressSummary}
+        anchors={anchors}
+        ctx={ctx}
+        presentation={presentation}
+      />
+    );
+  }
 
   if (presentation === 'prep-workflow') {
     return (

@@ -15,7 +15,7 @@
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getCurrentUserWithRoleFromSSR,
   type AuthenticatedUser,
@@ -36,6 +36,16 @@ import {
   PROGRAM_DELIVERY_MODULE_TYPES,
   type ProgramDeliveryModuleType,
 } from '@/lib/programs/deliveryModuleTypes';
+import { DeliveryCompositionPreview } from '@/components/admin/programPreview/DeliveryCompositionPreview';
+import {
+  buildCompositionSavePayload,
+  definitionFromCompositionPayload,
+  definitionFromDeliveryFields,
+  metadataHasComposition,
+  overlayEditedDefinition,
+  type EditorMediaBlockInput,
+} from '@/lib/programs/deliveryComposition';
+import type { ProgramCheckinTemplate } from '@/lib/programs/runtimeTypes';
 import type { ProgramDeliveryModuleRow } from '@/lib/programs/deliveryModuleAdminServerService';
 
 interface Props {
@@ -465,6 +475,12 @@ interface DeliveryModuleFormValues {
   cta_json: string;
   anchor_json: string;
   metadata: string;
+  composition_enabled: boolean;
+  program_version_id: string;
+  media_blocks: EditorMediaBlockInput[];
+  hero_title: string;
+  hero_eyebrow: string;
+  hero_image_url: string;
 }
 
 function emptyDeliveryModuleForm(): DeliveryModuleFormValues {
@@ -481,6 +497,12 @@ function emptyDeliveryModuleForm(): DeliveryModuleFormValues {
     cta_json: '{}',
     anchor_json: '{}',
     metadata: '{}',
+    composition_enabled: false,
+    program_version_id: '',
+    media_blocks: [],
+    hero_title: '',
+    hero_eyebrow: '',
+    hero_image_url: '',
   };
 }
 
@@ -491,6 +513,32 @@ function jsonText(value: Record<string, unknown>): string {
 function deliveryModuleToForm(
   row: ProgramDeliveryModuleRow,
 ): DeliveryModuleFormValues {
+  const blocks = Array.isArray(row.metadata.blocks)
+    ? (row.metadata.blocks as Array<Record<string, unknown>>)
+    : [];
+  const mediaBlocks: EditorMediaBlockInput[] = blocks.flatMap((block) => {
+    if (block.type !== 'audio' && block.type !== 'video') return [];
+    return [
+      {
+        id: typeof block.id === 'string' ? block.id : '',
+        type: block.type,
+        url: typeof block.url === 'string' ? block.url : '',
+        title: typeof block.title === 'string' ? block.title : '',
+        description:
+          typeof block.description === 'string' ? block.description : '',
+      },
+    ];
+  });
+  const hero =
+    row.metadata.hero &&
+    typeof row.metadata.hero === 'object' &&
+    !Array.isArray(row.metadata.hero)
+      ? (row.metadata.hero as {
+          title?: unknown;
+          eyebrow?: unknown;
+          imageUrl?: unknown;
+        })
+      : undefined;
   return {
     module_key: row.module_key,
     module_type: row.module_type,
@@ -504,6 +552,12 @@ function deliveryModuleToForm(
     cta_json: jsonText(row.cta_json),
     anchor_json: jsonText(row.anchor_json),
     metadata: jsonText(row.metadata),
+    composition_enabled: metadataHasComposition(row.metadata),
+    program_version_id: row.program_version_id ?? '',
+    media_blocks: mediaBlocks,
+    hero_title: typeof hero?.title === 'string' ? hero.title : '',
+    hero_eyebrow: typeof hero?.eyebrow === 'string' ? hero.eyebrow : '',
+    hero_image_url: typeof hero?.imageUrl === 'string' ? hero.imageUrl : '',
   };
 }
 
@@ -526,34 +580,176 @@ function optionalDay(value: string): number | null {
   return trimmed === '' ? null : Number(trimmed);
 }
 
-function buildDeliveryModulePayload(form: DeliveryModuleFormValues) {
-  return {
-    module_key: form.module_key.trim(),
-    module_type: form.module_type,
-    title: form.title.trim(),
-    eyebrow: form.eyebrow.trim() || null,
-    body: form.body.trim(),
-    day_start: optionalDay(form.day_start),
-    day_end: optionalDay(form.day_end),
+function readJsonField(
+  label: string,
+  value: string,
+): { value: Record<string, unknown>; error: string | null } {
+  try {
+    return { value: parseJsonObject(label, value), error: null };
+  } catch (error) {
+    return {
+      value: {},
+      error: error instanceof Error ? error.message : `${label} is invalid.`,
+    };
+  }
+}
+
+function compositionInput(
+  form: DeliveryModuleFormValues,
+  fields: {
+    metadata: Record<string, unknown>;
+    capacityVariants: Record<string, unknown>;
+    cta: Record<string, unknown>;
+    anchor: Record<string, unknown>;
+    durationDays?: number | null;
+  },
+) {
+  return buildCompositionSavePayload({
+    moduleKey: form.module_key,
+    moduleType: form.module_type,
+    title: form.title,
+    eyebrow: form.eyebrow,
+    body: form.body,
+    dayStart: optionalDay(form.day_start),
+    dayEnd: optionalDay(form.day_end),
     status: form.status,
-    capacity_variants_json: parseJsonObject(
+    programVersionId: form.program_version_id,
+    displayOrder: null,
+    compositionEnabled: form.composition_enabled,
+    mediaBlocks: form.media_blocks,
+    heroTitle: form.hero_title,
+    heroEyebrow: form.hero_eyebrow,
+    heroImageUrl: form.hero_image_url,
+    metadata: fields.metadata,
+    capacityVariants: fields.capacityVariants,
+    cta: fields.cta,
+    anchor: fields.anchor,
+    durationDays: fields.durationDays,
+  });
+}
+
+function buildDeliveryModulePayload(
+  form: DeliveryModuleFormValues,
+  durationDays?: number | null,
+) {
+  const result = compositionInput(form, {
+    metadata: parseJsonObject('Metadata JSON', form.metadata),
+    capacityVariants: parseJsonObject(
       'Capacity variants JSON',
       form.capacity_variants_json,
     ),
-    cta_json: parseJsonObject('CTA JSON', form.cta_json),
-    anchor_json: parseJsonObject('Anchor JSON', form.anchor_json),
-    metadata: parseJsonObject('Metadata JSON', form.metadata),
+    cta: parseJsonObject('CTA JSON', form.cta_json),
+    anchor: parseJsonObject('Anchor JSON', form.anchor_json),
+    durationDays,
+  });
+  if (result.issues.length > 0) {
+    throw new Error(result.issues[0]);
+  }
+  return result.payload;
+}
+
+function editorPreview(
+  form: DeliveryModuleFormValues,
+  programSlug: string,
+  versionRows: ProgramDeliveryModuleRow[],
+  durationDays: number | null,
+): {
+  modules: ReturnType<typeof definitionFromCompositionPayload>['definition'][];
+  issues: string[];
+} {
+  const metadata = readJsonField('Metadata JSON', form.metadata);
+  const capacity = readJsonField(
+    'Capacity variants JSON',
+    form.capacity_variants_json,
+  );
+  const cta = readJsonField('CTA JSON', form.cta_json);
+  const anchor = readJsonField('Anchor JSON', form.anchor_json);
+  const jsonIssues = [metadata.error, capacity.error, cta.error, anchor.error].filter(
+    (issue): issue is string => Boolean(issue),
+  );
+  if (jsonIssues.length > 0 || !form.composition_enabled) {
+    return {
+      modules: [],
+      issues: form.composition_enabled
+        ? jsonIssues
+        : ['Composition preview applies after the composition draft is enabled.'],
+    };
+  }
+  const saved = compositionInput(form, {
+    metadata: metadata.value,
+    capacityVariants: capacity.value,
+    cta: cta.value,
+    anchor: anchor.value,
+    durationDays,
+  });
+  const mapped = definitionFromCompositionPayload({
+    programSlug,
+    payload: saved.payload,
+  });
+  const issues = [...saved.issues, ...mapped.issues];
+  if (issues.length > 0) return { modules: [], issues };
+  const base = versionRows
+    .filter(
+      (row) =>
+        row.program_version_id === form.program_version_id &&
+        row.status === 'draft' &&
+        metadataHasComposition(row.metadata),
+    )
+    .sort((a, b) => a.display_order - b.display_order)
+    .map(
+      (row) =>
+        definitionFromDeliveryFields({
+          programSlug,
+          moduleKey: row.module_key,
+          moduleType: row.module_type,
+          title: row.title,
+          eyebrow: row.eyebrow,
+          body: row.body,
+          dayStart: row.day_start,
+          dayEnd: row.day_end,
+          statusVisibility: row.status_visibility,
+          metadata: row.metadata,
+          capacityVariants: row.capacity_variants_json,
+          cta: row.cta_json,
+          anchor: row.anchor_json,
+          safetyNotes: row.safety_notes,
+          noClaimsNotes: row.no_claims_notes,
+        }).definition,
+    );
+  return {
+    modules: overlayEditedDefinition(base, mapped.definition),
+    issues: [],
   };
 }
 
 function DeliveryModuleForm({
   initial,
   submitLabel,
+  programSlug,
+  programTitle,
+  versions,
+  versionRows,
+  durationDays,
+  checkinTemplates,
+  lockedVersionId,
   onSave,
   onCancel,
 }: {
   initial: DeliveryModuleFormValues;
   submitLabel: string;
+  programSlug: string;
+  programTitle: string;
+  versions: Array<{
+    id: string;
+    version_label: string | null;
+    version_key: string;
+    duration_days: number | null;
+    status: string;
+  }>;
+  versionRows: ProgramDeliveryModuleRow[];
+  durationDays: number | null;
+  checkinTemplates: ProgramCheckinTemplate[];
+  lockedVersionId: string;
   onSave: (payload: ReturnType<typeof buildDeliveryModulePayload>) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -571,7 +767,11 @@ function DeliveryModuleForm({
     setSaving(true);
     setErr(null);
     try {
-      await onSave(buildDeliveryModulePayload(form));
+      const versionLocked =
+        lockedVersionId && lockedVersionId !== 'unversioned'
+          ? { ...form, program_version_id: lockedVersionId }
+          : form;
+      await onSave(buildDeliveryModulePayload(versionLocked, durationDays));
     } catch (error) {
       setErr(error instanceof Error ? error.message : 'Save failed.');
     } finally {
@@ -720,6 +920,174 @@ function DeliveryModuleForm({
           className={`${LIGHT_CONTROL_COMPACT_CLASS} font-mono text-xs`}
         />
       </div>
+      <div className="md:col-span-6 flex items-center gap-2">
+        <input
+          id="composition-enabled"
+          type="checkbox"
+          checked={form.composition_enabled}
+          onChange={(e) => set('composition_enabled', e.target.checked)}
+        />
+        <label htmlFor="composition-enabled" className="text-xs text-gray-700">
+          Composition draft for one program version
+        </label>
+      </div>
+      <div className="md:col-span-3">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Program version
+        </label>
+        <input
+          list="program-version-options"
+          value={
+            lockedVersionId && lockedVersionId !== 'unversioned'
+              ? lockedVersionId
+              : form.program_version_id
+          }
+          onChange={(e) => set('program_version_id', e.target.value)}
+          readOnly={Boolean(lockedVersionId && lockedVersionId !== 'unversioned')}
+          className={`${LIGHT_CONTROL_COMPACT_CLASS} font-mono`}
+          placeholder="Version id"
+        />
+        <datalist id="program-version-options">
+          {versions.map((version) => (
+            <option key={version.id} value={version.id}>
+              {version.version_label || version.version_key}
+            </option>
+          ))}
+        </datalist>
+      </div>
+      <div className="md:col-span-3">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Media for this day
+        </label>
+        <div className="space-y-2">
+          {form.media_blocks.map((block, index) => (
+            <div key={`${block.id}-${index}`} className="grid grid-cols-2 gap-2">
+              <select
+                value={block.type}
+                onChange={(e) => {
+                  const type = e.target.value as '' | 'audio' | 'video';
+                  set(
+                    'media_blocks',
+                    form.media_blocks.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, type } : item,
+                    ),
+                  );
+                }}
+                className={LIGHT_CONTROL_COMPACT_CLASS}
+              >
+                <option value="">No media</option>
+                <option value="audio">Audio</option>
+                <option value="video">Video</option>
+              </select>
+              <input
+                value={block.url}
+                onChange={(e) =>
+                  set(
+                    'media_blocks',
+                    form.media_blocks.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, url: e.target.value } : item,
+                    ),
+                  )
+                }
+                className={LIGHT_CONTROL_COMPACT_CLASS}
+                placeholder="https:// or /path"
+              />
+              <input
+                value={block.id}
+                onChange={(e) =>
+                  set(
+                    'media_blocks',
+                    form.media_blocks.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, id: e.target.value } : item,
+                    ),
+                  )
+                }
+                className={LIGHT_CONTROL_COMPACT_CLASS}
+                placeholder="media id"
+              />
+              <input
+                value={block.title}
+                onChange={(e) =>
+                  set(
+                    'media_blocks',
+                    form.media_blocks.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, title: e.target.value }
+                        : item,
+                    ),
+                  )
+                }
+                className={LIGHT_CONTROL_COMPACT_CLASS}
+                placeholder="media title"
+              />
+              <input
+                value={block.description}
+                onChange={(e) =>
+                  set(
+                    'media_blocks',
+                    form.media_blocks.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, description: e.target.value }
+                        : item,
+                    ),
+                  )
+                }
+                className={`${LIGHT_CONTROL_COMPACT_CLASS} col-span-2`}
+                placeholder="media description"
+              />
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              set('media_blocks', [
+                ...form.media_blocks,
+                {
+                  id: `${form.module_key || 'media'}-${form.media_blocks.length + 1}`,
+                  type: 'audio',
+                  url: '',
+                  title: '',
+                  description: '',
+                },
+              ])
+            }
+            className="text-xs text-blue-700 hover:underline"
+          >
+            Add media block
+          </button>
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Hero title
+        </label>
+        <input
+          value={form.hero_title}
+          onChange={(e) => set('hero_title', e.target.value)}
+          className={LIGHT_CONTROL_COMPACT_CLASS}
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Hero eyebrow
+        </label>
+        <input
+          value={form.hero_eyebrow}
+          onChange={(e) => set('hero_eyebrow', e.target.value)}
+          className={LIGHT_CONTROL_COMPACT_CLASS}
+        />
+      </div>
+      <div className="md:col-span-4">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Hero image
+        </label>
+        <input
+          value={form.hero_image_url}
+          onChange={(e) => set('hero_image_url', e.target.value)}
+          className={LIGHT_CONTROL_COMPACT_CLASS}
+          placeholder="https:// or /path"
+        />
+      </div>
       <div className="md:col-span-6">
         <label className="block text-xs font-medium text-gray-700 mb-1">
           Metadata JSON
@@ -749,41 +1117,227 @@ function DeliveryModuleForm({
         </button>
         {err && <p className="text-sm text-red-700">{err}</p>}
       </div>
+      <div className="md:col-span-6">
+        <DeliveryCompositionPreview
+          programSlug={programSlug}
+          programTitle={programTitle}
+          source="unsaved"
+          versionId={
+            lockedVersionId && lockedVersionId !== 'unversioned'
+              ? lockedVersionId
+              : form.program_version_id
+          }
+          durationDays={durationDays}
+          checkinTemplates={checkinTemplates}
+          modules={
+            editorPreview(
+              lockedVersionId && lockedVersionId !== 'unversioned'
+                ? { ...form, program_version_id: lockedVersionId }
+                : form,
+              programSlug,
+              versionRows,
+              durationDays,
+            ).modules
+          }
+          validationIssues={
+            editorPreview(
+              lockedVersionId && lockedVersionId !== 'unversioned'
+                ? { ...form, program_version_id: lockedVersionId }
+                : form,
+              programSlug,
+              versionRows,
+              durationDays,
+            ).issues
+          }
+        />
+      </div>
     </form>
   );
 }
 
-function DeliveryModulesSection({ programId }: { programId: string }) {
+function DeliveryModulesSection({
+  programId,
+  programSlug,
+  programTitle,
+}: {
+  programId: string;
+  programSlug: string;
+  programTitle: string;
+}) {
   const [rows, setRows] = useState<ProgramDeliveryModuleRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState('');
+  const [checkinTemplates, setCheckinTemplates] = useState<ProgramCheckinTemplate[]>(
+    [],
+  );
+  const [checkinDraft, setCheckinDraft] = useState<{
+    id?: string;
+    checkin_day: string;
+    title: string;
+    description: string;
+    prompt_md: string;
+    questions_json: string;
+  } | null>(null);
+  const loadGeneration = useRef(0);
+  const [versions, setVersions] = useState<
+    Array<{
+      id: string;
+      version_label: string | null;
+      version_key: string;
+      duration_days: number | null;
+      status: string;
+    }>
+  >([]);
+  const [publishing, setPublishing] = useState(false);
+  const selectedVersion = versions.find((version) => version.id === selectedVersionId);
+  const savedDraftPreview = [...rows]
+    .filter(
+      (row) =>
+        row.program_version_id === selectedVersionId &&
+        row.status === 'draft' &&
+        metadataHasComposition(row.metadata),
+    )
+    .sort((a, b) => a.display_order - b.display_order)
+    .map((row) =>
+      definitionFromDeliveryFields({
+        programSlug,
+        moduleKey: row.module_key,
+        moduleType: row.module_type,
+        title: row.title,
+        eyebrow: row.eyebrow,
+        body: row.body,
+        dayStart: row.day_start,
+        dayEnd: row.day_end,
+        statusVisibility: row.status_visibility,
+        metadata: row.metadata,
+        capacityVariants: row.capacity_variants_json,
+        cta: row.cta_json,
+        anchor: row.anchor_json,
+        safetyNotes: row.safety_notes,
+        noClaimsNotes: row.no_claims_notes,
+      }),
+    );
 
   const refresh = useCallback(async () => {
+    if (!selectedVersionId) {
+      setRows([]);
+      setCheckinTemplates([]);
+      setLoading(false);
+      return;
+    }
+    const generation = loadGeneration.current + 1;
+    loadGeneration.current = generation;
     setLoading(true);
     setError(null);
     try {
       const resp = await fetch(
         `/api/admin/programs/${encodeURIComponent(
           programId,
-        )}/delivery-modules`,
+        )}/delivery-modules?version_id=${encodeURIComponent(selectedVersionId)}`,
       );
+      if (generation !== loadGeneration.current) return;
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}));
         throw new Error(body.error ?? 'Failed to load delivery modules.');
       }
       setRows((await resp.json()) as ProgramDeliveryModuleRow[]);
+      if (selectedVersionId === 'unversioned') {
+        setCheckinTemplates([]);
+        return;
+      }
+      const templateResp = await fetch(
+        `/api/admin/programs/${encodeURIComponent(
+          programId,
+        )}/checkin-templates?version_id=${encodeURIComponent(selectedVersionId)}`,
+      );
+      if (generation !== loadGeneration.current) return;
+      if (!templateResp.ok) {
+        const body = await templateResp.json().catch(() => ({}));
+        throw new Error(body.error ?? 'Failed to load check-in templates.');
+      }
+      setCheckinTemplates((await templateResp.json()) as ProgramCheckinTemplate[]);
     } catch (err) {
+      if (generation !== loadGeneration.current) return;
       setError(err instanceof Error ? err.message : 'Failed.');
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
-  }, [programId]);
+  }, [programId, selectedVersionId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const resp = await fetch(
+        `/api/admin/programs/${encodeURIComponent(programId)}/versions`,
+      );
+      if (!resp.ok || cancelled) return;
+      const body = (await resp.json()) as Array<{
+        id: string;
+        version_label: string | null;
+        version_key: string;
+        duration_days: number | null;
+        status: string;
+      }>;
+      if (!cancelled) setVersions(body);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [programId]);
+
+  const createDraftVersion = async (sourceVersionId?: string) => {
+    setError(null);
+    try {
+      const resp = await fetch(`/api/admin/programs/${encodeURIComponent(programId)}/versions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_version_id: sourceVersionId ?? null,
+          version_label: null,
+        }),
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.error ?? 'Could not create a draft program version.');
+      const created = body as { id: string };
+      setVersions((current) => [...current, body]);
+      setSelectedVersionId(created.id);
+      setRows([]);
+      setCheckinTemplates([]);
+      setEditingId(null);
+      setAdding(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create a draft program version.');
+    }
+  };
+
+  const publishSelectedVersion = async () => {
+    if (!selectedVersion || selectedVersion.status !== 'draft') return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const resp = await fetch(
+        `/api/admin/programs/${encodeURIComponent(programId)}/versions/${encodeURIComponent(selectedVersion.id)}/publish`,
+        { method: 'POST' },
+      );
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.error ?? 'Could not publish this version.');
+      setVersions((current) => current.map((version) =>
+        version.id === selectedVersion.id ? { ...version, status: 'published' } : version,
+      ));
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not publish this version.');
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const move = async (moduleId: string, dir: -1 | 1) => {
     const ordered = rows.map((row) => row.id);
@@ -791,20 +1345,81 @@ function DeliveryModulesSection({ programId }: { programId: string }) {
     const nextIndex = index + dir;
     if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) return;
     [ordered[index], ordered[nextIndex]] = [ordered[nextIndex], ordered[index]];
-    await fetch(`/api/admin/programs/${programId}/delivery-modules-reorder`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ordered_ids: ordered }),
-    });
-    await refresh();
+    if (!selectedVersionId) return;
+    try {
+      const response = await fetch(
+        `/api/admin/programs/${programId}/delivery-modules-reorder?version_id=${encodeURIComponent(selectedVersionId)}`,
+        {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ordered_ids: ordered }),
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? 'Could not reorder delivery modules.');
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reorder delivery modules.');
+    }
   };
 
   const archive = async (row: ProgramDeliveryModuleRow) => {
     if (!confirm(`Archive delivery module "${row.title}"?`)) return;
-    await fetch(`/api/admin/program-delivery-modules/${row.id}`, {
-      method: 'DELETE',
-    });
-    await refresh();
+    try {
+      const response = await fetch(`/api/admin/program-delivery-modules/${row.id}`, {
+        method: 'DELETE',
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? 'Could not archive delivery module.');
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not archive delivery module.');
+    }
+  };
+
+  const beginCheckinEdit = (template?: ProgramCheckinTemplate) => {
+    setError(null);
+    setCheckinDraft(template ? {
+      id: template.id,
+      checkin_day: String(template.checkin_day),
+      title: template.title,
+      description: template.description ?? '',
+      prompt_md: template.prompt_md ?? '',
+      questions_json: JSON.stringify(template.questions_json ?? [], null, 2),
+    } : { checkin_day: '1', title: '', description: '', prompt_md: '', questions_json: '[]' });
+  };
+
+  const saveCheckin = async () => {
+    if (!checkinDraft || !selectedVersionId || selectedVersionId === 'unversioned') return;
+    let questions: unknown;
+    try {
+      questions = JSON.parse(checkinDraft.questions_json);
+    } catch {
+      setError('Questions JSON must be valid JSON.');
+      return;
+    }
+    setError(null);
+    try {
+      const response = await fetch(`/api/admin/programs/${programId}/checkin-templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: checkinDraft.id ?? null,
+          version_id: selectedVersionId,
+          checkin_day: Number(checkinDraft.checkin_day),
+          title: checkinDraft.title,
+          description: checkinDraft.description || null,
+          prompt_md: checkinDraft.prompt_md || null,
+          questions_json: questions,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? 'Check-in template save failed.');
+      setCheckinDraft(null);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Check-in template save failed.');
+    }
   };
 
   return (
@@ -815,27 +1430,94 @@ function DeliveryModulesSection({ programId }: { programId: string }) {
             Delivery Modules
           </h2>
           <p className="text-xs text-gray-600 mt-1">
-            First-pass admin authoring for app delivery cards. Published rows
-            override code-owned Baseline delivery when present.
+            Drafts are editable. Publishing freezes a version and makes it
+            available to new enrollments while existing enrollments keep their version.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setEditingId(null);
-            setAdding((value) => !value);
-          }}
-          className="px-3 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
-        >
-          {adding ? 'Cancel' : '+ Add delivery module'}
-        </button>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button
+            type="button"
+            onClick={() => void createDraftVersion()}
+            className="px-3 py-2 border border-gray-300 rounded text-sm font-medium text-gray-800 hover:bg-gray-50"
+          >
+            New blank draft version
+          </button>
+          {selectedVersion?.status === 'published' && (
+            <button
+              type="button"
+              onClick={() => void createDraftVersion(selectedVersion.id)}
+              className="px-3 py-2 border border-gray-300 rounded text-sm font-medium text-gray-800 hover:bg-gray-50"
+            >
+              Clone as draft
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={!selectedVersion || selectedVersion.status !== 'draft'}
+            onClick={() => {
+              setEditingId(null);
+              setAdding((value) => !value);
+            }}
+            className="px-3 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-40"
+          >
+            {adding ? 'Cancel' : '+ Add delivery module'}
+          </button>
+          {selectedVersion?.status === 'draft' && (
+            <button
+              type="button"
+              disabled={publishing || rows.length === 0}
+              onClick={() => void publishSelectedVersion()}
+              className="px-3 py-2 bg-blue-700 text-white rounded text-sm font-medium hover:bg-blue-800 disabled:opacity-40"
+            >
+              {publishing ? 'Publishing…' : 'Publish version'}
+            </button>
+          )}
+        </div>
       </div>
+      <label className="mb-3 block text-xs font-medium text-gray-700">
+        Selected program version
+        <select
+          value={selectedVersionId}
+          onChange={(event) => {
+            loadGeneration.current += 1;
+            setSelectedVersionId(event.target.value);
+            setRows([]);
+            setCheckinTemplates([]);
+            setEditingId(null);
+            setAdding(false);
+          }}
+          className="mt-1 block w-full max-w-md border border-gray-300 rounded px-2 py-1"
+        >
+          <option value="">Choose a version</option>
+          <option value="unversioned">Unversioned rows</option>
+          {versions.map((version) => (
+            <option key={version.id} value={version.id}>
+              {version.version_label || version.version_key}
+              {` · ${version.status}`}
+              {version.duration_days == null
+                ? ''
+                : ` · ${version.duration_days} days`}
+            </option>
+          ))}
+        </select>
+      </label>
 
-      {adding && (
+      {adding && selectedVersionId && (
         <div className="mb-3">
           <DeliveryModuleForm
-            initial={emptyDeliveryModuleForm()}
+            initial={{
+              ...emptyDeliveryModuleForm(),
+              program_version_id:
+                selectedVersionId === 'unversioned' ? '' : selectedVersionId,
+            }}
             submitLabel="Create delivery module"
+            programSlug={programSlug}
+            programTitle={programTitle}
+            versions={versions}
+            versionRows={rows}
+            durationDays={selectedVersion?.duration_days ?? null}
+            checkinTemplates={checkinTemplates}
+            lockedVersionId={selectedVersionId}
             onCancel={() => setAdding(false)}
             onSave={async (payload) => {
               const resp = await fetch(
@@ -857,12 +1539,45 @@ function DeliveryModulesSection({ programId }: { programId: string }) {
         </div>
       )}
 
+      {selectedVersion?.status === 'draft' && selectedVersionId !== 'unversioned' && (
+        <section className="mb-4 rounded border border-gray-200 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-gray-900">Check-in templates</h3>
+            <button type="button" className="text-xs text-blue-700 hover:underline" onClick={() => beginCheckinEdit()}>
+              + Add check-in
+            </button>
+          </div>
+          {checkinTemplates.length === 0 && <p className="text-xs text-gray-600">No check-ins are authored for this version.</p>}
+          <ul className="divide-y divide-gray-100">
+            {checkinTemplates.map((template) => (
+              <li key={template.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                <span>Day {template.checkin_day}: {template.title} <span className="text-xs text-gray-500">({template.status})</span></span>
+                <button type="button" className="text-xs text-blue-700 hover:underline" onClick={() => beginCheckinEdit(template)}>Edit</button>
+              </li>
+            ))}
+          </ul>
+          {checkinDraft && (
+            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+              <label className="text-xs">Day<input type="number" min="1" max={selectedVersion.duration_days ?? undefined} value={checkinDraft.checkin_day} onChange={(e) => setCheckinDraft({ ...checkinDraft, checkin_day: e.target.value })} className={`${LIGHT_CONTROL_SM_CLASS} mt-1`} /></label>
+              <label className="text-xs">Title<input value={checkinDraft.title} onChange={(e) => setCheckinDraft({ ...checkinDraft, title: e.target.value })} className={`${LIGHT_CONTROL_SM_CLASS} mt-1`} /></label>
+              <label className="text-xs">Description<textarea value={checkinDraft.description} onChange={(e) => setCheckinDraft({ ...checkinDraft, description: e.target.value })} className={`${LIGHT_CONTROL_SM_CLASS} mt-1`} /></label>
+              <label className="text-xs">Prompt<textarea value={checkinDraft.prompt_md} onChange={(e) => setCheckinDraft({ ...checkinDraft, prompt_md: e.target.value })} className={`${LIGHT_CONTROL_SM_CLASS} mt-1`} /></label>
+              <label className="text-xs md:col-span-2">Questions JSON<textarea rows={8} value={checkinDraft.questions_json} onChange={(e) => setCheckinDraft({ ...checkinDraft, questions_json: e.target.value })} className={`${LIGHT_CONTROL_SM_CLASS} mt-1 font-mono`} /></label>
+              <div className="flex gap-2 md:col-span-2">
+                <button type="button" onClick={() => void saveCheckin()} className="rounded bg-blue-700 px-3 py-1.5 text-sm text-white">Save check-in</button>
+                <button type="button" onClick={() => setCheckinDraft(null)} className="rounded border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
       {loading && <p className="text-sm text-gray-600">Loading…</p>}
       {error && <p className="text-sm text-red-700">{error}</p>}
 
       {!loading && rows.length === 0 && (
         <p className="text-sm text-gray-600 italic">
-          No delivery modules yet. Baseline still uses the code-owned fallback.
+          No delivery modules yet. Add modules to this draft before publishing it.
         </p>
       )}
 
@@ -902,18 +1617,18 @@ function DeliveryModulesSection({ programId }: { programId: string }) {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="inline-flex rounded border border-gray-300 overflow-hidden bg-white">
-                        <button
-                          type="button"
-                          onClick={() => move(row.id, -1)}
-                          disabled={index === 0}
+                      <button
+                        type="button"
+                        disabled={selectedVersion?.status !== 'draft' || index === 0}
+                        onClick={() => move(row.id, -1)}
                           className="px-2 py-1 text-sm font-semibold text-gray-800 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-white border-r border-gray-300"
                         >
                           ↑
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => move(row.id, 1)}
-                          disabled={index === rows.length - 1}
+                      <button
+                        type="button"
+                        disabled={selectedVersion?.status !== 'draft' || index === rows.length - 1}
+                        onClick={() => move(row.id, 1)}
                           className="px-2 py-1 text-sm font-semibold text-gray-800 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-white"
                         >
                           ↓
@@ -921,6 +1636,7 @@ function DeliveryModulesSection({ programId }: { programId: string }) {
                       </div>
                       <button
                         type="button"
+                        disabled={selectedVersion?.status !== 'draft'}
                         onClick={() => {
                           setAdding(false);
                           setEditingId(row.id);
@@ -931,6 +1647,7 @@ function DeliveryModulesSection({ programId }: { programId: string }) {
                       </button>
                       <button
                         type="button"
+                        disabled={selectedVersion?.status !== 'draft'}
                         onClick={() => archive(row)}
                         className="text-xs text-red-700 hover:underline"
                       >
@@ -943,6 +1660,13 @@ function DeliveryModulesSection({ programId }: { programId: string }) {
                   <DeliveryModuleForm
                     initial={deliveryModuleToForm(row)}
                     submitLabel="Save delivery module"
+                    programSlug={programSlug}
+                    programTitle={programTitle}
+                    versions={versions}
+                    versionRows={rows}
+                    durationDays={selectedVersion?.duration_days ?? null}
+                    checkinTemplates={checkinTemplates}
+                    lockedVersionId={selectedVersionId}
                     onCancel={() => setEditingId(null)}
                     onSave={async (payload) => {
                       const resp = await fetch(
@@ -966,6 +1690,18 @@ function DeliveryModulesSection({ programId }: { programId: string }) {
             );
           })}
         </ul>
+      )}
+      {savedDraftPreview.length > 0 && (
+        <DeliveryCompositionPreview
+          programSlug={programSlug}
+          programTitle={programTitle}
+          source="saved-draft"
+          modules={savedDraftPreview.map((entry) => entry.definition)}
+          validationIssues={savedDraftPreview.flatMap((entry) => entry.issues)}
+          versionId={selectedVersionId === 'unversioned' ? '' : selectedVersionId}
+          durationDays={selectedVersion?.duration_days ?? null}
+          checkinTemplates={checkinTemplates}
+        />
       )}
     </section>
   );
@@ -1400,7 +2136,11 @@ export default function AdminProgramEditorPage({ user: _user, programId }: Props
                 }
               />
 
-              <DeliveryModulesSection programId={programId} />
+              <DeliveryModulesSection
+                programId={programId}
+                programSlug={tree.program.slug}
+                programTitle={tree.program.title}
+              />
 
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-xl font-semibold text-gray-900">

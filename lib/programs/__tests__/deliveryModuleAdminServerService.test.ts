@@ -127,7 +127,10 @@ describe('delivery module runtime fallback', () => {
         });
       }
       if (table === 'program_delivery_modules') {
-        return query({ data: [deliveryRow()] });
+        return query({ data: [deliveryRow({ program_version_id: 'version-1' })] });
+      }
+      if (table === 'program_versions') {
+        return query({ data: [{ id: 'version-1', program_id: 'program-1', version_key: 'baseline-v2', status: 'published' }] });
       }
       return query({ data: [] });
     });
@@ -142,7 +145,7 @@ describe('delivery module runtime fallback', () => {
     expect(result.modules[0].id).toBe('baseline-db-guide');
   });
 
-  test('falls back to code-owned Baseline config when no DB modules exist', async () => {
+  test('does not fall back to Baseline code config for an unregistered version', async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'programs') {
         return query({
@@ -152,6 +155,9 @@ describe('delivery module runtime fallback', () => {
       if (table === 'program_delivery_modules') {
         return query({ data: [] });
       }
+      if (table === 'program_versions') {
+        return query({ data: [{ id: 'version-1', program_id: 'program-1', version_key: 'baseline-v2', status: 'published' }] });
+      }
       return query({ data: [] });
     });
 
@@ -160,13 +166,8 @@ describe('delivery module runtime fallback', () => {
       programVersionId: 'version-1',
     });
 
-    expect(result.source).toBe('baseline_code');
-    expect(result.modules.map((module) => module.id)).toContain(
-      'baseline-prep-overview',
-    );
-    expect(result.modules.map((module) => module.id)).toContain(
-      'baseline-week-1-focus',
-    );
+    expect(result.source).toBe('none');
+    expect(result.modules).toEqual([]);
   });
 });
 

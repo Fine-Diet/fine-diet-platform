@@ -542,6 +542,48 @@ describe('program runtime enrollment writes', () => {
     expect(summary.resolved_status).toBe('paused');
   });
 
+  test('runtime summary freezes the accessible day at pause start', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T12:00:00.000Z'));
+    const paused = baseEnrollment({
+      status: 'paused',
+      selected_start_date: '2026-05-20',
+      metadata: { pause_started_at: '2026-05-22' },
+    });
+    const version = publishedVersionRow();
+    mockFrom
+      .mockReturnValueOnce(query({ data: paused }))
+      .mockReturnValueOnce(query({ data: version }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }));
+
+    const summary = await getProgramRuntimeSummary(paused.id);
+    expect(summary?.resolved_status).toBe('paused');
+    expect(summary?.current_day).toBe(3);
+  });
+
+  test('runtime summary freezes completed historical access at completion day', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T12:00:00.000Z'));
+    const completed = baseEnrollment({
+      status: 'completed',
+      selected_start_date: '2026-05-20',
+      completed_at: '2026-05-22T12:00:00.000Z',
+    });
+    const version = publishedVersionRow();
+    mockFrom
+      .mockReturnValueOnce(query({ data: completed }))
+      .mockReturnValueOnce(query({ data: version }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }));
+
+    const summary = await getProgramRuntimeSummary(completed.id);
+    expect(summary?.resolved_status).toBe('completed');
+    expect(summary?.current_day).toBe(3);
+  });
+
   test('future/pre-start and in-window active enrollments are not auto-completed', async () => {
     const preStart = baseEnrollment({
       status: 'pre_start',
@@ -599,7 +641,7 @@ describe('program runtime check-in responses', () => {
     const responseRow = {
       id: 'response-1',
       enrollment_id: enrollment.id,
-      checkin_template_id: null,
+      checkin_template_id: 'template-7',
       checkin_day: 7,
       response_status: 'skipped',
       response_payload_json: {},
@@ -612,6 +654,19 @@ describe('program runtime check-in responses', () => {
       created_at: '2026-05-27T00:00:00.000Z',
       updated_at: '2026-05-27T00:00:00.000Z',
     };
+    const template = {
+      id: 'template-7',
+      program_version_id: enrollment.program_version_id,
+      checkin_day: 7,
+      title: 'Day 7',
+      description: null,
+      prompt_md: null,
+      questions_json: [],
+      status: 'published',
+      metadata: {},
+      created_at: '2026-05-01T00:00:00.000Z',
+      updated_at: '2026-05-01T00:00:00.000Z',
+    };
 
     const upsertQuery = query({ singleData: responseRow });
     const version = publishedVersionRow();
@@ -619,8 +674,10 @@ describe('program runtime check-in responses', () => {
     mockFrom
       // getEnrollmentForPerson
       .mockReturnValueOnce(query({ data: enrollment }))
-      // getCheckinTemplateForDay (optional day lookup)
-      .mockReturnValueOnce(query({ data: null }))
+      // enrolled version must remain published
+      .mockReturnValueOnce(query({ data: version }))
+      // a matching published template is required
+      .mockReturnValueOnce(query({ data: template }))
       // program_checkin_responses upsert
       .mockReturnValueOnce(upsertQuery)
       // getProgramRuntimeSummaryForPerson ownership lookup
@@ -636,7 +693,7 @@ describe('program runtime check-in responses', () => {
       // getLatestRecommendation
       .mockReturnValueOnce(query({ data: null }))
       // getCheckinTemplateForDay for summary
-      .mockReturnValueOnce(query({ data: null }));
+      .mockReturnValueOnce(query({ data: template }));
 
     const result = await respondToProgramCheckin({
       personId: 'person-1',
@@ -651,6 +708,7 @@ describe('program runtime check-in responses', () => {
     expect(upsertQuery.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         enrollment_id: enrollment.id,
+        checkin_template_id: template.id,
         checkin_day: 7,
         response_status: 'skipped',
         response_payload_json: {},
@@ -660,6 +718,48 @@ describe('program runtime check-in responses', () => {
       { onConflict: 'enrollment_id,checkin_day' },
     );
     expect(result.summary.enrollment.id).toBe(enrollment.id);
+  });
+
+  test('refuses a response when that version has no published template for the day', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T00:00:00.000Z'));
+    const enrollment = baseEnrollment({ selected_start_date: '2026-05-20', status: 'active' });
+    mockFrom
+      .mockReturnValueOnce(query({ data: enrollment }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      .mockReturnValueOnce(query({ data: null }));
+
+    await expect(respondToProgramCheckin({
+      personId: 'person-1', enrollmentId: enrollment.id, checkinDay: 7,
+      responseStatus: 'skipped', skippedReason: 'No template available',
+    })).rejects.toMatchObject({ code: 'PROGRAM_CHECKIN_TEMPLATE_DENIED' });
+    expect(mockFrom).toHaveBeenCalledTimes(3);
+  });
+
+  test('refuses check-in responses for future program days', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T00:00:00.000Z'));
+    const enrollment = baseEnrollment({ selected_start_date: '2026-05-20', status: 'active' });
+    mockFrom
+      .mockReturnValueOnce(query({ data: enrollment }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      .mockReturnValueOnce(query({ data: {
+        id: 'template-9',
+        program_version_id: enrollment.program_version_id,
+        checkin_day: 9,
+        title: 'Day 9',
+        description: null,
+        prompt_md: null,
+        questions_json: [],
+        status: 'published',
+        metadata: {},
+        created_at: '2026-05-01T00:00:00.000Z',
+        updated_at: '2026-05-01T00:00:00.000Z',
+      } }));
+
+    await expect(respondToProgramCheckin({
+      personId: 'person-1', enrollmentId: enrollment.id, checkinDay: 9,
+      responseStatus: 'completed', responsesJson: { test: true },
+    })).rejects.toMatchObject({ code: 'PROGRAM_CHECKIN_NOT_AVAILABLE' });
+    expect(mockFrom).toHaveBeenCalledTimes(3);
   });
 });
 
