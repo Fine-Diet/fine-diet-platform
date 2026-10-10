@@ -43,6 +43,7 @@ import type {
 } from '@/lib/programs/runtimeTypes';
 import {
   formatRecommendedStepLabel,
+  hasPublishedRuntimeDeliverySource,
   getRecommendationRevealDetails,
   isCheckinDue,
   isDay21Handled,
@@ -807,7 +808,7 @@ export default function JournalProgramDetailBySlugPage() {
           // For an entitled/assigned member with no enrollment, the same API
           // exposes only Day 0 from the latest published version. A successful
           // response activates generic runtime UI for newly published slugs;
-          // a 404 keeps legacy catalogue rendering unchanged.
+          // a successful response with source='none' keeps legacy catalogue UI.
           const hasProgramAccess =
             detail.has_entitlement || detail.access_state === 'assigned_only';
           if (shouldRequestProgramRuntimeDelivery({
@@ -825,10 +826,13 @@ export default function JournalProgramDetailBySlugPage() {
             );
             if (deliveryResp.ok) {
               const deliveryBody = (await deliveryResp.json()) as {
+                source: string;
                 modules: ProgramDeliveryModuleDefinition[];
               };
               setDeliveryModules(deliveryBody.modules);
-              setHasPublishedRuntimeDelivery(true);
+              setHasPublishedRuntimeDelivery(
+                hasPublishedRuntimeDeliverySource(deliveryBody.source),
+              );
             } else {
               setDeliveryModules([]);
               setHasPublishedRuntimeDelivery(false);
@@ -843,6 +847,7 @@ export default function JournalProgramDetailBySlugPage() {
           if (isProgramRuntimeEnabled(slugStr)) {
             setDeliveryModules([]);
           }
+          setHasPublishedRuntimeDelivery(false);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load.');
@@ -918,16 +923,21 @@ export default function JournalProgramDetailBySlugPage() {
       );
       if (!response.ok) {
         setDeliveryModules([]);
+        setHasPublishedRuntimeDelivery(false);
         return;
       }
       const body = (await response.json()) as {
+        source: string;
         modules: ProgramDeliveryModuleDefinition[];
       };
       setDeliveryModules(body.modules);
-      setHasPublishedRuntimeDelivery(true);
+      setHasPublishedRuntimeDelivery(
+        hasPublishedRuntimeDeliverySource(body.source),
+      );
     } catch {
       // Do not render stale modules from a previously authorized version.
       setDeliveryModules([]);
+      setHasPublishedRuntimeDelivery(false);
     }
   }
 

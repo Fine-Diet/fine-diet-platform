@@ -4,6 +4,7 @@ import type {
 } from '../runtimeTypes';
 import {
   formatRecommendedStepLabel,
+  hasPublishedRuntimeDeliverySource,
   getRecommendationRevealDetails,
   getBaselineWeekOneCapacityCopy,
   getBaselineWeekThreeCapacityCopy,
@@ -507,6 +508,27 @@ describe('Baseline recommendation reveal helpers', () => {
 
 
 describe('published runtime discovery for new Programs', () => {
+  test('keeps legacy catalogue rendering when an authorized API response has source none', () => {
+    const response = { source: 'none', modules: [] };
+    expect(hasPublishedRuntimeDeliverySource(response.source)).toBe(false);
+    expect(shouldRenderProgramRuntimeExperience({
+      registeredRuntimeProgram: false,
+      hasRuntimeSummary: false,
+      hasPublishedRuntimeDelivery: hasPublishedRuntimeDeliverySource(response.source),
+    })).toBe(false);
+  });
+
+  test('treats an authorized delivery source as available when Day 0 filtering returns no modules', () => {
+    const response = { source: 'admin', modules: [] };
+    expect(response.modules).toHaveLength(0);
+    expect(hasPublishedRuntimeDeliverySource(response.source)).toBe(true);
+    expect(shouldRenderProgramRuntimeExperience({
+      registeredRuntimeProgram: false,
+      hasRuntimeSummary: false,
+      hasPublishedRuntimeDelivery: hasPublishedRuntimeDeliverySource(response.source),
+    })).toBe(true);
+  });
+
   test('requests Day 0 for an entitled, unregistered Program before enrollment', () => {
     expect(shouldRequestProgramRuntimeDelivery({
       registeredRuntimeProgram: false,

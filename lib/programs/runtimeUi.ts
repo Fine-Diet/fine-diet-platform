@@ -41,6 +41,17 @@ export function shouldRenderProgramRuntimeExperience(input: {
   );
 }
 
+/**
+ * A successful delivery response can still have no published source. Keep
+ * legacy catalogue rendering in that case; module count is not a proxy for
+ * availability because authorization may filter every module for Day 0.
+ */
+export function hasPublishedRuntimeDeliverySource(
+  source: string | null | undefined,
+): boolean {
+  return source === 'admin' || source === 'baseline_code' || source === 'code';
+}
+
 function summaryRecencyKey(summary: ProgramRuntimeSummary): string {
   // ISO timestamps sort lexicographically; id breaks ties stably.
   return [

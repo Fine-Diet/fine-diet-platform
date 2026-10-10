@@ -137,6 +137,47 @@ describe('member delivery authorization', () => {
     ]);
   });
 
+  test('preserves source none on a successful response when the published version has no delivery rows', async () => {
+    getDetailMock.mockResolvedValue({
+      slug: 'empty-published-program',
+      has_entitlement: true,
+      access_state: 'entitled',
+    });
+    getLatestVersionMock.mockResolvedValue({ id: 'empty-published-version', status: 'published' });
+    listEnrollmentsMock.mockResolvedValue([]);
+    getDeliveryMock.mockResolvedValue({ source: 'none', modules: [] });
+
+    const res = makeResponse();
+    await handler({ method: 'GET', query: { slug: 'empty-published-program' } } as any, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ source: 'none', modules: [] });
+  });
+
+  test('preserves an available source when Day 0 authorization filters every module', async () => {
+    getDetailMock.mockResolvedValue({
+      slug: 'day-zero-empty-program',
+      has_entitlement: true,
+      access_state: 'entitled',
+    });
+    getLatestVersionMock.mockResolvedValue({ id: 'day-zero-version', status: 'published' });
+    listEnrollmentsMock.mockResolvedValue([]);
+    getDeliveryMock.mockResolvedValue({
+      source: 'admin',
+      modules: [{
+        id: 'day-1',
+        dayStart: 1,
+        statusVisibility: ['pre_start', 'active', 'paused', 'completed'],
+      }],
+    });
+
+    const res = makeResponse();
+    await handler({ method: 'GET', query: { slug: 'day-zero-empty-program' } } as any, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ source: 'admin', modules: [] });
+  });
+
   test('denies cancelled enrollments even when a catalogue entitlement remains', async () => {
     listEnrollmentsMock.mockResolvedValue([enrollment({ status: 'cancelled' })]);
     getSummaryMock.mockResolvedValue(summary({ resolved_status: 'cancelled' }));
