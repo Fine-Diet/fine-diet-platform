@@ -63,6 +63,7 @@ import {
   isCheckinDue,
   isDay21Handled,
   shouldShowRecommendationReveal,
+  shouldOpenProgramStartGate,
 } from '@/lib/programs/runtimeUi';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
@@ -79,6 +80,7 @@ interface ProgramDeliveryExperienceProps {
   previewCheckinTemplates?: ProgramCheckinTemplate[];
   previewVersionId?: string | null;
   initialStartGateOpen?: boolean;
+  restartRequested?: boolean;
   initialView?: DeliveryView;
   onRuntimeSummaryUpdate: (summary: ProgramRuntimeSummary) => void;
   onSetItemStatus?: (
@@ -647,14 +649,22 @@ export function ProgramDeliveryExperience({
   previewCheckinTemplates = [],
   previewVersionId = null,
   initialStartGateOpen = true,
+  restartRequested = false,
   initialView = 'day',
   onRuntimeSummaryUpdate,
   onSetItemStatus,
 }: ProgramDeliveryExperienceProps) {
   const hasAccess = data.has_entitlement || data.access_state === 'assigned_only';
   const needsEnrollment = hasAccess && !runtimeSummary && !runtimeError;
+  const canOpenStartGate = shouldOpenProgramStartGate({
+    hasAccess,
+    runtimeSummary,
+    runtimeError,
+    restartRequested,
+    previewMode,
+  });
   const [startGateOpen, setStartGateOpen] = useState(
-    needsEnrollment && initialStartGateOpen,
+    canOpenStartGate && initialStartGateOpen,
   );
   const [view, setView] = useState<DeliveryView>(initialView);
   const [selectedDay, setSelectedDay] = useState(() =>

@@ -410,6 +410,17 @@ export function mapAvailabilityStateToFeatured(
   }
 }
 
+/** Carry restart intent only when the server-confirmed availability permits a new run. */
+function liveProgramDetailHref(
+  slug: string,
+  availability: ProgramAvailabilityEntry | undefined,
+): string {
+  const href = `/app/programs/${slug}`;
+  return availability?.state === 'completed' && availability.can_start
+    ? `${href}?restart=1`
+    : href;
+}
+
 /**
  * Map live Program Library availability onto the Programs Home catalogue
  * surface. Presentation copy still comes from the MVP registry; CTA truth
@@ -443,7 +454,7 @@ export function buildLiveCatalogueFromAvailability(
           href:
             mapped.disabled || mapped.availability === 'coming_soon'
               ? undefined
-              : `/app/programs/${program.slug}`,
+              : liveProgramDetailHref(program.slug, live),
           source: 'runtime',
         });
       }
@@ -504,7 +515,7 @@ export function buildLiveFeaturedFromAvailability(
       href:
         mapped.disabled || mapped.availability === 'coming_soon'
           ? undefined
-          : `/app/programs/${programDef.slug}`,
+          : liveProgramDetailHref(programDef.slug, live),
       disabled: mapped.disabled,
       source: 'runtime',
     });

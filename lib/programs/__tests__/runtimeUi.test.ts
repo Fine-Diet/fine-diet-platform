@@ -16,6 +16,7 @@ import {
   resolveBaselineDetailRuntimeState,
   resolveBaselinePrepModuleAccess,
   selectDisplayRuntimeSummaryForSlug,
+  shouldOpenProgramStartGate,
   shouldRenderProgramRuntimeExperience,
   shouldRequestProgramRuntimeDelivery,
   shouldShowBaselineWeekOneModules,
@@ -100,6 +101,53 @@ function recommendation(
     updated_at: '2026-05-27T00:00:00.000Z',
   };
 }
+
+describe('shouldOpenProgramStartGate', () => {
+  test('opens for an entitled fresh enrollment, not for ordinary history review', () => {
+    expect(shouldOpenProgramStartGate({ hasAccess: true, runtimeSummary: null })).toBe(true);
+    expect(shouldOpenProgramStartGate({
+      hasAccess: true,
+      runtimeSummary: summary('completed'),
+    })).toBe(false);
+  });
+
+  test.each(['completed', 'cancelled'] as const)(
+    'opens explicit restart for a %s journey',
+    (status) => {
+      expect(shouldOpenProgramStartGate({
+        hasAccess: true,
+        runtimeSummary: summary(status),
+        restartRequested: true,
+      })).toBe(true);
+    },
+  );
+
+  test.each(['pre_start', 'active', 'paused'] as const)(
+    'does not open restart for an existing %s journey',
+    (status) => {
+      expect(shouldOpenProgramStartGate({
+        hasAccess: true,
+        runtimeSummary: summary(status),
+        restartRequested: true,
+      })).toBe(false);
+    },
+  );
+
+  test('does not bypass access, runtime error, or preview mode', () => {
+    for (const overrides of [
+      { hasAccess: false },
+      { runtimeError: 'Runtime unavailable' },
+      { previewMode: true },
+    ]) {
+      expect(shouldOpenProgramStartGate({
+        hasAccess: true,
+        runtimeSummary: summary('completed'),
+        restartRequested: true,
+        ...overrides,
+      })).toBe(false);
+    }
+  });
+});
 
 describe('selectDisplayRuntimeSummaryForSlug', () => {
   const completedOlder = summary('completed', 22, {

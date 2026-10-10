@@ -318,11 +318,13 @@ function ProgramStartFlow({
 
 function BaselineRuntimeControls({
   hasAccess,
+  canRestart,
   runtimeSummary,
   runtimeLoading,
   onEnrollmentCreated,
 }: {
   hasAccess: boolean;
+  canRestart: boolean;
   runtimeSummary: ProgramRuntimeSummary | null;
   runtimeLoading: boolean;
   onEnrollmentCreated: () => Promise<void>;
@@ -350,17 +352,20 @@ function BaselineRuntimeControls({
     );
   }
 
-  if (state === 'start_ready') {
+  const isRestart =
+    canRestart && (state === 'completed' || state === 'cancelled');
+  if (state === 'start_ready' || isRestart) {
     return (
       <>
         {!showStartFlow ? (
           <ProgramCtaButton onClick={() => setShowStartFlow(true)}>
-            Get Started
+            {isRestart ? 'Start Baseline Again' : 'Get Started'}
           </ProgramCtaButton>
         ) : (
           <ProgramStartFlow
             programSlug={BASELINE_SLUG}
             programName="Baseline"
+            submitLabel={isRestart ? 'Start Baseline Again' : undefined}
             onStarted={async () => {
               await onEnrollmentCreated();
               setShowStartFlow(false);
@@ -587,6 +592,7 @@ function ProgramCard({
         {isBaseline ? (
           <BaselineRuntimeControls
             hasAccess={Boolean(hasAccess)}
+            canRestart={Boolean(availability?.can_start)}
             runtimeSummary={runtimeSummary ?? null}
             runtimeLoading={Boolean(runtimeLoading)}
             onEnrollmentCreated={onEnrollmentCreated}
