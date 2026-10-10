@@ -969,6 +969,7 @@ export default function JournalProgramDetailBySlugPage() {
         progressSummary={progressSummary}
         deliveryModules={allDeliveryModules}
         runtimeError={runtimeError}
+        restartRequested={router.query.restart === '1'}
         onRuntimeSummaryUpdate={(summary) => {
           void handleRuntimeSummaryUpdate(summary);
         }}

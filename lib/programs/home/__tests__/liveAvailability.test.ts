@@ -61,6 +61,38 @@ describe('Programs Home live availability adapters', () => {
     expect(featured.items[1]?.href).toBeUndefined();
   });
 
+  test('eligible completed programs carry restart intent but review and continue do not', () => {
+    const restarted = [
+      entry('baseline', 'completed', true),
+      entry('digestive-foundations', 'completed', true),
+    ];
+    const featured = buildLiveFeaturedFromAvailability(restarted);
+    const baseline = featured.items.find((item) => item.slug === 'baseline');
+    const digestive = featured.items.find((item) => item.slug === 'digestive-foundations');
+    expect(baseline).toMatchObject({
+      ctaLabel: 'Start again',
+      href: '/app/programs/baseline?restart=1',
+      disabled: false,
+    });
+    expect(digestive?.href).toBe('/app/programs/digestive-foundations?restart=1');
+    const catalogue = buildLiveCatalogueFromAvailability(restarted);
+    expect(catalogue.find((item) => item.slug === 'baseline')?.href).toBe(
+      '/app/programs/baseline?restart=1',
+    );
+
+    const review = buildLiveFeaturedFromAvailability([
+      entry('baseline', 'completed', false),
+    ]);
+    expect(review.items[0]).toMatchObject({
+      ctaLabel: 'Review',
+      href: '/app/programs/baseline',
+    });
+    const continueCard = buildLiveFeaturedFromAvailability([
+      entry('baseline', 'in_progress', false),
+    ]);
+    expect(continueCard.items[0]?.href).toBe('/app/programs/baseline');
+  });
+
   test('live catalogue never invents available CTAs without availability truth', () => {
     const items = buildLiveCatalogueFromAvailability([
       entry('baseline', 'in_progress'),

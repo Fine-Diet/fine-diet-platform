@@ -28,6 +28,23 @@ export function shouldRequestProgramRuntimeDelivery(input: {
   );
 }
 
+/** A restart URL may open a fresh enrollment gate only for a closed journey.
+ * The enrollment API remains the authority for access and concurrency. */
+export function shouldOpenProgramStartGate(input: {
+  hasAccess: boolean;
+  runtimeSummary: Pick<ProgramRuntimeSummary, 'resolved_status'> | null;
+  runtimeError?: string | null;
+  restartRequested?: boolean;
+  previewMode?: boolean;
+}): boolean {
+  if (!input.hasAccess || input.runtimeError) return false;
+  if (!input.runtimeSummary) return true;
+  return Boolean(input.restartRequested) &&
+    !input.previewMode &&
+    (input.runtimeSummary.resolved_status === 'completed' ||
+      input.runtimeSummary.resolved_status === 'cancelled');
+}
+
 /** Keep legacy catalogue rendering unless a published runtime version exists. */
 export function shouldRenderProgramRuntimeExperience(input: {
   registeredRuntimeProgram: boolean;
