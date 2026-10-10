@@ -2,12 +2,11 @@
  * Program Runtime Packet 16 — delivery module delivery service (server-only).
  *
  * Reads published admin-authored delivery modules and maps them to the generic
- * renderer contract. If no DB modules exist for a program, runtime falls back to
- * a code-owned module set registered in deliveryModuleSetRegistry (if any).
+ * renderer contract. Member reads are scoped to an authorized version; an empty
+ * database result remains empty.
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { getCodeDeliveryModuleSet } from './deliveryModuleSetRegistry';
 import {
   PROGRAM_DELIVERY_VISIBILITY_CONDITIONS,
   type ProgramDeliveryBlock,
@@ -18,9 +17,14 @@ import {
 } from './deliveryModuleTypes';
 import { PROGRAM_CAPACITIES, type ProgramCapacity } from './runtimeTypes';
 import {
+  definitionFromDeliveryFields,
+  parseMediaBlock,
+} from './deliveryComposition';
+import {
   rowToProgramDeliveryModuleRow,
   type ProgramDeliveryModuleRow,
 } from './deliveryModuleAdminServerService';
+import { getCodeDeliveryModuleSet } from './deliveryModuleSetRegistry';
 
 interface ProgramRow {
   id: string;
@@ -128,54 +132,48 @@ function parseCta(value: unknown): ProgramDeliveryCta | undefined {
 
 function parseBlocks(value: unknown): ProgramDeliveryBlock[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  return value.every(isRecord)
-    ? (value as unknown as ProgramDeliveryBlock[])
-    : undefined;
+  if (!value.every(isRecord)) return undefined;
+  const blocks: ProgramDeliveryBlock[] = [];
+  for (const entry of value) {
+    if (entry.type === 'audio' || entry.type === 'video') {
+      const parsed = parseMediaBlock(entry);
+      if ('block' in parsed) blocks.push(parsed.block);
+      continue;
+    }
+    blocks.push(entry as unknown as ProgramDeliveryBlock);
+  }
+  return blocks;
 }
 
 export function mapDeliveryModuleRowToDefinition(
   row: ProgramDeliveryModuleRow,
   programSlug: string,
 ): ProgramDeliveryModuleDefinition {
-  const anchorId = optionalString(row.anchor_json.anchorId);
-  const groupId =
-    optionalString(row.metadata.groupId) ?? optionalString(row.anchor_json.groupId);
-  const groupTitle =
-    optionalString(row.metadata.groupTitle) ??
-    optionalString(row.anchor_json.groupTitle);
-
-  return {
-    id: row.module_key,
+  return definitionFromDeliveryFields({
     programSlug,
+    moduleKey: row.module_key,
     moduleType: row.module_type,
-    groupId,
-    groupTitle,
     title: row.title,
-    eyebrow: row.eyebrow ?? undefined,
+    eyebrow: row.eyebrow,
     body: row.body,
-    dayStart: row.day_start ?? undefined,
-    dayEnd: row.day_end ?? undefined,
+    dayStart: row.day_start,
+    dayEnd: row.day_end,
     statusVisibility: row.status_visibility,
-    showWhen: parseShowWhen(row.metadata.showWhen),
-    statusCopy: isRecord(row.metadata.statusCopy)
-      ? (row.metadata.statusCopy as ProgramDeliveryModuleDefinition['statusCopy'])
-      : undefined,
-    capacityVariants: parseCapacityVariants(row.capacity_variants_json),
-    blocks: parseBlocks(row.metadata.blocks),
-    cta: parseCta(row.cta_json),
-    anchorId,
-    safetyNotes: row.safety_notes.length > 0 ? row.safety_notes : undefined,
-    noClaimsNotes:
-      row.no_claims_notes.length > 0 ? row.no_claims_notes : undefined,
-  };
+    metadata: row.metadata,
+    capacityVariants: row.capacity_variants_json,
+    cta: row.cta_json,
+    anchor: row.anchor_json,
+    safetyNotes: row.safety_notes,
+    noClaimsNotes: row.no_claims_notes,
+  }).definition;
 }
 
 export async function getPublishedDeliveryModulesForProgram(
   programSlug: string,
-  programVersionId?: string | null,
-): Promise<ProgramDeliveryModuleDefinition[]> {
+  programVersionId: string,
+): Promise<{ modules: ProgramDeliveryModuleDefinition[]; versionKey: string | null }> {
   const trimmed = programSlug.trim().toLowerCase();
-  if (!trimmed) return [];
+  if (!trimmed || !programVersionId) return { modules: [], versionKey: null };
 
   const { data: programRows, error: programError } = await supabaseAdmin
     .from('programs')
@@ -184,56 +182,64 @@ export async function getPublishedDeliveryModulesForProgram(
     .eq('status', 'published')
     .limit(1);
   if (programError) {
-    console.warn(
-      '[programs/delivery-modules] programs error:',
-      programError.message,
-    );
-    return [];
+    throw new Error(`program lookup failed: ${programError.message}`);
   }
 
   const program = (programRows ?? [])[0] as ProgramRow | undefined;
-  if (!program) return [];
+  if (!program) return { modules: [], versionKey: null };
+
+  const { data: versionRows, error: versionError } = await supabaseAdmin
+    .from('program_versions')
+    .select('id, program_id, version_key, status')
+    .eq('id', programVersionId)
+    .eq('program_id', program.id)
+    .limit(1);
+  if (versionError) {
+    throw new Error(`program version lookup failed: ${versionError.message}`);
+  }
+  const version = (versionRows ?? [])[0] as
+    | { id: string; program_id: string; version_key: string; status: string }
+    | undefined;
+  if (!version || version.status !== 'published') {
+    return { modules: [], versionKey: null };
+  }
 
   const { data, error } = await supabaseAdmin
     .from('program_delivery_modules')
     .select('*')
     .eq('program_id', program.id)
+    .eq('program_version_id', programVersionId)
     .eq('status', 'published')
     .order('display_order', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) {
-    console.warn(
-      '[programs/delivery-modules] delivery modules error:',
-      error.message,
-    );
-    return [];
+    throw new Error(`delivery modules lookup failed: ${error.message}`);
   }
 
-  return ((data ?? []) as ProgramDeliveryModuleDbRow[])
+  const modules = ((data ?? []) as ProgramDeliveryModuleDbRow[])
     .map(rowToProgramDeliveryModuleRow)
-    .filter((row) => {
-      if (programVersionId === undefined) return true;
-      return row.program_version_id == null || row.program_version_id === programVersionId;
-    })
+    .filter((row) => row.program_version_id === programVersionId)
     .map((row) => mapDeliveryModuleRowToDefinition(row, program.slug));
+  return { modules, versionKey: version.version_key };
 }
 
 export async function getDeliveryModulesForProgramWithFallback(input: {
   programSlug: string;
-  programVersionId?: string | null;
+  programVersionId: string;
 }): Promise<DeliveryModulesResult> {
-  const dbModules = await getPublishedDeliveryModulesForProgram(
+  const { modules: dbModules, versionKey } = await getPublishedDeliveryModulesForProgram(
     input.programSlug,
     input.programVersionId,
   );
   if (dbModules.length > 0) {
     return { source: 'admin', modules: dbModules };
   }
-
-  const codeSet = getCodeDeliveryModuleSet(input.programSlug);
-  if (codeSet) {
-    return { source: codeSet.source, modules: codeSet.modules };
-  }
-
+  // The seeded Baseline v1 experience predates DB-authored delivery rows.
+  // Preserve it only for its exact immutable version key. Never apply it to a
+  // newer version or after a database read error.
+  const codeSet = versionKey
+    ? getCodeDeliveryModuleSet(input.programSlug, versionKey)
+    : null;
+  if (codeSet) return { source: codeSet.source, modules: codeSet.modules };
   return { source: 'none', modules: [] };
 }

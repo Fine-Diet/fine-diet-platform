@@ -54,9 +54,16 @@ export default async function handler(
       const updated = await updateDeliveryModule(id, parsed.data);
       return res.status(200).json(updated);
     } catch (err) {
-      return res.status(500).json({
-        error: err instanceof Error ? err.message : 'Server error',
-      });
+      const code = (err as { code?: string } | undefined)?.code;
+      const message = err instanceof Error ? err.message : 'Server error';
+      const status =
+        message === 'Delivery module not found.'
+          ? 404
+          : code === 'VERSION_PROGRAM_MISMATCH' ||
+              code === 'COMPOSITION_WRITE_REJECTED'
+            ? 409
+            : 500;
+      return res.status(status).json({ error: message });
     }
   }
 
@@ -65,7 +72,9 @@ export default async function handler(
       await archiveDeliveryModule(id);
       return res.status(200).json({ ok: true });
     } catch (err) {
-      return res.status(500).json({
+      const code = (err as { code?: string } | undefined)?.code;
+      const status = code === 'COMPOSITION_WRITE_REJECTED' ? 409 : 500;
+      return res.status(status).json({
         error: err instanceof Error ? err.message : 'Server error',
       });
     }

@@ -23,7 +23,6 @@ import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramChecki
 import { ProgramDeliveryExperience } from '@/components/journal/programs/ProgramDeliveryExperience';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
-import { getCodeDeliveryModuleSet } from '@/lib/programs/deliveryModuleSetRegistry';
 import { isProgramRuntimeEnabled } from '@/lib/programs/programRuntimeRegistry';
 import type { ProgramDeliveryModuleDefinition } from '@/lib/programs/deliveryModuleTypes';
 import type {
@@ -44,11 +43,14 @@ import type {
 } from '@/lib/programs/runtimeTypes';
 import {
   formatRecommendedStepLabel,
+  hasPublishedRuntimeDeliverySource,
   getRecommendationRevealDetails,
   isCheckinDue,
   isDay21Handled,
   resolveProgramDetailRuntimeState,
   selectDisplayRuntimeSummaryForSlug,
+  shouldRenderProgramRuntimeExperience,
+  shouldRequestProgramRuntimeDelivery,
   shouldShowRecommendationReveal,
 } from '@/lib/programs/runtimeUi';
 
@@ -747,6 +749,8 @@ export default function JournalProgramDetailBySlugPage() {
   const [data, setData] = useState<ProgramLibraryDetail | null>(null);
   const [runtimeSummary, setRuntimeSummary] =
     useState<ProgramRuntimeSummary | null>(null);
+  const [hasPublishedRuntimeDelivery, setHasPublishedRuntimeDelivery] =
+    useState(false);
   const [progressSummary, setProgressSummary] =
     useState<ProgramProgressSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -766,6 +770,7 @@ export default function JournalProgramDetailBySlugPage() {
     setNotFound(false);
     setData(null);
     setRuntimeSummary(null);
+    setHasPublishedRuntimeDelivery(false);
     setProgressSummary(null);
     setDeliveryModules(null);
     (async () => {
@@ -799,11 +804,18 @@ export default function JournalProgramDetailBySlugPage() {
           );
           setRuntimeSummary(summary);
 
-          // Fetch delivery modules for any runtime-enabled program (or any
-          // program the caller is enrolled in). The API resolves DB-published
-          // modules first, then a code-owned set; on network failure we fall
-          // back to the code-owned set for that slug (if registered).
-          if (isProgramRuntimeEnabled(slugStr) || summary) {
+          // The server derives the enrolled version and accessible day range.
+          // For an entitled/assigned member with no enrollment, the same API
+          // exposes only Day 0 from the latest published version. A successful
+          // response activates generic runtime UI for newly published slugs;
+          // a successful response with source='none' keeps legacy catalogue UI.
+          const hasProgramAccess =
+            detail.has_entitlement || detail.access_state === 'assigned_only';
+          if (shouldRequestProgramRuntimeDelivery({
+            registeredRuntimeProgram: isProgramRuntimeEnabled(slugStr),
+            hasRuntimeSummary: Boolean(summary),
+            hasProgramAccess,
+          })) {
             const versionParam = summary?.version.id
               ? `?version_id=${encodeURIComponent(summary.version.id)}`
               : '';
@@ -814,13 +826,16 @@ export default function JournalProgramDetailBySlugPage() {
             );
             if (deliveryResp.ok) {
               const deliveryBody = (await deliveryResp.json()) as {
+                source: string;
                 modules: ProgramDeliveryModuleDefinition[];
               };
               setDeliveryModules(deliveryBody.modules);
-            } else {
-              setDeliveryModules(
-                getCodeDeliveryModuleSet(slugStr)?.modules ?? [],
+              setHasPublishedRuntimeDelivery(
+                hasPublishedRuntimeDeliverySource(deliveryBody.source),
               );
+            } else {
+              setDeliveryModules([]);
+              setHasPublishedRuntimeDelivery(false);
             }
           }
         } catch (runtimeErr) {
@@ -830,10 +845,9 @@ export default function JournalProgramDetailBySlugPage() {
               : 'Failed to load runtime summary.',
           );
           if (isProgramRuntimeEnabled(slugStr)) {
-            setDeliveryModules(
-              getCodeDeliveryModuleSet(slugStr)?.modules ?? [],
-            );
+            setDeliveryModules([]);
           }
+          setHasPublishedRuntimeDelivery(false);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load.');
@@ -898,6 +912,7 @@ export default function JournalProgramDetailBySlugPage() {
     summary: ProgramRuntimeSummary,
   ): Promise<void> {
     setRuntimeSummary(summary);
+    setDeliveryModules([]);
     if (!slugStr) return;
 
     try {
@@ -906,13 +921,23 @@ export default function JournalProgramDetailBySlugPage() {
           slugStr,
         )}/delivery-modules?version_id=${encodeURIComponent(summary.version.id)}`,
       );
-      if (!response.ok) return;
+      if (!response.ok) {
+        setDeliveryModules([]);
+        setHasPublishedRuntimeDelivery(false);
+        return;
+      }
       const body = (await response.json()) as {
+        source: string;
         modules: ProgramDeliveryModuleDefinition[];
       };
       setDeliveryModules(body.modules);
+      setHasPublishedRuntimeDelivery(
+        hasPublishedRuntimeDeliverySource(body.source),
+      );
     } catch {
-      // Keep the already-loaded published/global or code-owned fallback set.
+      // Do not render stale modules from a previously authorized version.
+      setDeliveryModules([]);
+      setHasPublishedRuntimeDelivery(false);
     }
   }
 
@@ -923,12 +948,12 @@ export default function JournalProgramDetailBySlugPage() {
         return to ? `${from} – ${to}` : `Starts ${from}`;
       })()
     : null;
-  const isRuntimeProgram =
-    isProgramRuntimeEnabled(slugStr) || Boolean(runtimeSummary);
-  const allDeliveryModules =
-    deliveryModules ??
-    getCodeDeliveryModuleSet(slugStr ?? '')?.modules ??
-    [];
+  const isRuntimeProgram = shouldRenderProgramRuntimeExperience({
+    registeredRuntimeProgram: isProgramRuntimeEnabled(slugStr),
+    hasRuntimeSummary: Boolean(runtimeSummary),
+    hasPublishedRuntimeDelivery,
+  });
+  const allDeliveryModules = deliveryModules ?? [];
   const prepDeliveryModules = allDeliveryModules.filter(
     (module) => module.moduleType === 'prep' || module.moduleType === 'roadmap',
   );

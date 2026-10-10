@@ -12,6 +12,46 @@ const OPEN_DISPLAY_STATUSES = new Set<ProgramEnrollmentStatus>([
   'paused',
 ]);
 
+/**
+ * Discover a published runtime version for any entitled/assigned program.
+ * The API remains the authority: it only returns Day 0 without an enrollment.
+ */
+export function shouldRequestProgramRuntimeDelivery(input: {
+  registeredRuntimeProgram: boolean;
+  hasRuntimeSummary: boolean;
+  hasProgramAccess: boolean;
+}): boolean {
+  return (
+    input.registeredRuntimeProgram ||
+    input.hasRuntimeSummary ||
+    input.hasProgramAccess
+  );
+}
+
+/** Keep legacy catalogue rendering unless a published runtime version exists. */
+export function shouldRenderProgramRuntimeExperience(input: {
+  registeredRuntimeProgram: boolean;
+  hasRuntimeSummary: boolean;
+  hasPublishedRuntimeDelivery: boolean;
+}): boolean {
+  return (
+    input.registeredRuntimeProgram ||
+    input.hasRuntimeSummary ||
+    input.hasPublishedRuntimeDelivery
+  );
+}
+
+/**
+ * A successful delivery response can still have no published source. Keep
+ * legacy catalogue rendering in that case; module count is not a proxy for
+ * availability because authorization may filter every module for Day 0.
+ */
+export function hasPublishedRuntimeDeliverySource(
+  source: string | null | undefined,
+): boolean {
+  return source === 'admin' || source === 'baseline_code' || source === 'code';
+}
+
 function summaryRecencyKey(summary: ProgramRuntimeSummary): string {
   // ISO timestamps sort lexicographically; id breaks ties stably.
   return [

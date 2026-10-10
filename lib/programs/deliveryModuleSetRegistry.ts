@@ -20,12 +20,15 @@ export type CodeDeliveryModuleSource = 'baseline_code' | 'code';
 
 export interface CodeDeliveryModuleSet {
   source: CodeDeliveryModuleSource;
+  /** Exact immutable program_versions.version_key values allowed to use this set. */
+  supportedVersionKeys: readonly string[];
   modules: ProgramDeliveryModuleDefinition[];
 }
 
 const REGISTRY: Record<string, CodeDeliveryModuleSet> = {
   baseline: {
     source: 'baseline_code',
+    supportedVersionKeys: ['baseline-v1'],
     modules: [
       ...BASELINE_PREP_DELIVERY_MODULES,
       ...BASELINE_WEEK_DELIVERY_MODULES,
@@ -35,6 +38,9 @@ const REGISTRY: Record<string, CodeDeliveryModuleSet> = {
 
 export function getCodeDeliveryModuleSet(
   programSlug: string,
+  versionKey: string,
 ): CodeDeliveryModuleSet | null {
-  return REGISTRY[programSlug.trim().toLowerCase()] ?? null;
+  const set = REGISTRY[programSlug.trim().toLowerCase()] ?? null;
+  if (!set || !set.supportedVersionKeys.includes(versionKey)) return null;
+  return set;
 }

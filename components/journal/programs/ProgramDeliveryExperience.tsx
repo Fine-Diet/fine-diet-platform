@@ -26,7 +26,18 @@ import {
   StackedPageSection,
 } from '@/components/layout/StackedPageSection';
 import { PROGRAMS_MVP_CATEGORIES } from '@/lib/programs/appProgramsMvp';
-import type { ProgramDeliveryModuleDefinition } from '@/lib/programs/deliveryModuleTypes';
+import {
+  checkinPromptWithoutTemplate,
+  heroForViewedDay,
+  mediaForViewedDay,
+  selectPreviewCheckinTemplate,
+  shouldPreserveAuthoredOrder,
+  type DeliveryCompositionSource,
+} from '@/lib/programs/deliveryComposition';
+import {
+  isDeliveryModuleVisible,
+  type ProgramDeliveryModuleDefinition,
+} from '@/lib/programs/deliveryModuleTypes';
 import type { ProgramLibraryDetail } from '@/lib/programs/programLibraryServerService';
 import {
   buildProgramDayRail,
@@ -44,6 +55,7 @@ import type {
   ProgramProgressSummary,
 } from '@/lib/programs/progressTypes';
 import type {
+  ProgramCheckinTemplate,
   ProgramLifecycleAction,
   ProgramRuntimeSummary,
 } from '@/lib/programs/runtimeTypes';
@@ -63,6 +75,9 @@ interface ProgramDeliveryExperienceProps {
   deliveryModules: ProgramDeliveryModuleDefinition[];
   runtimeError?: string | null;
   previewMode?: boolean;
+  compositionSource?: DeliveryCompositionSource;
+  previewCheckinTemplates?: ProgramCheckinTemplate[];
+  previewVersionId?: string | null;
   initialStartGateOpen?: boolean;
   initialView?: DeliveryView;
   onRuntimeSummaryUpdate: (summary: ProgramRuntimeSummary) => void;
@@ -89,58 +104,6 @@ function formatDate(dateKey: string | null | undefined): string | null {
     day: 'numeric',
     year: 'numeric',
   });
-}
-
-interface ProgramMedia {
-  type: 'audio' | 'video';
-  url: string;
-  title: string;
-  description: string | null;
-}
-
-interface Day0MediaFixture {
-  type: 'audio';
-  url: string;
-  title: string;
-  description: string;
-}
-
-const DAY_0_AUDIO_FIXTURE_PATH = '/audio/Test-Print-For-FD.mp3';
-
-function resolveDay0MediaFixture(): Day0MediaFixture | null {
-  return {
-    type: 'audio',
-    url: DAY_0_AUDIO_FIXTURE_PATH,
-    title: 'Program Introduction',
-    description: 'An introduction to this program and what you can expect.',
-  };
-}
-
-function firstMedia(data: ProgramLibraryDetail): ProgramMedia | null {
-  for (const module of data.managed_content?.modules ?? []) {
-    for (const item of module.items) {
-      const itemWithOptionalAudio = item as typeof item & {
-        audio_url?: string | null;
-      };
-      if (itemWithOptionalAudio.audio_url) {
-        return {
-          type: 'audio',
-          url: itemWithOptionalAudio.audio_url,
-          title: item.title,
-          description: item.summary,
-        };
-      }
-      if (item.video_url) {
-        return {
-          type: 'video',
-          url: item.video_url,
-          title: item.title,
-          description: item.summary,
-        };
-      }
-    }
-  }
-  return null;
 }
 
 function formatAudioTime(seconds: number): string {
@@ -680,6 +643,9 @@ export function ProgramDeliveryExperience({
   deliveryModules,
   runtimeError = null,
   previewMode = false,
+  compositionSource = 'delivery',
+  previewCheckinTemplates = [],
+  previewVersionId = null,
   initialStartGateOpen = true,
   initialView = 'day',
   onRuntimeSummaryUpdate,
@@ -706,10 +672,19 @@ export function ProgramDeliveryExperience({
     runtimeStatus: runtimeSummary?.resolved_status ?? 'not_started',
     currentDay: runtimeSummary?.current_day ?? 0,
   });
-  const displaySummary =
-    runtimeSummary && selectedDay > 0
-      ? { ...runtimeSummary, current_day: selectedDay }
-      : runtimeSummary;
+  const viewedDay = selectedDay;
+  const membershipCheckinDue =
+    selectedDay === runtimeSummary?.current_day && isCheckinDue(runtimeSummary);
+  const visibilityCtx = {
+    runtimeSummary,
+    checkinDue: membershipCheckinDue,
+    day21Handled: isDay21Handled(runtimeSummary),
+    viewedDay,
+  };
+  const authoredOrder = shouldPreserveAuthoredOrder(
+    deliveryModules,
+    visibilityCtx,
+  );
   const prepModules = deliveryModules
     .filter((module) => module.moduleType === 'prep')
     .map((module) =>
@@ -738,15 +713,29 @@ export function ProgramDeliveryExperience({
       module.moduleType !== 'practice_card' &&
       module.moduleType !== 'guide',
   );
-  const showDayZero = selectedDay === 0;
-  const imageUrl = programImage(data.slug);
-  const media = firstMedia(data);
-  const day0Media = resolveDay0MediaFixture();
-  const day0AuthoredModule = deliveryModules.find(
-    (module) =>
-      module.moduleType === 'prep' &&
-      /orientation|arrive/i.test(`${module.eyebrow ?? ''} ${module.title}`),
+  const showDayZero = viewedDay === 0;
+  const composedHero = authoredOrder
+    ? heroForViewedDay(deliveryModules, viewedDay, visibilityCtx)
+    : null;
+  const viewedMedia = mediaForViewedDay(
+    deliveryModules,
+    viewedDay,
+    visibilityCtx,
   );
+  const visibleModules = deliveryModules.filter((module) =>
+    isDeliveryModuleVisible(module, visibilityCtx),
+  );
+  const previewTemplate = previewMode
+    ? selectPreviewCheckinTemplate(
+        previewCheckinTemplates,
+        previewVersionId ?? runtimeSummary?.version.id ?? '',
+        viewedDay,
+      )
+    : null;
+  const previewTemplateMissing =
+    previewMode &&
+    checkinPromptWithoutTemplate(visibleModules, viewedDay, previewTemplate);
+  const imageUrl = composedHero?.imageUrl ?? programImage(data.slug);
   const activeWeekModule = deliveryModules.find(
     (module) =>
       module.moduleType === 'week' &&
@@ -755,13 +744,20 @@ export function ProgramDeliveryExperience({
       selectedDay >= module.dayStart &&
       selectedDay <= module.dayEnd,
   );
-  const checkinDue =
-    selectedDay === runtimeSummary?.current_day && isCheckinDue(runtimeSummary);
-  const headline = showDayZero
-    ? `Let’s get you set up for ${data.title}`
-    : activeWeekModule
-      ? `Let’s focus on ${activeWeekModule.title}`
-      : `Day ${twoDigitDay(selectedDay)} in ${data.title}`;
+  const checkinDue = previewMode
+    ? Boolean(previewTemplate) || previewTemplateMissing
+    : membershipCheckinDue;
+  const panelSummary =
+    runtimeSummary && previewTemplate
+      ? { ...runtimeSummary, next_checkin_template: previewTemplate }
+      : runtimeSummary;
+  const headline =
+    composedHero?.title ??
+    (showDayZero
+      ? `Let’s get you set up for ${data.title}`
+      : activeWeekModule
+        ? `Let’s focus on ${activeWeekModule.title}`
+        : `Day ${twoDigitDay(viewedDay)} in ${data.title}`);
   const derivedContextLine = deriveHeroDayContext(
     selectedDay,
     deliveryModules,
@@ -803,6 +799,11 @@ export function ProgramDeliveryExperience({
               />
               <span>{derivedContextLine}</span>
             </p>
+            {composedHero?.eyebrow && (
+              <p className="mt-3 text-xs uppercase tracking-wider text-white/70">
+                {composedHero.eyebrow}
+              </p>
+            )}
             <h1 className="mt-3 max-w-3xl text-[2.65rem] font-normal leading-[0.98] tracking-[-0.035em] sm:text-5xl">
               {headline}
             </h1>
@@ -811,17 +812,13 @@ export function ProgramDeliveryExperience({
                 {activeWeekModule.body}
               </p>
             )}
-            {showDayZero && day0Media && (
-              <div className="mt-7 max-w-2xl">
-                <ProgramAudioPlayer
-                  src={day0Media.url}
-                  title={day0AuthoredModule?.title ?? day0Media.title}
-                  description={
-                    day0AuthoredModule?.body ?? day0Media.description
-                  }
-                />
-              </div>
-            )}
+            {!viewedMedia &&
+              authoredOrder &&
+              compositionSource !== 'delivery' && (
+                <p className="mt-7 max-w-2xl text-sm text-white/60">
+                  No media is authored for this day.
+                </p>
+              )}
             {runtimeSummary && (
               <HorizontalRail
                 ariaLabel="Program days"
@@ -947,6 +944,122 @@ export function ProgramDeliveryExperience({
               />
             )}
           </StackedPageSection>
+        ) : authoredOrder ? (
+          <StackedPageSection
+            layer={1}
+            className="mt-0 rounded-none bg-[#102312] pb-20 pt-12"
+            contentClassName="max-w-[1000px]"
+          >
+            {compositionSource !== 'delivery' && (
+              <p className="mb-5 text-xs uppercase tracking-wider text-white/55">
+                Preview source: {compositionSource}
+              </p>
+            )}
+            {lockedMessage && (
+              <p role="status" className="mb-5 text-xs text-[#d7ecff]/75">
+                {lockedMessage}
+              </p>
+            )}
+            {runtimeError && (
+              <p className="mb-5 border-l-2 border-amber-200/35 pl-4 text-sm text-amber-100">
+                Runtime details could not be confirmed. Interactive Program
+                regions remain unavailable.
+              </p>
+            )}
+            <div
+              className={
+                needsEnrollment ? 'pointer-events-none opacity-75' : undefined
+              }
+              aria-disabled={needsEnrollment || undefined}
+            >
+              <ProgramDeliveryModules
+                runtimeSummary={runtimeSummary}
+                progressSummary={progressSummary}
+                modules={deliveryModules}
+                viewedDay={viewedDay}
+                checkinDue={membershipCheckinDue}
+                day21Handled={isDay21Handled(runtimeSummary)}
+                anchors={{
+                  checkin: 'program-checkin',
+                  recommendation: 'program-recommendation',
+                }}
+              />
+            </div>
+            {needsEnrollment && (
+              <div className="mt-5 flex items-center gap-3 border-t border-white/15 pt-5">
+                <Lock className="h-5 w-5 text-white/65" />
+                <p className="flex-1 text-xs text-white/60">
+                  Day 00 stays readable. Start the Program to use setup actions.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setStartGateOpen(true)}
+                  className="shrink-0 rounded-full bg-[#d7ecff] px-4 py-2 text-xs font-semibold text-black"
+                >
+                  Get Started
+                </button>
+              </div>
+            )}
+            {previewTemplateMissing && (
+              <p id="program-checkin" className="mt-8 text-sm text-white/70">
+                Check-in template is not available for this day.
+              </p>
+            )}
+            {previewTemplate && panelSummary && (
+              <div id="program-checkin" className="mt-8">
+                <ProgramCheckinPanel
+                  runtimeSummary={panelSummary}
+                  onHandled={onRuntimeSummaryUpdate}
+                  previewMode={previewMode}
+                />
+              </div>
+            )}
+            {!previewMode && checkinDue && runtimeSummary && (
+              <div id="program-checkin" className="mt-8">
+                <ProgramCheckinPanel
+                  runtimeSummary={runtimeSummary}
+                  onHandled={onRuntimeSummaryUpdate}
+                  previewMode={previewMode}
+                />
+              </div>
+            )}
+            {data.slug === 'baseline' &&
+              shouldShowRecommendationReveal(runtimeSummary) && (
+                <div
+                  id="program-recommendation"
+                  className="mt-8 border-t border-[#d7ecff]/25 pt-7"
+                >
+                  <p className="text-xs uppercase tracking-wider text-white/55">
+                    Recommendation
+                  </p>
+                  <h2 className="mt-2 text-2xl font-normal">
+                    Your next-step review is ready
+                  </h2>
+                  <p className="mt-2 text-sm text-white/65">
+                    Your stored Program recommendation remains available here
+                    for review.
+                  </p>
+                </div>
+              )}
+            {runtimeSummary && (
+              <LifecycleMenu
+                runtimeSummary={runtimeSummary}
+                previewMode={previewMode}
+                onUpdated={onRuntimeSummaryUpdate}
+              />
+            )}
+            <ProgramResources
+              data={data}
+              progressSummary={progressSummary}
+              onSetItemStatus={
+                needsEnrollment || runtimeError ? undefined : onSetItemStatus
+              }
+            />
+            <p className="mt-8 text-sm text-white/60">
+              Day completion is not available. Catalogue item progress is not
+              day completion.
+            </p>
+          </StackedPageSection>
         ) : showDayZero ? (
           <StackedPageSection
             layer={1}
@@ -973,6 +1086,7 @@ export function ProgramDeliveryExperience({
                 progressSummary={progressSummary}
                 modules={prepModules}
                 presentation="prep-workflow"
+                viewedDay={viewedDay}
               />
             </div>
             {needsEnrollment && (
@@ -1018,12 +1132,13 @@ export function ProgramDeliveryExperience({
                 </p>
               )}
               <ProgramDeliveryModules
-                runtimeSummary={displaySummary}
+                runtimeSummary={runtimeSummary}
                 progressSummary={progressSummary}
                 modules={lightModules}
                 presentation="light"
                 checkinDue={checkinDue}
-                day21Handled={isDay21Handled(displaySummary)}
+                day21Handled={isDay21Handled(runtimeSummary)}
+                viewedDay={viewedDay}
               />
             </StackedPageSection>
 
@@ -1032,44 +1147,14 @@ export function ProgramDeliveryExperience({
               className="bg-[#0d2110] pb-20 pt-12"
               contentClassName="max-w-[1000px]"
             >
-              {media && (
-                <div className="mb-10 max-w-2xl">
-                  {media.type === 'audio' ? (
-                    <ProgramAudioPlayer
-                      src={media.url}
-                      title={media.title}
-                      description={media.description}
-                      eyebrow="Take a listen"
-                    />
-                  ) : (
-                    <a
-                      href={media.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-4 border-y border-white/20 py-5"
-                    >
-                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black">
-                        <Play className="ml-0.5 h-5 w-5 fill-current" />
-                      </span>
-                      <span>
-                        <span className="block text-xs text-white/55">
-                          Take a listen
-                        </span>
-                        <span className="mt-1 block text-xl">
-                          {media.title}
-                        </span>
-                      </span>
-                    </a>
-                  )}
-                </div>
-              )}
               <ProgramDeliveryModules
-                runtimeSummary={displaySummary}
+                runtimeSummary={runtimeSummary}
                 progressSummary={progressSummary}
                 modules={listeningModules}
                 presentation="dark"
                 checkinDue={checkinDue}
-                day21Handled={isDay21Handled(displaySummary)}
+                day21Handled={isDay21Handled(runtimeSummary)}
+                viewedDay={viewedDay}
               />
             </StackedPageSection>
 
@@ -1079,12 +1164,13 @@ export function ProgramDeliveryExperience({
               contentClassName="max-w-[1000px]"
             >
               <ProgramDeliveryModules
-                runtimeSummary={displaySummary}
+                runtimeSummary={runtimeSummary}
                 progressSummary={progressSummary}
                 modules={reflectionModules}
                 presentation="deep"
                 checkinDue={checkinDue}
-                day21Handled={isDay21Handled(displaySummary)}
+                day21Handled={isDay21Handled(runtimeSummary)}
+                viewedDay={viewedDay}
                 anchors={{
                   checkin: 'program-checkin',
                   recommendation: 'program-recommendation',
@@ -1100,7 +1186,7 @@ export function ProgramDeliveryExperience({
                 </div>
               )}
               {data.slug === 'baseline' &&
-                shouldShowRecommendationReveal(displaySummary) && (
+                shouldShowRecommendationReveal(runtimeSummary) && (
                 <div
                   id="program-recommendation"
                   className="mt-8 border-t border-[#d7ecff]/25 pt-7"
@@ -1138,7 +1224,8 @@ export function ProgramDeliveryExperience({
               className="bg-[#1b1711] pb-24 pt-10"
               contentClassName="max-w-[1000px]"
             >
-              {selectedDay === runtimeSummary?.current_day &&
+              {!authoredOrder &&
+              selectedDay === runtimeSummary?.current_day &&
               progressSummary?.resume_content_item_id &&
               onSetItemStatus ? (
                 <button

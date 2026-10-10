@@ -31,7 +31,15 @@ export default async function handler(
 
   if (req.method === 'GET') {
     try {
-      const rows = await listDeliveryModulesForProgram(id);
+      const rawVersion = req.query.version_id;
+      const versionId = Array.isArray(rawVersion) ? rawVersion[0] : rawVersion;
+      const scope =
+        versionId === 'unversioned'
+          ? null
+          : typeof versionId === 'string' && versionId
+            ? versionId
+            : undefined;
+      const rows = await listDeliveryModulesForProgram(id, scope);
       return res.status(200).json(rows);
     } catch (err) {
       console.error('[admin/programs/:id/delivery-modules GET] error:', err);
@@ -56,7 +64,13 @@ export default async function handler(
       return res.status(201).json(created);
     } catch (err) {
       console.error('[admin/programs/:id/delivery-modules POST] error:', err);
-      return res.status(500).json({
+      const code = (err as { code?: string } | undefined)?.code;
+      const status =
+        code === 'VERSION_PROGRAM_MISMATCH' ||
+        code === 'COMPOSITION_WRITE_REJECTED'
+          ? 409
+          : 500;
+      return res.status(status).json({
         error: err instanceof Error ? err.message : 'Server error',
       });
     }

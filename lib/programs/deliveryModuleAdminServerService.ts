@@ -2,7 +2,7 @@
  * Program Runtime Packet 16 — delivery module admin service (server-only).
  *
  * CRUD + reorder support for admin-authored Program Delivery Modules. These
- * rows are additive; code-owned Baseline modules remain the runtime fallback.
+ * version-scoped rows are the sole source of member delivery.
  */
 
 import { z } from 'zod';
@@ -13,6 +13,13 @@ import {
   type ProgramDeliveryModuleType,
   type ProgramDeliveryStatusVisibility,
 } from './deliveryModuleTypes';
+import {
+  compositionIssues,
+  evaluateCompositionWrite,
+  mergeDeliveryMetadata,
+  metadataHasComposition,
+  versionBelongsToProgram,
+} from './deliveryComposition';
 import type { ProgramStatus } from './contentTypes';
 
 export type ProgramDeliveryModuleStatus = ProgramStatus;
@@ -127,6 +134,19 @@ const DeliveryModuleBaseSchema = z
         code: z.ZodIssueCode.custom,
         path: ['day_end'],
         message: 'day_end must be greater than or equal to day_start.',
+      });
+    }
+    for (const message of compositionIssues({
+      metadata: value.metadata,
+      programVersionId: value.program_version_id,
+      status: value.status,
+      dayStart: value.day_start,
+      dayEnd: value.day_end,
+    })) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['metadata'],
+        message,
       });
     }
   });
@@ -267,10 +287,99 @@ export async function getDeliveryModuleById(
     : null;
 }
 
+async function assertVersionOwnedByProgram(
+  programId: string,
+  programVersionId: string,
+): Promise<{ duration_days: number | null; status: string }> {
+  const { data, error } = await supabaseAdmin
+    .from('program_versions')
+    .select('id, program_id, duration_days, status')
+    .eq('id', programVersionId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`assertVersionOwnedByProgram failed: ${error.message}`);
+  }
+  const version = data as {
+    id: string;
+    program_id: string;
+    duration_days: number | null;
+    status: string;
+  } | null;
+  const match = versionBelongsToProgram({ programId, version });
+  if (!match.ok) {
+    const err = new Error(match.message);
+    (err as Error & { code?: string }).code = 'VERSION_PROGRAM_MISMATCH';
+    throw err;
+  }
+  return {
+    duration_days: version?.duration_days ?? null,
+    status: version?.status ?? 'draft',
+  };
+}
+
+function rejectComposition(message: string): never {
+  const err = new Error(message);
+  (err as Error & { code?: string }).code = 'COMPOSITION_WRITE_REJECTED';
+  throw err;
+}
+
+export async function listProgramVersionsForProgram(programId: string): Promise<
+  Array<{
+    id: string;
+    program_id: string;
+    version_key: string;
+    version_label: string | null;
+    version_number: number;
+    status: string;
+    duration_days: number | null;
+  }>
+> {
+  const { data, error } = await supabaseAdmin
+    .from('program_versions')
+    .select(
+      'id, program_id, version_key, version_label, version_number, status, duration_days',
+    )
+    .eq('program_id', programId)
+    .order('version_number', { ascending: true });
+  if (error) {
+    throw new Error(`listProgramVersionsForProgram failed: ${error.message}`);
+  }
+  return (data ?? []) as Array<{
+    id: string;
+    program_id: string;
+    version_key: string;
+    version_label: string | null;
+    version_number: number;
+    status: string;
+    duration_days: number | null;
+  }>;
+}
+
 export async function createDeliveryModule(
   programId: string,
   input: ProgramDeliveryModuleCreateInput,
 ): Promise<ProgramDeliveryModuleRow> {
+  const ownedVersion = input.program_version_id
+    ? await assertVersionOwnedByProgram(programId, input.program_version_id)
+    : null;
+  if (input.program_version_id && ownedVersion?.status !== 'draft') {
+    rejectComposition('Published program versions are immutable. Create a new draft version to make changes.');
+  }
+  const createIssues = compositionIssues({
+    metadata: input.metadata,
+    programVersionId: input.program_version_id,
+    status: input.status,
+    dayStart: input.day_start,
+    dayEnd: input.day_end,
+    durationDays: ownedVersion?.duration_days,
+  });
+  if (createIssues.length > 0) rejectComposition(createIssues[0]);
+  if (
+    metadataHasComposition(input.metadata) &&
+    ownedVersion?.status !== 'draft'
+  ) {
+    rejectComposition('Composition content can only be authored on a draft version.');
+  }
   const displayOrder =
     input.display_order ??
     (await nextDisplayOrder(programId, input.program_version_id));
@@ -306,6 +415,55 @@ export async function updateDeliveryModule(
   id: string,
   input: ProgramDeliveryModuleUpdateInput,
 ): Promise<ProgramDeliveryModuleRow> {
+  const existing = await getDeliveryModuleById(id);
+  if (!existing) throw new Error('Delivery module not found.');
+
+  const nextMetadata =
+    input.metadata !== undefined
+      ? mergeDeliveryMetadata(existing.metadata, input.metadata)
+      : existing.metadata;
+  const nextStatus = input.status ?? existing.status;
+  const nextVersionId =
+    input.program_version_id !== undefined
+      ? input.program_version_id
+      : existing.program_version_id;
+  const decision = evaluateCompositionWrite({
+    existingStatus: existing.status,
+    existingVersionId: existing.program_version_id,
+    existingMetadata: existing.metadata,
+    nextStatus,
+    nextVersionId: nextVersionId ?? null,
+    nextMetadata,
+  });
+  if (!decision.ok) {
+    const err = new Error(decision.message ?? 'Composition write rejected.');
+    (err as Error & { code?: string }).code = decision.code;
+    throw err;
+  }
+  const ownedVersion = nextVersionId
+    ? await assertVersionOwnedByProgram(existing.program_id, nextVersionId)
+    : null;
+  if (existing.program_version_id && ownedVersion?.status !== 'draft') {
+    rejectComposition('Published program versions are immutable. Create a new draft version to make changes.');
+  }
+  const issues = compositionIssues({
+    metadata: nextMetadata,
+    programVersionId: nextVersionId,
+    status: nextStatus,
+    dayStart:
+      input.day_start !== undefined ? input.day_start : existing.day_start,
+    dayEnd: input.day_end !== undefined ? input.day_end : existing.day_end,
+    durationDays: ownedVersion?.duration_days,
+  });
+  if (issues.length > 0) {
+    const err = new Error(issues[0]);
+    (err as Error & { code?: string }).code = 'COMPOSITION_WRITE_REJECTED';
+    throw err;
+  }
+  if (metadataHasComposition(nextMetadata) && ownedVersion?.status !== 'draft') {
+    rejectComposition('Published program versions are immutable. Create a new draft version to make changes.');
+  }
+
   const patch: Partial<ProgramDeliveryModuleDbRow> = {};
   if (input.program_version_id !== undefined) {
     patch.program_version_id = input.program_version_id ?? null;
@@ -330,7 +488,7 @@ export async function updateDeliveryModule(
   if (input.safety_notes !== undefined) patch.safety_notes = input.safety_notes;
   if (input.no_claims_notes !== undefined)
     patch.no_claims_notes = input.no_claims_notes;
-  if (input.metadata !== undefined) patch.metadata = input.metadata;
+  if (input.metadata !== undefined) patch.metadata = nextMetadata;
 
   const { data, error } = await supabaseAdmin
     .from('program_delivery_modules')
@@ -351,10 +509,17 @@ export async function archiveDeliveryModule(
 export async function reorderDeliveryModules(
   programId: string,
   orderedIds: string[],
+  programVersionId: string | null,
 ): Promise<ProgramDeliveryModuleRow[]> {
+  if (programVersionId) {
+    const version = await assertVersionOwnedByProgram(programId, programVersionId);
+    if (version.status !== 'draft') {
+      rejectComposition('Published program versions are immutable. Create a new draft version to reorder content.');
+    }
+  }
   const { data: existingData, error: existingError } = await supabaseAdmin
     .from('program_delivery_modules')
-    .select('id')
+    .select('id, program_version_id')
     .eq('program_id', programId);
   if (existingError) {
     throw new Error(
@@ -362,20 +527,194 @@ export async function reorderDeliveryModules(
     );
   }
 
-  const validIds = new Set(
-    ((existingData ?? []) as Array<{ id: string }>).map((row) => row.id),
+  const rows = (existingData ?? []) as Array<{
+    id: string;
+    program_version_id: string | null;
+  }>;
+  const foreign = orderedIds.filter((id) => {
+    const row = rows.find((candidate) => candidate.id === id);
+    return (
+      row != null && (row.program_version_id ?? null) !== programVersionId
+    );
+  });
+  if (foreign.length > 0) {
+    const err = new Error(
+      'Reorder includes a row from another program version.',
+    );
+    (err as Error & { code?: string }).code = 'VERSION_SCOPE_MISMATCH';
+    throw err;
+  }
+  const allowed = new Set(
+    rows
+      .filter((row) => (row.program_version_id ?? null) === programVersionId)
+      .map((row) => row.id),
   );
-  const filtered = orderedIds.filter((id) => validIds.has(id));
+  const filtered = orderedIds.filter((id) => allowed.has(id));
 
   for (let i = 0; i < filtered.length; i++) {
     const { error } = await supabaseAdmin
       .from('program_delivery_modules')
       .update({ display_order: i })
-      .eq('id', filtered[i]);
+      .eq('id', filtered[i])
+      .eq('program_id', programId);
     if (error) {
       throw new Error(`reorderDeliveryModules.update failed: ${error.message}`);
     }
   }
 
-  return listDeliveryModulesForProgram(programId);
+  return listDeliveryModulesForProgram(programId, programVersionId);
+}
+
+export async function listCheckinTemplatesForVersion(
+  programId: string,
+  programVersionId: string,
+): Promise<
+  Array<{
+    id: string;
+    program_version_id: string;
+    checkin_day: number;
+    title: string;
+    description: string | null;
+    prompt_md: string | null;
+    questions_json: unknown;
+    status: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+  }>
+> {
+  await assertVersionOwnedByProgram(programId, programVersionId);
+  const { data, error } = await supabaseAdmin
+    .from('program_checkin_templates')
+    .select(
+      'id, program_version_id, checkin_day, title, description, prompt_md, questions_json, status, metadata, created_at, updated_at',
+    )
+    .eq('program_version_id', programVersionId)
+    .order('checkin_day', { ascending: true });
+  if (error) {
+    throw new Error(`listCheckinTemplatesForVersion failed: ${error.message}`);
+  }
+  return (data ?? []) as Array<{
+    id: string;
+    program_version_id: string;
+    checkin_day: number;
+    title: string;
+    description: string | null;
+    prompt_md: string | null;
+    questions_json: unknown;
+    status: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+  }>;
+}
+
+export async function saveCheckinTemplateForDraft(input: {
+  programId: string;
+  programVersionId: string;
+  id?: string | null;
+  checkinDay: number;
+  title: string;
+  description?: string | null;
+  promptMd?: string | null;
+  questionsJson: unknown;
+}): Promise<Record<string, unknown>> {
+  const version = await assertVersionOwnedByProgram(input.programId, input.programVersionId);
+  if (version.status !== 'draft') rejectComposition('Check-in templates can only be edited on a draft version.');
+  if (!version.duration_days || !Number.isInteger(input.checkinDay) || input.checkinDay < 1 || input.checkinDay > version.duration_days) {
+    rejectComposition(`Check-in day must be between 1 and ${version.duration_days}.`);
+  }
+  const title = input.title.trim();
+  if (!title || title.length > 240) rejectComposition('Check-in title is required and must be at most 240 characters.');
+  if (!Array.isArray(input.questionsJson)) rejectComposition('Check-in questions must be a JSON array.');
+
+  const values = {
+    checkin_day: input.checkinDay,
+    title,
+    description: input.description?.trim() || null,
+    prompt_md: input.promptMd?.trim() || null,
+    questions_json: input.questionsJson,
+    status: 'draft',
+  };
+  const result = input.id
+    ? await supabaseAdmin.from('program_checkin_templates').update(values)
+        .eq('id', input.id).eq('program_version_id', input.programVersionId).select('*').single()
+    : await supabaseAdmin.from('program_checkin_templates').insert({
+        ...values,
+        program_version_id: input.programVersionId,
+      }).select('*').single();
+  if (result.error) {
+    if (result.error.code === '23505') rejectComposition('This version already has a check-in on that day.');
+    throw new Error(`saveCheckinTemplateForDraft failed: ${result.error.message}`);
+  }
+  if (!result.data) throw new Error('Check-in template was not saved.');
+  return result.data as Record<string, unknown>;
+}
+
+export async function createProgramVersionDraft(input: {
+  programId: string;
+  sourceVersionId?: string | null;
+  versionLabel?: string | null;
+  durationDays?: number | null;
+}): Promise<Record<string, unknown>> {
+  const { data, error } = await supabaseAdmin.rpc('create_program_version_draft', {
+    p_program_id: input.programId,
+    p_source_version_id: input.sourceVersionId ?? null,
+    p_version_label: input.versionLabel ?? null,
+    p_duration_days: input.durationDays ?? null,
+  });
+  if (error) throw new Error(`createProgramVersionDraft failed: ${error.message}`);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== 'object') {
+    throw new Error('createProgramVersionDraft returned no version.');
+  }
+  return row as Record<string, unknown>;
+}
+
+export async function publishProgramVersion(input: {
+  programId: string;
+  programVersionId: string;
+}): Promise<Record<string, unknown>> {
+  const version = await assertVersionOwnedByProgram(
+    input.programId,
+    input.programVersionId,
+  );
+  if (version.status === 'published') {
+    const { data, error } = await supabaseAdmin
+      .from('program_versions')
+      .select('*')
+      .eq('id', input.programVersionId)
+      .eq('program_id', input.programId)
+      .single();
+    if (error) throw new Error(`publishProgramVersion read failed: ${error.message}`);
+    return data as Record<string, unknown>;
+  }
+  if (version.status !== 'draft') rejectComposition('Only draft versions can be published.');
+
+  const rows = await listDeliveryModulesForProgram(input.programId, input.programVersionId);
+  const invalid = rows.flatMap((row) =>
+    compositionIssues({
+      metadata: row.metadata,
+      programVersionId: row.program_version_id,
+      status: row.status,
+      dayStart: row.day_start,
+      dayEnd: row.day_end,
+      durationDays: version.duration_days,
+    }),
+  );
+  if (invalid.length > 0) rejectComposition(invalid[0]);
+  if (!rows.some((row) => row.status === 'draft')) {
+    rejectComposition('Add at least one draft delivery module before publishing.');
+  }
+
+  const { data, error } = await supabaseAdmin.rpc('publish_program_version', {
+    p_program_id: input.programId,
+    p_program_version_id: input.programVersionId,
+  });
+  if (error) throw new Error(`publishProgramVersion failed: ${error.message}`);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== 'object') {
+    throw new Error('publishProgramVersion returned no version.');
+  }
+  return row as Record<string, unknown>;
 }

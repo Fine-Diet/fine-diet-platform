@@ -4,6 +4,7 @@ import type {
 } from '../runtimeTypes';
 import {
   formatRecommendedStepLabel,
+  hasPublishedRuntimeDeliverySource,
   getRecommendationRevealDetails,
   getBaselineWeekOneCapacityCopy,
   getBaselineWeekThreeCapacityCopy,
@@ -15,6 +16,8 @@ import {
   resolveBaselineDetailRuntimeState,
   resolveBaselinePrepModuleAccess,
   selectDisplayRuntimeSummaryForSlug,
+  shouldRenderProgramRuntimeExperience,
+  shouldRequestProgramRuntimeDelivery,
   shouldShowBaselineWeekOneModules,
   shouldShowBaselineWeekThreeModules,
   shouldShowBaselineWeekTwoModules,
@@ -500,5 +503,55 @@ describe('Baseline recommendation reveal helpers', () => {
   test('supports placeholder state when no recommendation row exists', () => {
     expect(getRecommendationRevealDetails(null)).toBeNull();
     expect(formatRecommendedStepLabel(null)).toBe('Not set');
+  });
+});
+
+
+describe('published runtime discovery for new Programs', () => {
+  test('keeps legacy catalogue rendering when an authorized API response has source none', () => {
+    const response = { source: 'none', modules: [] };
+    expect(hasPublishedRuntimeDeliverySource(response.source)).toBe(false);
+    expect(shouldRenderProgramRuntimeExperience({
+      registeredRuntimeProgram: false,
+      hasRuntimeSummary: false,
+      hasPublishedRuntimeDelivery: hasPublishedRuntimeDeliverySource(response.source),
+    })).toBe(false);
+  });
+
+  test('treats an authorized delivery source as available when Day 0 filtering returns no modules', () => {
+    const response = { source: 'admin', modules: [] };
+    expect(response.modules).toHaveLength(0);
+    expect(hasPublishedRuntimeDeliverySource(response.source)).toBe(true);
+    expect(shouldRenderProgramRuntimeExperience({
+      registeredRuntimeProgram: false,
+      hasRuntimeSummary: false,
+      hasPublishedRuntimeDelivery: hasPublishedRuntimeDeliverySource(response.source),
+    })).toBe(true);
+  });
+
+  test('requests Day 0 for an entitled, unregistered Program before enrollment', () => {
+    expect(shouldRequestProgramRuntimeDelivery({
+      registeredRuntimeProgram: false,
+      hasRuntimeSummary: false,
+      hasProgramAccess: true,
+    })).toBe(true);
+    expect(shouldRenderProgramRuntimeExperience({
+      registeredRuntimeProgram: false,
+      hasRuntimeSummary: false,
+      hasPublishedRuntimeDelivery: true,
+    })).toBe(true);
+  });
+
+  test('keeps legacy catalogue rendering when no published runtime exists', () => {
+    expect(shouldRequestProgramRuntimeDelivery({
+      registeredRuntimeProgram: false,
+      hasRuntimeSummary: false,
+      hasProgramAccess: true,
+    })).toBe(true);
+    expect(shouldRenderProgramRuntimeExperience({
+      registeredRuntimeProgram: false,
+      hasRuntimeSummary: false,
+      hasPublishedRuntimeDelivery: false,
+    })).toBe(false);
   });
 });

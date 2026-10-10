@@ -113,12 +113,21 @@ export interface ProgramDeliveryRoadmapBlock {
   }>;
 }
 
+export interface ProgramDeliveryMediaBlock {
+  type: 'audio' | 'video';
+  id: string;
+  url: string;
+  title: string;
+  description?: string;
+}
+
 export type ProgramDeliveryBlock =
   | ProgramDeliveryMetricBlock
   | ProgramDeliveryListBlock
   | ProgramDeliveryCardsBlock
   | ProgramDeliveryNoticeBlock
-  | ProgramDeliveryRoadmapBlock;
+  | ProgramDeliveryRoadmapBlock
+  | ProgramDeliveryMediaBlock;
 
 export interface ProgramDeliveryCta {
   label: string;
@@ -152,12 +161,22 @@ export interface ProgramDeliveryModuleDefinition {
   anchorId?: string;
   safetyNotes?: string[];
   noClaimsNotes?: string[];
+  composition?: {
+    contract: 'programs-delivery-composition-v1';
+    hero?: {
+      title?: string;
+      eyebrow?: string;
+      imageUrl?: string;
+    };
+  };
 }
 
 export interface ProgramDeliveryRuntimeContext {
   runtimeSummary: ProgramRuntimeSummary | null;
   checkinDue?: boolean;
   day21Handled?: boolean;
+  /** Selected review day. Absent callers keep legacy current_day filtering. */
+  viewedDay?: number;
 }
 
 function statusForSummary(
@@ -200,13 +219,22 @@ export function isDeliveryModuleVisible(
   if (!module.statusVisibility.includes(status)) return false;
   if (!conditionMatches(module.showWhen, ctx)) return false;
 
-  if (ctx.runtimeSummary?.resolved_status !== 'active') {
-    return module.dayStart == null && module.dayEnd == null;
+  const unbounded = module.dayStart == null && module.dayEnd == null;
+  if (status !== 'active') {
+    if (unbounded) return true;
+    const setupDay = ctx.viewedDay ?? 0;
+    return (
+      (status === 'not_started' || status === 'pre_start') &&
+      setupDay === 0 &&
+      module.dayStart === 0 &&
+      module.dayEnd != null &&
+      module.dayEnd >= 0
+    );
   }
 
-  const currentDay = ctx.runtimeSummary.current_day;
-  if (module.dayStart != null && currentDay < module.dayStart) return false;
-  if (module.dayEnd != null && currentDay > module.dayEnd) return false;
+  const day = ctx.viewedDay ?? ctx.runtimeSummary?.current_day ?? 0;
+  if (module.dayStart != null && day < module.dayStart) return false;
+  if (module.dayEnd != null && day > module.dayEnd) return false;
 
   return true;
 }
@@ -214,13 +242,15 @@ export function isDeliveryModuleVisible(
 export function resolveDeliveryModuleCopy(
   module: ProgramDeliveryModuleDefinition,
   summary: ProgramRuntimeSummary | null,
+  options?: { viewedDay?: number },
 ): Required<Pick<ProgramDeliveryCopy, 'title' | 'body'>> &
   Pick<ProgramDeliveryCopy, 'eyebrow' | 'practice'> {
   const status = statusForSummary(summary);
+  const day = options?.viewedDay ?? summary?.current_day;
   const shouldUseStatusCopy = !(
     module.moduleType === 'prep' &&
     status === 'active' &&
-    summary?.current_day === 0
+    day === 0
   );
   const statusCopy = shouldUseStatusCopy
     ? (module.statusCopy?.[status] ?? {})
