@@ -1080,6 +1080,8 @@ function DeliveryModulesSection({
     }>
   >([]);
   const [publishing, setPublishing] = useState(false);
+  const [draftDurationInput, setDraftDurationInput] = useState('');
+  const [creatingDraft, setCreatingDraft] = useState(false);
   const selectedVersion = versions.find((version) => version.id === selectedVersionId);
   const refresh = useCallback(async () => {
     if (!selectedVersionId) {
@@ -1154,6 +1156,13 @@ function DeliveryModulesSection({
 
   const createDraftVersion = async (sourceVersionId?: string) => {
     setError(null);
+    const trimmedDuration = draftDurationInput.trim();
+    const durationDays = trimmedDuration === '' ? null : Number(trimmedDuration);
+    if (durationDays !== null && (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650)) {
+      setError('Program duration must be a whole number between 1 and 3650 days.');
+      return;
+    }
+    setCreatingDraft(true);
     try {
       const resp = await fetch(`/api/admin/programs/${encodeURIComponent(programId)}/versions`, {
         method: 'POST',
@@ -1161,6 +1170,7 @@ function DeliveryModulesSection({
         body: JSON.stringify({
           source_version_id: sourceVersionId ?? null,
           version_label: null,
+          duration_days: durationDays,
         }),
       });
       const body = await resp.json().catch(() => ({}));
@@ -1172,8 +1182,11 @@ function DeliveryModulesSection({
       setCheckinTemplates([]);
       setEditingId(null);
       setAdding(false);
+      setDraftDurationInput('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create a draft program version.');
+    } finally {
+      setCreatingDraft(false);
     }
   };
 
@@ -1295,8 +1308,26 @@ function DeliveryModulesSection({
           </p>
         </div>
         <div className="flex flex-wrap gap-2 justify-end">
+          <label className="text-xs font-medium text-gray-700">
+            New version duration (days)
+            <input
+              type="number"
+              min="1"
+              max="3650"
+              step="1"
+              value={draftDurationInput}
+              onChange={(event) => setDraftDurationInput(event.target.value)}
+              placeholder={selectedVersion?.status === 'published' ? 'Inherit if blank' : 'Optional'}
+              aria-label="New version duration in days"
+              className="mt-1 block w-44 rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+            <span className="mt-1 block max-w-48 font-normal text-gray-500">
+              Required for scheduled check-ins. Blank clones inherit their source duration.
+            </span>
+          </label>
           <button
             type="button"
+            disabled={creatingDraft}
             onClick={() => void createDraftVersion()}
             className="px-3 py-2 border border-gray-300 rounded text-sm font-medium text-gray-800 hover:bg-gray-50"
           >
@@ -1305,6 +1336,7 @@ function DeliveryModulesSection({
           {selectedVersion?.status === 'published' && (
             <button
               type="button"
+              disabled={creatingDraft}
               onClick={() => void createDraftVersion(selectedVersion.id)}
               className="px-3 py-2 border border-gray-300 rounded text-sm font-medium text-gray-800 hover:bg-gray-50"
             >
@@ -1403,10 +1435,16 @@ function DeliveryModulesSection({
         <section className="mb-4 rounded border border-gray-200 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-gray-900">Check-in templates</h3>
-            <button type="button" className="text-xs text-blue-700 hover:underline" onClick={() => beginCheckinEdit()}>
+            <button type="button" disabled={selectedVersion.duration_days == null} className="text-xs text-blue-700 hover:underline disabled:text-gray-400" onClick={() => beginCheckinEdit()}>
               + Add check-in
             </button>
           </div>
+          {selectedVersion.duration_days == null && (
+            <p className="mb-2 text-xs text-amber-700">
+              Scheduled check-ins require a version duration. Create a new draft with a duration in days.
+              Published versions cannot be changed.
+            </p>
+          )}
           {checkinTemplates.length === 0 && <p className="text-xs text-gray-600">No check-ins are authored for this version.</p>}
           <ul className="divide-y divide-gray-100">
             {checkinTemplates.map((template) => (
