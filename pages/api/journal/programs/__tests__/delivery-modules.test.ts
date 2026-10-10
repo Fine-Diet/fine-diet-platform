@@ -117,14 +117,21 @@ describe('member delivery authorization', () => {
     expect(getDeliveryMock).not.toHaveBeenCalled();
   });
 
-  test('only returns Day 0 before a start date without an enrollment', async () => {
+  test('returns Day 0 for an entitled member of a newly published, unregistered Program before enrollment', async () => {
+    getDetailMock.mockResolvedValue({
+      slug: 'newly-published-program',
+      has_entitlement: true,
+      access_state: 'entitled',
+    });
+    getLatestVersionMock.mockResolvedValue({ id: 'newly-published-version', status: 'published' });
     listEnrollmentsMock.mockResolvedValue([]);
     const res = makeResponse();
-    await handler({ method: 'GET', query: { slug: 'gut-reset' } } as any, res);
+    await handler({ method: 'GET', query: { slug: 'newly-published-program' } } as any, res);
     expect(getDeliveryMock).toHaveBeenCalledWith({
-      programSlug: 'gut-reset',
-      programVersionId: 'latest-version',
+      programSlug: 'newly-published-program',
+      programVersionId: 'newly-published-version',
     });
+    expect(res.statusCode).toBe(200);
     expect(res.body.modules.map((module: { id: string }) => module.id)).toEqual([
       'day-0', 'always',
     ]);

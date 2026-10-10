@@ -48,6 +48,8 @@ import {
   isDay21Handled,
   resolveProgramDetailRuntimeState,
   selectDisplayRuntimeSummaryForSlug,
+  shouldRenderProgramRuntimeExperience,
+  shouldRequestProgramRuntimeDelivery,
   shouldShowRecommendationReveal,
 } from '@/lib/programs/runtimeUi';
 
@@ -746,6 +748,8 @@ export default function JournalProgramDetailBySlugPage() {
   const [data, setData] = useState<ProgramLibraryDetail | null>(null);
   const [runtimeSummary, setRuntimeSummary] =
     useState<ProgramRuntimeSummary | null>(null);
+  const [hasPublishedRuntimeDelivery, setHasPublishedRuntimeDelivery] =
+    useState(false);
   const [progressSummary, setProgressSummary] =
     useState<ProgramProgressSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -765,6 +769,7 @@ export default function JournalProgramDetailBySlugPage() {
     setNotFound(false);
     setData(null);
     setRuntimeSummary(null);
+    setHasPublishedRuntimeDelivery(false);
     setProgressSummary(null);
     setDeliveryModules(null);
     (async () => {
@@ -798,10 +803,18 @@ export default function JournalProgramDetailBySlugPage() {
           );
           setRuntimeSummary(summary);
 
-          // The server derives the exact version and accessible day range
-          // from this person's enrollment. Never fall back to unversioned
-          // content when authorization or delivery fails.
-          if (isProgramRuntimeEnabled(slugStr) || summary) {
+          // The server derives the enrolled version and accessible day range.
+          // For an entitled/assigned member with no enrollment, the same API
+          // exposes only Day 0 from the latest published version. A successful
+          // response activates generic runtime UI for newly published slugs;
+          // a 404 keeps legacy catalogue rendering unchanged.
+          const hasProgramAccess =
+            detail.has_entitlement || detail.access_state === 'assigned_only';
+          if (shouldRequestProgramRuntimeDelivery({
+            registeredRuntimeProgram: isProgramRuntimeEnabled(slugStr),
+            hasRuntimeSummary: Boolean(summary),
+            hasProgramAccess,
+          })) {
             const versionParam = summary?.version.id
               ? `?version_id=${encodeURIComponent(summary.version.id)}`
               : '';
@@ -815,8 +828,10 @@ export default function JournalProgramDetailBySlugPage() {
                 modules: ProgramDeliveryModuleDefinition[];
               };
               setDeliveryModules(deliveryBody.modules);
+              setHasPublishedRuntimeDelivery(true);
             } else {
               setDeliveryModules([]);
+              setHasPublishedRuntimeDelivery(false);
             }
           }
         } catch (runtimeErr) {
@@ -909,6 +924,7 @@ export default function JournalProgramDetailBySlugPage() {
         modules: ProgramDeliveryModuleDefinition[];
       };
       setDeliveryModules(body.modules);
+      setHasPublishedRuntimeDelivery(true);
     } catch {
       // Do not render stale modules from a previously authorized version.
       setDeliveryModules([]);
@@ -922,8 +938,11 @@ export default function JournalProgramDetailBySlugPage() {
         return to ? `${from} – ${to}` : `Starts ${from}`;
       })()
     : null;
-  const isRuntimeProgram =
-    isProgramRuntimeEnabled(slugStr) || Boolean(runtimeSummary);
+  const isRuntimeProgram = shouldRenderProgramRuntimeExperience({
+    registeredRuntimeProgram: isProgramRuntimeEnabled(slugStr),
+    hasRuntimeSummary: Boolean(runtimeSummary),
+    hasPublishedRuntimeDelivery,
+  });
   const allDeliveryModules = deliveryModules ?? [];
   const prepDeliveryModules = allDeliveryModules.filter(
     (module) => module.moduleType === 'prep' || module.moduleType === 'roadmap',

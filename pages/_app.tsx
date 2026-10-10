@@ -15,7 +15,6 @@ import { clearPersistedAuthContext } from '@/lib/auth/authContext';
 import { bindNdsAuthContext } from '@/lib/nds/ndsDayStore';
 import { startNdsClientLifecycle } from '@/lib/nds/ndsClientLifecycle';
 import { isAppShellRoute } from '@/lib/routes/appRoutes';
-import { isCompositionPreviewDevIsolation } from '@/lib/routes/compositionPreviewDevIsolation';
 import Link from 'next/link';
 
 interface MyAppProps extends AppProps {
@@ -32,10 +31,9 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
 function MyApp({ Component, pageProps, navigation, footerContent, globalContent }: MyAppProps) {
   const router = useRouter();
   const [authError, setAuthError] = useState<string | null>(null);
-  const isolateCompositionPreview = isCompositionPreviewDevIsolation(
-    process.env.NODE_ENV,
-    router.pathname,
-  );
+  const isolateCompositionPreview =
+    process.env.NODE_ENV === 'development' &&
+    router.pathname === '/dev/programs-composition-preview';
 
   // Surface OAuth error from ?auth_error= query param and clear it from the URL
   useEffect(() => {

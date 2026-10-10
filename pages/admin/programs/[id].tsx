@@ -36,13 +36,9 @@ import {
   PROGRAM_DELIVERY_MODULE_TYPES,
   type ProgramDeliveryModuleType,
 } from '@/lib/programs/deliveryModuleTypes';
-import { DeliveryCompositionPreview } from '@/components/admin/programPreview/DeliveryCompositionPreview';
 import {
   buildCompositionSavePayload,
-  definitionFromCompositionPayload,
-  definitionFromDeliveryFields,
   metadataHasComposition,
-  overlayEditedDefinition,
   type EditorMediaBlockInput,
 } from '@/lib/programs/deliveryComposition';
 import type { ProgramCheckinTemplate } from '@/lib/programs/runtimeTypes';
@@ -648,80 +644,6 @@ function buildDeliveryModulePayload(
   return result.payload;
 }
 
-function editorPreview(
-  form: DeliveryModuleFormValues,
-  programSlug: string,
-  versionRows: ProgramDeliveryModuleRow[],
-  durationDays: number | null,
-): {
-  modules: ReturnType<typeof definitionFromCompositionPayload>['definition'][];
-  issues: string[];
-} {
-  const metadata = readJsonField('Metadata JSON', form.metadata);
-  const capacity = readJsonField(
-    'Capacity variants JSON',
-    form.capacity_variants_json,
-  );
-  const cta = readJsonField('CTA JSON', form.cta_json);
-  const anchor = readJsonField('Anchor JSON', form.anchor_json);
-  const jsonIssues = [metadata.error, capacity.error, cta.error, anchor.error].filter(
-    (issue): issue is string => Boolean(issue),
-  );
-  if (jsonIssues.length > 0 || !form.composition_enabled) {
-    return {
-      modules: [],
-      issues: form.composition_enabled
-        ? jsonIssues
-        : ['Composition preview applies after the composition draft is enabled.'],
-    };
-  }
-  const saved = compositionInput(form, {
-    metadata: metadata.value,
-    capacityVariants: capacity.value,
-    cta: cta.value,
-    anchor: anchor.value,
-    durationDays,
-  });
-  const mapped = definitionFromCompositionPayload({
-    programSlug,
-    payload: saved.payload,
-  });
-  const issues = [...saved.issues, ...mapped.issues];
-  if (issues.length > 0) return { modules: [], issues };
-  const base = versionRows
-    .filter(
-      (row) =>
-        row.program_version_id === form.program_version_id &&
-        row.status === 'draft' &&
-        metadataHasComposition(row.metadata),
-    )
-    .sort((a, b) => a.display_order - b.display_order)
-    .map(
-      (row) =>
-        definitionFromDeliveryFields({
-          programSlug,
-          moduleKey: row.module_key,
-          moduleType: row.module_type,
-          title: row.title,
-          eyebrow: row.eyebrow,
-          body: row.body,
-          dayStart: row.day_start,
-          dayEnd: row.day_end,
-          statusVisibility: row.status_visibility,
-          metadata: row.metadata,
-          capacityVariants: row.capacity_variants_json,
-          cta: row.cta_json,
-          anchor: row.anchor_json,
-          safetyNotes: row.safety_notes,
-          noClaimsNotes: row.no_claims_notes,
-        }).definition,
-    );
-  return {
-    modules: overlayEditedDefinition(base, mapped.definition),
-    issues: [],
-  };
-}
-
 function DeliveryModuleForm({
   initial,
   submitLabel,
@@ -1117,40 +1039,6 @@ function DeliveryModuleForm({
         </button>
         {err && <p className="text-sm text-red-700">{err}</p>}
       </div>
-      <div className="md:col-span-6">
-        <DeliveryCompositionPreview
-          programSlug={programSlug}
-          programTitle={programTitle}
-          source="unsaved"
-          versionId={
-            lockedVersionId && lockedVersionId !== 'unversioned'
-              ? lockedVersionId
-              : form.program_version_id
-          }
-          durationDays={durationDays}
-          checkinTemplates={checkinTemplates}
-          modules={
-            editorPreview(
-              lockedVersionId && lockedVersionId !== 'unversioned'
-                ? { ...form, program_version_id: lockedVersionId }
-                : form,
-              programSlug,
-              versionRows,
-              durationDays,
-            ).modules
-          }
-          validationIssues={
-            editorPreview(
-              lockedVersionId && lockedVersionId !== 'unversioned'
-                ? { ...form, program_version_id: lockedVersionId }
-                : form,
-              programSlug,
-              versionRows,
-              durationDays,
-            ).issues
-          }
-        />
-      </div>
     </form>
   );
 }
@@ -1193,34 +1081,6 @@ function DeliveryModulesSection({
   >([]);
   const [publishing, setPublishing] = useState(false);
   const selectedVersion = versions.find((version) => version.id === selectedVersionId);
-  const savedDraftPreview = [...rows]
-    .filter(
-      (row) =>
-        row.program_version_id === selectedVersionId &&
-        row.status === 'draft' &&
-        metadataHasComposition(row.metadata),
-    )
-    .sort((a, b) => a.display_order - b.display_order)
-    .map((row) =>
-      definitionFromDeliveryFields({
-        programSlug,
-        moduleKey: row.module_key,
-        moduleType: row.module_type,
-        title: row.title,
-        eyebrow: row.eyebrow,
-        body: row.body,
-        dayStart: row.day_start,
-        dayEnd: row.day_end,
-        statusVisibility: row.status_visibility,
-        metadata: row.metadata,
-        capacityVariants: row.capacity_variants_json,
-        cta: row.cta_json,
-        anchor: row.anchor_json,
-        safetyNotes: row.safety_notes,
-        noClaimsNotes: row.no_claims_notes,
-      }),
-    );
-
   const refresh = useCallback(async () => {
     if (!selectedVersionId) {
       setRows([]);
@@ -1690,18 +1550,6 @@ function DeliveryModulesSection({
             );
           })}
         </ul>
-      )}
-      {savedDraftPreview.length > 0 && (
-        <DeliveryCompositionPreview
-          programSlug={programSlug}
-          programTitle={programTitle}
-          source="saved-draft"
-          modules={savedDraftPreview.map((entry) => entry.definition)}
-          validationIssues={savedDraftPreview.flatMap((entry) => entry.issues)}
-          versionId={selectedVersionId === 'unversioned' ? '' : selectedVersionId}
-          durationDays={selectedVersion?.duration_days ?? null}
-          checkinTemplates={checkinTemplates}
-        />
       )}
     </section>
   );
