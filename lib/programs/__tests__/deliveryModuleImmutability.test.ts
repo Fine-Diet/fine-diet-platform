@@ -156,6 +156,60 @@ describe('published program version immutability', () => {
     expect(mockRpc).not.toHaveBeenCalled();
   });
 
+  test('passes explicit duration for a blank draft and clone overrides', async () => {
+    mockRpc.mockResolvedValue({ data: { id: 'new-draft', status: 'draft' }, error: null });
+    await createProgramVersionDraft({ programId: 'program-1', durationDays: 2 });
+    expect(mockRpc).toHaveBeenLastCalledWith('create_program_version_draft', {
+      p_program_id: 'program-1',
+      p_source_version_id: null,
+      p_version_label: null,
+      p_duration_days: 2,
+    });
+    await createProgramVersionDraft({ programId: 'program-1', sourceVersionId: 'published-version', durationDays: 2 });
+    expect(mockRpc).toHaveBeenLastCalledWith('create_program_version_draft', {
+      p_program_id: 'program-1',
+      p_source_version_id: 'published-version',
+      p_version_label: null,
+      p_duration_days: 2,
+    });
+  });
+
+  test('rejects check-in creation when draft duration is missing', async () => {
+    mockFrom.mockImplementation((table: string) => table === 'program_versions'
+      ? query({ data: { id: 'version-1', program_id: 'program-1', duration_days: null, status: 'draft' } })
+      : query({ data: null }));
+    await expect(saveCheckinTemplateForDraft({
+      programId: 'program-1', programVersionId: 'version-1', checkinDay: 1,
+      title: 'Day one', questionsJson: [],
+    })).rejects.toThrow('Set a program version duration');
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects a check-in day exceeding the configured duration', async () => {
+    mockFrom.mockImplementation((table: string) => table === 'program_versions'
+      ? query({ data: { id: 'version-1', program_id: 'program-1', duration_days: 2, status: 'draft' } })
+      : query({ data: null }));
+    await expect(saveCheckinTemplateForDraft({
+      programId: 'program-1', programVersionId: 'version-1', checkinDay: 3,
+      title: 'Beyond end', questionsJson: [],
+    })).rejects.toThrow('between 1 and 2');
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
+
+  test('persists Day 1 check-in for a draft with a two-day duration', async () => {
+    const insert = query({ data: { id: 'qa-day-1' } });
+    mockFrom.mockImplementation((table: string) => table === 'program_versions'
+      ? query({ data: { id: 'version-1', program_id: 'program-1', duration_days: 2, status: 'draft' } })
+      : insert);
+    await expect(saveCheckinTemplateForDraft({
+      programId: 'program-1', programVersionId: 'version-1', checkinDay: 1,
+      title: 'Day one', questionsJson: [],
+    })).resolves.toEqual({ id: 'qa-day-1' });
+    expect(insert.insert).toHaveBeenCalledWith(expect.objectContaining({
+      checkin_day: 1, title: 'Day one', status: 'draft',
+    }));
+  });
+
   test('persists check-in templates only on draft versions and within duration', async () => {
     const template = { id: 'template-1', checkin_day: 7, title: 'Weekly check-in' };
     const insert = query({ data: template });

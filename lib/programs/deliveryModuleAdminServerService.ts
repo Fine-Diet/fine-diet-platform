@@ -621,7 +621,10 @@ export async function saveCheckinTemplateForDraft(input: {
 }): Promise<Record<string, unknown>> {
   const version = await assertVersionOwnedByProgram(input.programId, input.programVersionId);
   if (version.status !== 'draft') rejectComposition('Check-in templates can only be edited on a draft version.');
-  if (!version.duration_days || !Number.isInteger(input.checkinDay) || input.checkinDay < 1 || input.checkinDay > version.duration_days) {
+  if (version.duration_days == null) {
+    rejectComposition('Set a program version duration before adding scheduled check-ins. Create a draft with a duration in days.');
+  }
+  if (!Number.isInteger(input.checkinDay) || input.checkinDay < 1 || input.checkinDay > version.duration_days) {
     rejectComposition(`Check-in day must be between 1 and ${version.duration_days}.`);
   }
   const title = input.title.trim();
