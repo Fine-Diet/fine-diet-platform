@@ -664,9 +664,9 @@ export function heroForViewedDay(
   viewedDay: number,
   ctx?: ProgramDeliveryRuntimeContext,
 ): DeliveryCompositionHero | null {
-  for (const module of modulesForView(modules, viewedDay, ctx)) {
-    if (!module.composition?.hero) continue;
-    return module.composition.hero;
+  for (const deliveryModule of modulesForView(modules, viewedDay, ctx)) {
+    if (!deliveryModule.composition?.hero) continue;
+    return deliveryModule.composition.hero;
   }
   return null;
 }
@@ -676,8 +676,8 @@ export function mediaForViewedDay(
   viewedDay: number,
   ctx?: ProgramDeliveryRuntimeContext,
 ): ProgramDeliveryMediaBlock | null {
-  for (const module of modulesForView(modules, viewedDay, ctx)) {
-    const media = mediaBlocksFrom(module.blocks)[0];
+  for (const deliveryModule of modulesForView(modules, viewedDay, ctx)) {
+    const media = mediaBlocksFrom(deliveryModule.blocks)[0];
     if (media) return media;
   }
   return null;
@@ -961,13 +961,13 @@ export function selectPreviewCheckinTemplate<
     checkin_day: number;
     status: string;
   },
->(templates: readonly T[], versionId: string, day: number): T | null {
+>(templates: readonly T[], versionId: string, day: number, allowDraft = false): T | null {
   return (
     templates.find(
       (template) =>
         template.program_version_id === versionId &&
         template.checkin_day === day &&
-        template.status === 'published',
+        (template.status === 'published' || (allowDraft && template.status === 'draft')),
     ) ?? null
   );
 }

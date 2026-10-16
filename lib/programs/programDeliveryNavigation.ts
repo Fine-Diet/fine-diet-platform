@@ -1,7 +1,9 @@
 import type {
+  ProgramDeliveryMediaBlock,
   ProgramDeliveryModuleDefinition,
   ProgramDeliveryRoadmapBlock,
 } from './deliveryModuleTypes';
+import { PROGRAM_PREVIEW_TEST_AUDIO_PATH } from './deliveryComposition';
 import type {
   ProgramEnrollmentStatus,
   ProgramRuntimeSummary,
@@ -202,6 +204,52 @@ export function buildProgramDayRail(params: {
     });
   }
   return rail;
+}
+
+/** Days 1 through duration. Day 0 stays on the full rail for Setup access rules. */
+export function numberedProgramDayRail(
+  rail: readonly ProgramDayRailItem[],
+): ProgramDayRailItem[] {
+  return rail.filter((item) => item.day > 0);
+}
+
+/**
+ * The frozen runtime day a member may return to from Setup.
+ * Pre-start and locked days are not an authorized "today".
+ */
+export function authorizedReturnDay(
+  rail: readonly ProgramDayRailItem[],
+  runtimeStatus: ProgramEnrollmentStatus | 'not_started',
+  currentDay: number,
+): number | null {
+  if (!['active', 'paused', 'completed'].includes(runtimeStatus)) return null;
+  const day = Math.floor(currentDay);
+  if (day < 1) return null;
+  const item = rail.find((entry) => entry.day === day);
+  return item?.accessible ? day : null;
+}
+
+export function resolveCommentaryAudio(
+  media: ProgramDeliveryMediaBlock | null | undefined,
+): {
+  available: boolean;
+  src: string | null;
+  title: string | null;
+  description: string | null;
+} {
+  const url = media?.url?.trim() ?? '';
+  if (!media || media.type !== 'audio' || url === PROGRAM_PREVIEW_TEST_AUDIO_PATH) {
+    return { available: false, src: null, title: null, description: null };
+  }
+  const title = media.title?.trim() || null;
+  const description = media.description?.trim() || null;
+  const available = url.length > 0 && !/^javascript:/i.test(url);
+  return {
+    available,
+    src: available ? url : null,
+    title: media?.type === 'audio' ? title : null,
+    description: media?.type === 'audio' ? description : null,
+  };
 }
 
 export function resolveInitialProgramDay(
