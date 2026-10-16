@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 /** z-index steps for stacked page layers (layer 1 → z-10, layer 2 → z-20, …). */
@@ -30,6 +30,7 @@ export type StackedPageSectionProps = {
   layer: number;
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
   /** Override inner content width (default: max-w-[650px]). */
   contentClassName?: string;
 };
@@ -42,6 +43,7 @@ export function StackedPageSection({
   layer,
   children,
   className,
+  style,
   contentClassName,
 }: StackedPageSectionProps) {
   return (
@@ -54,6 +56,7 @@ export function StackedPageSection({
         layerZClass(layer),
         className,
       )}
+      style={style}
     >
       <div className={cn('mx-auto w-full max-w-[650px]', contentClassName)}>{children}</div>
     </section>
@@ -63,9 +66,10 @@ export function StackedPageSection({
 export type StackedPageHeroProps = {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 };
 
 /** Bottom layer of a stacked page — flat bottom edge, z-0. */
-export function StackedPageHero({ children, className }: StackedPageHeroProps) {
-  return <div className={cn('relative z-0', className)}>{children}</div>;
+export function StackedPageHero({ children, className, style }: StackedPageHeroProps) {
+  return <div className={cn('relative z-0', className)} style={style}>{children}</div>;
 }

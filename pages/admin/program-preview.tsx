@@ -89,6 +89,21 @@ function SurfaceHub({
           </Link>
         );
       })}
+      <Link
+        href="/admin/baseline-partner-demo"
+        className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-denim-200 hover:shadow"
+      >
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-denim-700">
+          Read-only review
+        </p>
+        <h2 className="mt-2 text-xl font-semibold text-gray-950">
+          Baseline · Days 0–21
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-gray-600">
+          Review the source-authored Baseline candidate through the Programs
+          delivery renderer. This preview does not enroll members or save responses.
+        </p>
+      </Link>
       <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-relaxed text-amber-950">
         <h2 className="text-lg font-semibold">Admin authoring map</h2>
         <p className="mt-2">

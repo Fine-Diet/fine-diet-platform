@@ -1,15 +1,20 @@
 import { describe, expect, test } from '@jest/globals';
+import { PROGRAM_PREVIEW_TEST_AUDIO_PATH } from '@/lib/programs/deliveryComposition';
 import {
+  authorizedReturnDay,
   buildProgramDayRail,
   buildProgramEnrollmentRequest,
   deriveDayTabLabel,
   deriveHeroDayContext,
   getProgramRoadmapItems,
   localDateKey,
+  numberedProgramDayRail,
+  resolveCommentaryAudio,
   resolveProgramDuration,
   twoDigitDay,
   weekOrdinalLabel,
 } from '@/lib/programs/programDeliveryNavigation';
+import { SYNTHETIC_PROGRAM_BLUEPRINT } from '@/lib/programs/programBlueprintExamples';
 import {
   BASELINE_PREP_DELIVERY_MODULES,
   BASELINE_WEEK_DELIVERY_MODULES,
@@ -88,6 +93,80 @@ describe('Program delivery navigation', () => {
     expect(rail[2]).toMatchObject({ day: 2, accessible: true, state: 'review' });
     expect(rail[3]).toMatchObject({ day: 3, accessible: true, state: 'current' });
     expect(rail[4]).toMatchObject({ day: 4, accessible: false, state: 'locked' });
+  });
+
+  test('numbers the active rail from day 1 through the program duration', () => {
+    const baseline = numberedProgramDayRail(buildProgramDayRail({
+      durationDays: 21,
+      runtimeStatus: 'active',
+      currentDay: 7,
+    }));
+    const synthetic = numberedProgramDayRail(buildProgramDayRail({
+      durationDays: SYNTHETIC_PROGRAM_BLUEPRINT.version.durationDays,
+      runtimeStatus: 'active',
+      currentDay: 2,
+    }));
+
+    expect(baseline.map((item) => item.day)).toEqual(
+      Array.from({ length: 21 }, (_, index) => index + 1),
+    );
+    expect(baseline.some((item) => item.day === 0)).toBe(false);
+    expect(synthetic.map((item) => item.day)).toEqual([1, 2, 3, 4, 5]);
+    expect(synthetic.find((item) => item.day === 2)?.state).toBe('current');
+    expect(synthetic.find((item) => item.day === 1)?.state).toBe('review');
+    expect(synthetic.find((item) => item.day === 3)?.state).toBe('locked');
+  });
+
+  test('returns to the authorized runtime day and withholds locked or pre-start days', () => {
+    const active = buildProgramDayRail({
+      durationDays: 21,
+      runtimeStatus: 'active',
+      currentDay: 7,
+    });
+    expect(authorizedReturnDay(active, 'active', 7)).toBe(7);
+    expect(authorizedReturnDay(active, 'paused', 7)).toBe(7);
+    expect(authorizedReturnDay(active, 'pre_start', 0)).toBeNull();
+    expect(authorizedReturnDay(active, 'active', 0)).toBeNull();
+    expect(authorizedReturnDay(active, 'active', 8)).toBeNull();
+  });
+
+  test('resolves only genuine day-scoped audio and rejects the development recording', () => {
+    expect(resolveCommentaryAudio(null)).toEqual({
+      available: false,
+      src: null,
+      title: null,
+      description: null,
+    });
+    expect(resolveCommentaryAudio({
+      type: 'audio',
+      id: 'test-file',
+      url: PROGRAM_PREVIEW_TEST_AUDIO_PATH,
+      title: 'Development recording',
+      description: 'Not a Baseline recording',
+    })).toEqual({
+      available: false,
+      src: null,
+      title: null,
+      description: null,
+    });
+    expect(resolveCommentaryAudio({
+      type: 'video',
+      id: 'video',
+      url: 'https://example.com/setup.mp4',
+      title: 'Video',
+    }).available).toBe(false);
+    expect(resolveCommentaryAudio({
+      type: 'audio',
+      id: 'day-0',
+      url: 'https://example.com/day-0-commentary.mp3',
+      title: ' Day zero commentary ',
+      description: ' Authored description ',
+    })).toEqual({
+      available: true,
+      src: 'https://example.com/day-0-commentary.mp3',
+      title: 'Day zero commentary',
+      description: 'Authored description',
+    });
   });
 
   test('locks every delivery day before the selected start date', () => {

@@ -21,6 +21,8 @@ import {
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
+import { ProgramDeliveryPreviewExperience } from '@/components/journal/programs/ProgramDeliveryPreviewExperience';
+import type { ProgramBlueprintDeliveryConfig } from '@/lib/programs/programBlueprint';
 import {
   StackedPageHero,
   StackedPageSection,
@@ -74,12 +76,14 @@ interface ProgramDeliveryExperienceProps {
   runtimeSummary: ProgramRuntimeSummary | null;
   progressSummary: ProgramProgressSummary | null;
   deliveryModules: ProgramDeliveryModuleDefinition[];
+  blueprint?: ProgramBlueprintDeliveryConfig;
   runtimeError?: string | null;
   previewMode?: boolean;
   compositionSource?: DeliveryCompositionSource;
   previewCheckinTemplates?: ProgramCheckinTemplate[];
   previewVersionId?: string | null;
   initialStartGateOpen?: boolean;
+  initialSelectedDay?: number;
   restartRequested?: boolean;
   initialView?: DeliveryView;
   onRuntimeSummaryUpdate: (summary: ProgramRuntimeSummary) => void;
@@ -638,7 +642,14 @@ function ProgramResources({
   );
 }
 
-export function ProgramDeliveryExperience({
+export function ProgramDeliveryExperience(props: ProgramDeliveryExperienceProps) {
+  if (props.previewMode && props.blueprint) {
+    return <ProgramDeliveryPreviewExperience {...props} />;
+  }
+  return <MemberProgramDeliveryExperience {...props} />;
+}
+
+function MemberProgramDeliveryExperience({
   data,
   runtimeSummary,
   progressSummary,

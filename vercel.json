@@ -6,6 +6,8 @@
     }
   ],
   "git": {
-    "deploymentEnabled": true
+    "deploymentEnabled": {
+      "feat/baseline-partner-demo-readonly-v1": false
+    }
   }
 }
