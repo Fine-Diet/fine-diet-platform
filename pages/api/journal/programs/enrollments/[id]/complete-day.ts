@@ -6,7 +6,15 @@ import {
 } from '@/lib/access/requireJournalAccess';
 import { completeProgramDay, getProgramDayCompletion, PROGRAM_DAY_READ_ONLY } from '@/lib/programs/programDayInteractionServerService';
 
-const BodySchema = z.object({ day: z.number().int().min(0).max(10000) });
+const PostBodySchema = z.object({ day: z.number().int().min(0).max(10000) });
+const MAX_DAY = 10000;
+
+function readGetDay(value: unknown): number | undefined {
+  if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) return undefined;
+  const day = Number(value);
+  if (!Number.isSafeInteger(day) || day > MAX_DAY) return undefined;
+  return day;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!['GET', 'POST'].includes(req.method ?? '')) {
@@ -19,10 +27,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   const ctx = await requireJournalAuth(req, res);
   if (!ctx || !(await requireCallerJournalAccess(res, ctx))) return;
-  const parsed = BodySchema.safeParse(req.method === 'GET' ? req.query : req.body);
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid day completion payload.', issues: parsed.error.flatten() });
+  let day: number;
+  if (req.method === 'GET') {
+    const parsedDay = readGetDay(req.query.day);
+    if (parsedDay === undefined) return res.status(400).json({ error: 'Invalid day completion payload.' });
+    day = parsedDay;
+  } else {
+    const parsed = PostBodySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid day completion payload.', issues: parsed.error.flatten() });
+    day = parsed.data.day;
+  }
   try {
-    const input = { personId: ctx.personId, enrollmentId: enrollmentId!, day: parsed.data.day };
+    const input = { personId: ctx.personId, enrollmentId: enrollmentId!, day };
     const completion = req.method === 'GET'
       ? await getProgramDayCompletion(input)
       : await completeProgramDay(input);

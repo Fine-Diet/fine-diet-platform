@@ -75,4 +75,96 @@ describe('day interaction lifecycle API responses', () => {
     expect(out.statusCode).toBe(409);
     expect(out.body).toMatchObject({ code: 'PROGRAM_DAY_READ_ONLY' });
   });
+
+  it.each([
+    ['7', 7],
+    ['10000', 10000],
+  ])('returns the saved completion for GET day %s', async (dayQuery, day) => {
+    const completion = { day };
+    mockGetCompletion.mockResolvedValue(completion);
+    const { res, out } = makeResponse();
+    await completeDayHandler({
+      method: 'GET',
+      query: { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: dayQuery },
+    } as any, res as any);
+    expect(out.statusCode).toBe(200);
+    expect(out.body).toEqual(completion);
+    expect(mockGetCompletion).toHaveBeenCalledWith({
+      personId: '32da6ab4-818e-467b-bd10-4ef7f184825b',
+      enrollmentId: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2',
+      day,
+    });
+    expect(mockCompleteDay).not.toHaveBeenCalled();
+  });
+
+  it('accepts Day 0 as the query string 0', async () => {
+    const completion = { day: 0 };
+    mockGetCompletion.mockResolvedValue(completion);
+    const { res, out } = makeResponse();
+    await completeDayHandler({
+      method: 'GET',
+      query: { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: '0' },
+    } as any, res as any);
+    expect(out.statusCode).toBe(200);
+    expect(out.body).toEqual(completion);
+    expect(mockGetCompletion).toHaveBeenCalledWith({
+      personId: '32da6ab4-818e-467b-bd10-4ef7f184825b',
+      enrollmentId: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2',
+      day: 0,
+    });
+    expect(mockCompleteDay).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2' }],
+    ['empty', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: '' }],
+    ['repeated', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: ['1', '2'] }],
+    ['malformed', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: 'nope' }],
+    ['leading zero', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: '01' }],
+    ['fractional', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: '1.5' }],
+    ['whole fractional', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: '1.0' }],
+    ['negative', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: '-1' }],
+    ['whitespace', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: ' 7' }],
+    ['trailing whitespace', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: '7 ' }],
+    ['out of range', { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: '10001' }],
+  ])('rejects %s GET day input with 400', async (_label, query) => {
+    const { res, out } = makeResponse();
+    await completeDayHandler({ method: 'GET', query } as any, res as any);
+    expect(out.statusCode).toBe(400);
+    expect(out.body).toMatchObject({ error: 'Invalid day completion payload.' });
+    expect(mockGetCompletion).not.toHaveBeenCalled();
+    expect(mockCompleteDay).not.toHaveBeenCalled();
+  });
+
+  it('accepts a numeric JSON day on POST', async () => {
+    const completion = { day: 7 };
+    mockCompleteDay.mockResolvedValue(completion);
+    const { res, out } = makeResponse();
+    await completeDayHandler({
+      method: 'POST',
+      query: { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2' },
+      body: { day: 7 },
+    } as any, res as any);
+    expect(out.statusCode).toBe(200);
+    expect(out.body).toEqual(completion);
+    expect(mockCompleteDay).toHaveBeenCalledWith({
+      personId: '32da6ab4-818e-467b-bd10-4ef7f184825b',
+      enrollmentId: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2',
+      day: 7,
+    });
+    expect(mockGetCompletion).not.toHaveBeenCalled();
+  });
+
+  it('rejects a string day on POST', async () => {
+    const { res, out } = makeResponse();
+    await completeDayHandler({
+      method: 'POST',
+      query: { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2' },
+      body: { day: '7' },
+    } as any, res as any);
+    expect(out.statusCode).toBe(400);
+    expect(out.body).toMatchObject({ error: 'Invalid day completion payload.' });
+    expect(mockCompleteDay).not.toHaveBeenCalled();
+    expect(mockGetCompletion).not.toHaveBeenCalled();
+  });
 });
