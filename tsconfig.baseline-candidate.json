@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "lib/programs/programDayInteractionServerService.ts",
+    "pages/api/journal/programs/enrollments/[id]/observations.ts",
+    "pages/api/journal/programs/enrollments/[id]/complete-day.ts"
+  ],
+  "exclude": ["node_modules", "test", "**/__tests__/**"]
+}

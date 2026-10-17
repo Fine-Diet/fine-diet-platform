@@ -1,0 +1,38 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { z } from 'zod';
+import {
+  requireCallerJournalAccess,
+  requireJournalAuth,
+} from '@/lib/access/requireJournalAccess';
+import { completeProgramDay, getProgramDayCompletion, PROGRAM_DAY_READ_ONLY } from '@/lib/programs/programDayInteractionServerService';
+
+const BodySchema = z.object({ day: z.number().int().min(0).max(10000) });
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!['GET', 'POST'].includes(req.method ?? '')) {
+    res.setHeader('Allow', 'GET, POST');
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  const enrollmentId = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
+  if (!z.string().uuid().safeParse(enrollmentId).success) {
+    return res.status(400).json({ error: 'Invalid enrollment id.' });
+  }
+  const ctx = await requireJournalAuth(req, res);
+  if (!ctx || !(await requireCallerJournalAccess(res, ctx))) return;
+  const parsed = BodySchema.safeParse(req.method === 'GET' ? req.query : req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid day completion payload.', issues: parsed.error.flatten() });
+  try {
+    const input = { personId: ctx.personId, enrollmentId: enrollmentId!, day: parsed.data.day };
+    const completion = req.method === 'GET'
+      ? await getProgramDayCompletion(input)
+      : await completeProgramDay(input);
+    return res.status(200).json(completion);
+  } catch (err) {
+    const code = (err as Error & { code?: string }).code;
+    const status = code === 'PROGRAM_ENROLLMENT_NOT_FOUND' ? 404
+      : code === 'PROGRAM_DAY_NOT_UNLOCKED' || code === 'PROGRAM_DAY_REQUIREMENTS_UNMET' || code === PROGRAM_DAY_READ_ONLY ? 409
+        : 500;
+    console.error('[journal/programs/enrollments/:id/complete-day] error:', err);
+    return res.status(status).json({ error: err instanceof Error ? err.message : 'Server error', code });
+  }
+}
