@@ -8,7 +8,8 @@
   "git": {
     "deploymentEnabled": {
       "feat/baseline-partner-demo-readonly-v1": false,
-      "feat/baseline-day-interaction-backend-r1": false
+      "feat/baseline-day-interaction-backend-r1": false,
+      "fix/baseline-empty-day-completion-guard-v1": false
     }
   }
 }

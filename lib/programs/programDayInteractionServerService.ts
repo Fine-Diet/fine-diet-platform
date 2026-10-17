@@ -35,6 +35,47 @@ export function isCheckinHandled(status: string | null | undefined): boolean {
   return status === 'completed' || status === 'skipped';
 }
 
+type ProgramRuntimeSummary = NonNullable<Awaited<ReturnType<typeof getProgramRuntimeSummaryForPerson>>>;
+
+type DeliveryModuleCompletionRow = {
+  module_key: string;
+  metadata: Record<string, unknown> | null;
+  program_id: string;
+  program_version_id: string;
+  status: string;
+  day_start: number | null;
+  day_end: number | null;
+  status_visibility: string[] | null;
+};
+
+function isEligiblePublishedDeliveryModule(
+  row: DeliveryModuleCompletionRow,
+  summary: ProgramRuntimeSummary,
+  day: number,
+): boolean {
+  return row.program_id === summary.version.program_id
+    && row.program_version_id === summary.version.id
+    && row.status === 'published'
+    && typeof row.day_start === 'number'
+    && typeof row.day_end === 'number'
+    && day >= row.day_start
+    && day <= row.day_end
+    && Array.isArray(row.status_visibility)
+    && row.status_visibility.includes(summary.resolved_status);
+}
+
+async function readProgramDayCompletion(enrollmentId: string, programVersionId: string, day: number) {
+  const { data, error } = await supabaseAdmin
+    .from('program_day_completions')
+    .select('id, enrollment_id, program_version_id, program_day, completed_at')
+    .eq('enrollment_id', enrollmentId)
+    .eq('program_version_id', programVersionId)
+    .eq('program_day', day)
+    .maybeSingle();
+  if (error) throw new Error(`day completion lookup failed: ${error.message}`);
+  return data;
+}
+
 async function assertUnlocked(personId: string, enrollmentId: string, day: number) {
   const summary = await getProgramRuntimeSummaryForPerson(personId, enrollmentId);
   if (!summary) throw codedError('Enrollment not found for person.', 'PROGRAM_ENROLLMENT_NOT_FOUND');
@@ -49,7 +90,7 @@ async function assertUnlocked(personId: string, enrollmentId: string, day: numbe
   return summary;
 }
 
-function assertWritable(summary: NonNullable<Awaited<ReturnType<typeof getProgramRuntimeSummaryForPerson>>>, day: number) {
+function assertWritable(summary: ProgramRuntimeSummary, day: number) {
   const canWriteInLifecycle = summary.resolved_status === 'active'
     || (summary.resolved_status === 'pre_start' && day === 0);
   if (!canWriteInLifecycle) {
@@ -58,7 +99,7 @@ function assertWritable(summary: NonNullable<Awaited<ReturnType<typeof getProgra
 }
 
 async function findVersionedModule(
-  summary: NonNullable<Awaited<ReturnType<typeof getProgramRuntimeSummaryForPerson>>>,
+  summary: ProgramRuntimeSummary,
   day: number,
   contentKey: string,
 ) {
@@ -141,16 +182,22 @@ export async function completeProgramDay(input: {
   assertWritable(summary, input.day);
   const { data: moduleRows, error: modulesError } = await supabaseAdmin
     .from('program_delivery_modules')
-    .select('module_key, metadata')
+    .select('module_key, metadata, program_id, program_version_id, status, day_start, day_end, status_visibility')
     .eq('program_id', summary.version.program_id)
     .eq('program_version_id', summary.version.id)
     .eq('status', 'published')
     .lte('day_start', input.day)
-    .gte('day_end', input.day);
+    .gte('day_end', input.day)
+    .contains('status_visibility', [summary.resolved_status]);
   if (modulesError) throw new Error(`completion requirements lookup failed: ${modulesError.message}`);
-  const requiredModules = (moduleRows ?? []).filter((row) =>
-    (row.metadata as Record<string, unknown> | null)?.completionRequired === true,
-  ) as Array<{ module_key: string }>;
+  const eligibleModules = ((moduleRows ?? []) as DeliveryModuleCompletionRow[])
+    .filter((row) => isEligiblePublishedDeliveryModule(row, summary, input.day));
+  if (eligibleModules.length === 0) {
+    const existing = await readProgramDayCompletion(input.enrollmentId, summary.version.id, input.day);
+    if (existing) return existing;
+    throw codedError('This day has no published delivery content and cannot be completed.', PROGRAM_DAY_REQUIREMENTS_UNMET);
+  }
+  const requiredModules = eligibleModules.filter((row) => row.metadata?.completionRequired === true);
 
   const { data: observations, error: observationsError } = await supabaseAdmin
     .from('program_day_observations')
@@ -212,13 +259,5 @@ export async function getProgramDayCompletion(input: {
   day: number;
 }) {
   const summary = await assertUnlocked(input.personId, input.enrollmentId, input.day);
-  const { data, error } = await supabaseAdmin
-    .from('program_day_completions')
-    .select('id, enrollment_id, program_version_id, program_day, completed_at')
-    .eq('enrollment_id', input.enrollmentId)
-    .eq('program_version_id', summary.version.id)
-    .eq('program_day', input.day)
-    .maybeSingle();
-  if (error) throw new Error(`day completion lookup failed: ${error.message}`);
-  return data;
+  return readProgramDayCompletion(input.enrollmentId, summary.version.id, input.day);
 }
