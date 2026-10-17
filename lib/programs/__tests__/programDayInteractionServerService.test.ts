@@ -14,8 +14,24 @@ import {
 } from '../programDayInteractionServerService';
 
 const VERSION_ID = 'f5c52fd9-b8a0-48bc-a7bb-2100d21b0021';
+const OTHER_VERSION_ID = '11111111-1111-4111-8111-111111111111';
+const PROGRAM_ID = 'c6c3bc25-5778-4a43-92f5-13b6136d2b6b';
 const ENROLLMENT_ID = 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2';
 const PERSON_ID = '32da6ab4-818e-467b-bd10-4ef7f184825b';
+
+function publishedModule(overrides: Record<string, unknown> = {}) {
+  return {
+    module_key: 'baseline-candidate-day-7-reflection',
+    metadata: { completionRequired: true },
+    program_id: PROGRAM_ID,
+    program_version_id: VERSION_ID,
+    status: 'published',
+    day_start: 7,
+    day_end: 7,
+    status_visibility: ['active'],
+    ...overrides,
+  };
+}
 
 type QueryState = { table: string; filters: Record<string, unknown>; write: Record<string, unknown> | null };
 let states: QueryState[];
@@ -27,9 +43,11 @@ function makeQuery(table: string) {
   const state: QueryState = { table, filters: {}, write: null };
   states.push(state);
   const query: Record<string, unknown> = {};
-  for (const method of ['select', 'order', 'limit', 'eq', 'lte', 'gte', 'is']) {
+  for (const method of ['select', 'order', 'limit', 'eq', 'lte', 'gte', 'is', 'contains']) {
     query[method] = (...args: unknown[]) => {
-      if (method === 'eq' || method === 'lte' || method === 'gte' || method === 'is') state.filters[String(args[0])] = args[1];
+      if (method === 'eq' || method === 'lte' || method === 'gte' || method === 'is' || method === 'contains') {
+        state.filters[String(args[0])] = args[1];
+      }
       return query;
     };
   }
@@ -48,7 +66,7 @@ function makeQuery(table: string) {
 
 const activeSummary = {
   enrollment: { id: ENROLLMENT_ID, person_id: PERSON_ID },
-  version: { id: VERSION_ID, program_id: 'c6c3bc25-5778-4a43-92f5-13b6136d2b6b', duration_days: 21 },
+  version: { id: VERSION_ID, program_id: PROGRAM_ID, duration_days: 21 },
   resolved_status: 'active',
   current_day: 7,
 };
@@ -92,7 +110,7 @@ describe('versioned day observations', () => {
 
 describe('true day completion', () => {
   it('requires saved authored modules and a completed or skipped check-in, then writes one versioned completion', async () => {
-    rows.program_delivery_modules = [{ module_key: 'baseline-candidate-day-7-reflection', metadata: { completionRequired: true } }];
+    rows.program_delivery_modules = [publishedModule()];
     rows.program_day_observations = [{ content_key: 'baseline-candidate-day-7-reflection', response_text: 'Saved' }];
     rows.program_checkin_templates = [{ id: 'template' }];
     singleRows.program_checkin_responses = { response_status: 'skipped', checkin_template_id: 'template' };
@@ -100,6 +118,14 @@ describe('true day completion', () => {
 
     const completion = await completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 });
     expect(completion).toMatchObject({ enrollment_id: ENROLLMENT_ID, program_version_id: VERSION_ID, program_day: 7 });
+    expect(states.find((state) => state.table === 'program_delivery_modules')?.filters).toMatchObject({
+      program_id: PROGRAM_ID,
+      program_version_id: VERSION_ID,
+      status: 'published',
+      day_start: 7,
+      day_end: 7,
+      status_visibility: ['active'],
+    });
     expect(states.find((state) => state.table === 'program_day_completions')?.write).toMatchObject({ enrollment_id: ENROLLMENT_ID, program_version_id: VERSION_ID, program_day: 7 });
 
     const loaded = await getProgramDayCompletion({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 });
@@ -107,13 +133,97 @@ describe('true day completion', () => {
   });
 
   it('blocks an unhandled check-in without writing a completion record', async () => {
-    rows.program_delivery_modules = [{ module_key: 'baseline-candidate-day-7-reflection', metadata: { completionRequired: true } }];
+    rows.program_delivery_modules = [publishedModule()];
     rows.program_day_observations = [{ content_key: 'baseline-candidate-day-7-reflection', response_text: 'Saved' }];
     rows.program_checkin_templates = [{ id: 'template' }];
     singleRows.program_checkin_responses = { response_status: 'skipped', checkin_template_id: 'other-version-template' };
     await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 }))
       .rejects.toMatchObject({ code: PROGRAM_DAY_REQUIREMENTS_UNMET });
     expect(states.some((state) => state.table === 'program_day_completions' && state.write)).toBe(false);
+  });
+});
+
+describe('published delivery content guard', () => {
+  function expectNoCompletionWrite() {
+    expect(states.some((state) => state.table === 'program_day_completions' && state.write)).toBe(false);
+  }
+
+  it('rejects an empty day when only a check-in or code fallback is available', async () => {
+    rows.program_delivery_modules = [];
+    rows.program_checkin_templates = [{ id: 'template' }];
+    singleRows.program_checkin_responses = { response_status: 'completed', checkin_template_id: 'template' };
+
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 }))
+      .rejects.toMatchObject({ code: PROGRAM_DAY_REQUIREMENTS_UNMET });
+    expectNoCompletionWrite();
+    expect(states.some((state) => state.table === 'program_checkin_templates')).toBe(false);
+  });
+
+  it('rejects unpublished delivery content', async () => {
+    rows.program_delivery_modules = [publishedModule({ status: 'draft', metadata: { source: 'baseline_code' } })];
+    rows.program_checkin_templates = [{ id: 'template' }];
+    singleRows.program_checkin_responses = { response_status: 'completed', checkin_template_id: 'template' };
+
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 }))
+      .rejects.toMatchObject({ code: PROGRAM_DAY_REQUIREMENTS_UNMET });
+    expectNoCompletionWrite();
+  });
+
+  it('rejects a published module from another program version', async () => {
+    rows.program_delivery_modules = [publishedModule({ program_version_id: OTHER_VERSION_ID })];
+    rows.program_day_observations = [{ content_key: 'baseline-candidate-day-7-reflection', response_text: 'Saved' }];
+
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 }))
+      .rejects.toMatchObject({ code: PROGRAM_DAY_REQUIREMENTS_UNMET });
+    expectNoCompletionWrite();
+  });
+
+  it('rejects a published module from another program', async () => {
+    rows.program_delivery_modules = [publishedModule({ program_id: '99999999-9999-4999-8999-999999999999' })];
+
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 }))
+      .rejects.toMatchObject({ code: PROGRAM_DAY_REQUIREMENTS_UNMET });
+    expectNoCompletionWrite();
+  });
+
+  it('rejects a published module outside the requested day', async () => {
+    rows.program_delivery_modules = [publishedModule({ day_start: 8, day_end: 8 })];
+
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 }))
+      .rejects.toMatchObject({ code: PROGRAM_DAY_REQUIREMENTS_UNMET });
+    expectNoCompletionWrite();
+  });
+
+  it('rejects a published module that is not visible for the active lifecycle', async () => {
+    rows.program_delivery_modules = [publishedModule({ status_visibility: ['paused', 'completed'] })];
+    rows.program_day_observations = [{ content_key: 'baseline-candidate-day-7-reflection', response_text: 'Saved' }];
+    rows.program_checkin_templates = [{ id: 'template' }];
+    singleRows.program_checkin_responses = { response_status: 'completed', checkin_template_id: 'template' };
+
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 }))
+      .rejects.toMatchObject({ code: PROGRAM_DAY_REQUIREMENTS_UNMET });
+    expectNoCompletionWrite();
+  });
+
+  it('rejects Day 0 completion when no published Day 0 content is visible before start', async () => {
+    (getProgramRuntimeSummaryForPerson as jest.Mock).mockResolvedValue({ ...activeSummary, resolved_status: 'pre_start', current_day: 0 });
+    rows.program_delivery_modules = [publishedModule({ status_visibility: ['active'], day_start: 0, day_end: 0 })];
+    rows.program_checkin_templates = [{ id: 'template' }];
+    singleRows.program_checkin_responses = { response_status: 'completed', checkin_template_id: 'template' };
+
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 0 }))
+      .rejects.toMatchObject({ code: PROGRAM_DAY_REQUIREMENTS_UNMET });
+    expect(states.find((state) => state.table === 'program_delivery_modules')?.filters.status_visibility).toEqual(['pre_start']);
+    expectNoCompletionWrite();
+  });
+
+  it('returns an existing active completion when published content is no longer available', async () => {
+    const existing = { id: 'completion', enrollment_id: ENROLLMENT_ID, program_version_id: VERSION_ID, program_day: 7, completed_at: '2026-10-13T12:00:00.000Z' };
+    rows.program_delivery_modules = [];
+    singleRows.program_day_completions = existing;
+
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 })).resolves.toEqual(existing);
+    expectNoCompletionWrite();
   });
 });
 
@@ -149,9 +259,19 @@ describe('enrollment lifecycle write authorization', () => {
     expect(states.some((state) => state.table === 'program_day_observations' && state.write)).toBe(true);
 
     states = [];
-    rows = {};
+    rows = {
+      program_delivery_modules: [publishedModule({
+        module_key: 'baseline-day-0-reflection',
+        metadata: {},
+        day_start: 0,
+        day_end: 0,
+        status_visibility: ['pre_start'],
+      })],
+      program_checkin_templates: [],
+    };
     singleRows = {};
     await completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 0 });
+    expect(states.find((state) => state.table === 'program_delivery_modules')?.filters.status_visibility).toEqual(['pre_start']);
     expect(states.some((state) => state.table === 'program_day_completions' && state.write)).toBe(true);
   });
 
@@ -181,7 +301,7 @@ describe('enrollment lifecycle write authorization', () => {
 
   it('keeps active completion retries idempotent when the unique row already exists', async () => {
     const existing = { id: 'completion', enrollment_id: ENROLLMENT_ID, program_version_id: VERSION_ID, program_day: 7, completed_at: '2026-10-13T12:00:00.000Z' };
-    rows.program_delivery_modules = [];
+    rows.program_delivery_modules = [publishedModule({ metadata: {} })];
     rows.program_day_observations = [];
     rows.program_checkin_templates = [];
     singleRows.program_checkin_responses = null;
