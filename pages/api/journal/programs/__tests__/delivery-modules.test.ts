@@ -210,4 +210,59 @@ describe('member delivery authorization', () => {
     ]);
     expect(res.body.modules.every((module: { cta?: unknown }) => module.cta == null)).toBe(true);
   });
+
+  test('fail-closes a paused response to Day 0 when the reached day is unknown', async () => {
+    getDeliveryMock.mockResolvedValue({
+      source: 'admin',
+      modules: [
+        { id: 'day-0', moduleType: 'prep', dayStart: 0, dayEnd: 0, statusVisibility: ['pre_start', 'active', 'paused'] },
+        { id: 'day-2', moduleType: 'guide', dayStart: 2, dayEnd: 2, statusVisibility: ['active', 'paused'] },
+        { id: 'day-8', moduleType: 'week', dayStart: 8, dayEnd: 14, statusVisibility: ['active', 'paused'] },
+        {
+          id: 'checkin',
+          moduleType: 'checkin_prompt',
+          dayStart: 0,
+          dayEnd: 0,
+          statusVisibility: ['paused'],
+          cta: { label: 'Check in', href: '/check-in' },
+        },
+      ],
+    });
+    listEnrollmentsMock.mockResolvedValue([enrollment({ status: 'paused' })]);
+    getSummaryMock.mockResolvedValue(summary({
+      current_day: 0,
+      resolved_status: 'paused',
+      enrollment: enrollment({ status: 'paused' }),
+    }));
+
+    const res = makeResponse();
+    await handler({ method: 'GET', query: { slug: 'gut-reset' } } as any, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.modules.map((module: { id: string }) => module.id)).toEqual(['day-0']);
+  });
+
+  test('keeps paused review modules through the trustworthy reached day', async () => {
+    getDeliveryMock.mockResolvedValue({
+      source: 'admin',
+      modules: [
+        { id: 'day-0', moduleType: 'prep', dayStart: 0, dayEnd: 0, statusVisibility: ['paused'] },
+        { id: 'day-2', moduleType: 'practice_card', dayStart: 2, dayEnd: 2, statusVisibility: ['active'], cta: { label: 'Open', href: '/open' } },
+        { id: 'day-8', moduleType: 'week', dayStart: 8, dayEnd: 14, statusVisibility: ['active'] },
+      ],
+    });
+    listEnrollmentsMock.mockResolvedValue([enrollment({ status: 'paused' })]);
+    getSummaryMock.mockResolvedValue(summary({
+      current_day: 3,
+      resolved_status: 'paused',
+      enrollment: enrollment({ status: 'paused' }),
+    }));
+
+    const res = makeResponse();
+    await handler({ method: 'GET', query: { slug: 'gut-reset' } } as any, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.modules.map((module: { id: string }) => module.id)).toEqual(['day-0', 'day-2']);
+    expect(res.body.modules.every((module: { cta?: unknown }) => module.cta == null)).toBe(true);
+  });
 });

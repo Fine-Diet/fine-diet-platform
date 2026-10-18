@@ -9,6 +9,7 @@ import {
   BASELINE_DAY_0_TO_21_CANDIDATE,
 } from '@/lib/programs/baselineDay0To21Candidate';
 import { PROGRAM_PREVIEW_TEST_AUDIO_PATH } from '@/lib/programs/deliveryComposition';
+import { selectHistoricalReviewModules } from '@/lib/programs/historicalReviewPolicy';
 import type { ProgramDeliveryModuleDefinition } from '@/lib/programs/deliveryModuleTypes';
 import { SYNTHETIC_PROGRAM_BLUEPRINT } from '@/lib/programs/programBlueprintExamples';
 import type { ProgramLibraryDetail } from '@/lib/programs/programLibraryServerService';
@@ -255,6 +256,34 @@ describe('Program delivery UI pass', () => {
       );
     });
     expect(container.textContent).toContain('Day 5 unlocks on its Program date.');
+  });
+
+  test('locks historical days beyond Day 0 when a paused reached day is unknown', async () => {
+    const reachedModules = selectHistoricalReviewModules(
+      BASELINE_DAY_0_TO_21_CANDIDATE.modules,
+      0,
+    );
+    expect(reachedModules.map((module) => module.id)).not.toContain(
+      'baseline-candidate-week-1-context',
+    );
+
+    await renderExperience(root, {
+      runtimeSummary: runtime('paused', 0),
+      deliveryModules: reachedModules,
+      initialSelectedDay: 0,
+    });
+
+    expect(container.textContent).toContain(
+      'Use this space to get oriented and make a simple plan for the days ahead.',
+    );
+    expect(container.textContent).not.toContain('Find a routine that works');
+    expect(container.textContent).not.toContain('Add context to your observations');
+    expect(container.querySelector('[aria-label="Program days"]')).toBeNull();
+    expect(
+      Array.from(container.querySelectorAll('button')).some((button) =>
+        button.getAttribute('aria-label')?.includes('available to review'),
+      ),
+    ).toBe(false);
   });
 
   test('plays authored Day 0 audio and ignores another day or the development file', async () => {

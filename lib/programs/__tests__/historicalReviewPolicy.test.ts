@@ -39,6 +39,23 @@ describe('historical review policy', () => {
     expect(visible[0].showWhen).toBeUndefined();
   });
 
+  test('fail-closes historical review beyond Day 0 when the reached day is unknown', () => {
+    const dayZero: ProgramDeliveryModuleDefinition = {
+      ...week,
+      id: 'day-0',
+      moduleType: 'prep',
+      dayStart: 0,
+      dayEnd: 0,
+    };
+    const visible = selectHistoricalReviewModules([dayZero, week], 0);
+    expect(visible.map((module) => module.id)).toEqual(['day-0']);
+    expect(filterMemberDeliveryModules([dayZero, week], 'paused', 0).map((module) => module.id)).toEqual(['day-0']);
+    expect(filterMemberDeliveryModules([dayZero, week], 'paused', 3).map((module) => module.id)).toEqual([
+      'day-0',
+      'week-1',
+    ]);
+  });
+
   test('preserves active and pre-start filtering', () => {
     expect(filterMemberDeliveryModules([week], 'active', 3).map((module) => module.id)).toEqual(['week-1']);
     expect(filterMemberDeliveryModules([week], 'pre_start', 0)).toEqual([]);

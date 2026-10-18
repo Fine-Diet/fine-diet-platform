@@ -319,6 +319,82 @@ describe('program runtime enrollment writes', () => {
     expect(insertQuery.insert).toHaveBeenCalled();
   });
 
+  test('does not treat a cancelled Baseline enrollment with completed_at as a completed prerequisite', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    mockHasEntitlement.mockResolvedValue(true);
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: { ...programHeaderRow(), slug: 'digestive-foundations', id: 'program-digestive' } }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow({ program_id: 'program-digestive', metadata: {} }) }))
+      .mockReturnValueOnce(query({
+        data: [baseEnrollment({
+          status: 'cancelled',
+          program_slug: 'baseline',
+          completed_at: '2026-05-01T00:00:00.000Z',
+        })],
+      }));
+
+    await expect(createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'digestive-foundations',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    })).rejects.toMatchObject({ code: 'PROGRAM_PREREQUISITE_UNMET' });
+    expect(mockFrom).toHaveBeenCalledTimes(4);
+  });
+
+  test('still enrolls when a genuine Baseline completion follows a cancelled completed_at row', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const created = baseEnrollment({
+      id: 'enrollment-digestive',
+      program_slug: 'digestive-foundations',
+      program_id: 'program-digestive',
+      source_type: 'assignment',
+      entitlement_key: null,
+      assignment_id: 'assignment-1',
+    });
+    const insertQuery = query({ singleData: created });
+    mockHasEntitlement.mockResolvedValue(false);
+    mockListAssignments.mockResolvedValue({
+      rows: [{ id: 'assignment-1' }],
+      total: 1,
+      limit: 1,
+      offset: 0,
+    });
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: { ...programHeaderRow(), id: 'program-digestive', slug: 'digestive-foundations' } }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow({ id: 'version-digestive', program_id: 'program-digestive' }) }))
+      .mockReturnValueOnce(query({
+        data: [
+          baseEnrollment({
+            id: 'baseline-cancelled',
+            status: 'cancelled',
+            program_slug: 'baseline',
+            completed_at: '2026-04-01T00:00:00.000Z',
+          }),
+          baseEnrollment({
+            id: 'baseline-completed',
+            status: 'completed',
+            program_slug: 'baseline',
+            completed_at: '2026-05-01T00:00:00.000Z',
+          }),
+        ],
+      }))
+      .mockReturnValueOnce(query({ data: { id: 'assignment-1' } }))
+      .mockReturnValueOnce(insertQuery);
+
+    const out = await createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'digestive-foundations',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    });
+
+    expect(out.id).toBe('enrollment-digestive');
+    expect(insertQuery.insert).toHaveBeenCalled();
+  });
+
   test('does not treat another person completion row as this person prerequisite', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
     mockHasEntitlement.mockResolvedValue(true);
@@ -735,6 +811,101 @@ describe('program runtime enrollment writes', () => {
     const summary = await getProgramRuntimeSummary(paused.id);
     expect(summary?.resolved_status).toBe('paused');
     expect(summary?.current_day).toBe(3);
+  });
+
+  test('fail-closes paused historical access at Day 0 when pause_started_at is missing or invalid', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T12:00:00.000Z'));
+    const todayDay = calculateCurrentProgramDay({
+      selectedStartDate: '2026-05-20',
+      timezone: 'UTC',
+      now: new Date('2026-05-27T12:00:00.000Z'),
+    });
+    expect(todayDay).toBe(8);
+
+    const untrustedPauseMetadata = [
+      {},
+      { pause_started_at: null },
+      { pause_started_at: '' },
+      { pause_started_at: 'not-a-date' },
+      { pause_started_at: '2026-02-31' },
+      { pause_started_at: '2026-05-22T12:00:00.000Z' },
+      { pause_started_at: 20260522 },
+    ];
+
+    for (const metadata of untrustedPauseMetadata) {
+      mockFrom.mockReset();
+      const paused = baseEnrollment({
+        status: 'paused',
+        selected_start_date: '2026-05-20',
+        metadata: metadata as ProgramEnrollment['metadata'],
+      });
+      const version = publishedVersionRow();
+      // Day 0 does not query a check-in template.
+      mockFrom
+        .mockReturnValueOnce(query({ data: paused }))
+        .mockReturnValueOnce(query({ data: version }))
+        .mockReturnValueOnce(query({ data: programHeaderRow() }))
+        .mockReturnValueOnce(query({ data: null }))
+        .mockReturnValueOnce(query({ data: null }));
+
+      const summary = await getProgramRuntimeSummary(paused.id);
+      expect(summary?.resolved_status).toBe('paused');
+      expect(summary?.current_day).toBe(0);
+    }
+
+    mockFrom.mockReset();
+    const pauseUntilOnly = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-20',
+      pause_until: '2026-06-01',
+      metadata: {},
+    });
+    mockFrom
+      .mockReturnValueOnce(query({ data: pauseUntilOnly }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }));
+    const derivedPause = await getProgramRuntimeSummary(pauseUntilOnly.id);
+    expect(derivedPause?.resolved_status).toBe('paused');
+    expect(derivedPause?.current_day).toBe(0);
+  });
+
+  test('keeps calendar days for active and pre-start enrollments without pause metadata', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T12:00:00.000Z'));
+    const active = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-20',
+      metadata: {},
+    });
+    mockFrom
+      .mockReturnValueOnce(query({ data: active }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }));
+
+    const activeSummary = await getProgramRuntimeSummary(active.id);
+    expect(activeSummary?.resolved_status).toBe('active');
+    expect(activeSummary?.current_day).toBe(8);
+
+    const preStart = baseEnrollment({
+      id: 'enrollment-pre-start',
+      status: 'pre_start',
+      selected_start_date: '2026-06-01',
+      metadata: {},
+    });
+    mockFrom
+      .mockReturnValueOnce(query({ data: preStart }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }));
+
+    const preStartSummary = await getProgramRuntimeSummary(preStart.id);
+    expect(preStartSummary?.resolved_status).toBe('pre_start');
+    expect(preStartSummary?.current_day).toBe(0);
   });
 
   test('runtime summary freezes completed historical access at completion day', async () => {

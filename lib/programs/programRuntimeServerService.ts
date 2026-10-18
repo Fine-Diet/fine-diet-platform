@@ -312,6 +312,21 @@ function calculateProgramDayAtDateKey(
   return Math.max(1, rawDay - Math.max(pausedDaysTotal, 0));
 }
 
+/** A pause boundary is trustworthy only as a real calendar date key. */
+function trustedPauseStartedDateKey(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  if (
+    utc.getUTCFullYear() !== year ||
+    utc.getUTCMonth() !== month - 1 ||
+    utc.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return value;
+}
+
 /** Stored statuses that count as open (unique-open-enrollment constraint). */
 const OPEN_STORED_ENROLLMENT_STATUSES: readonly ProgramEnrollmentStatus[] = [
   'pre_start',
@@ -605,11 +620,18 @@ async function personHasCompletedProgram(
   for (const row of rows) {
     const enrollment = rowToEnrollment(row as ProgramEnrollmentRow);
     if (enrollment.person_id !== personId || enrollment.program_slug !== programSlug) continue;
-    if (enrollment.status === 'completed' || enrollment.completed_at) return true;
-    if (enrollment.status === 'cancelled') continue;
-    const version = await getVersionById(enrollment.program_version_id);
+    // Same completion rule as program availability: resolveEnrollmentStatus.
+    // Cancelled stays cancelled even when completed_at is still populated, so
+    // that timestamp alone cannot satisfy a prerequisite. Explicit completion
+    // and a non-cancelled completed_at still resolve without a version read.
+    const resolvedDurationDays =
+      enrollment.status === 'cancelled' ||
+      enrollment.status === 'completed' ||
+      Boolean(enrollment.completed_at)
+        ? undefined
+        : (await getVersionById(enrollment.program_version_id))?.duration_days;
     if (
-      resolveEnrollmentStatus(enrollment, new Date(), version?.duration_days) === 'completed'
+      resolveEnrollmentStatus(enrollment, new Date(), resolvedDurationDays) === 'completed'
     ) {
       return true;
     }
@@ -917,17 +939,18 @@ export async function getProgramRuntimeSummary(
 
   const now = new Date();
   const resolvedStatus = resolveEnrollmentStatus(enrollment, now, version.duration_days);
-  const pauseStartedAt =
-    typeof enrollment.metadata?.pause_started_at === 'string'
-      ? enrollment.metadata.pause_started_at
-      : null;
+  const pauseStartedAt = trustedPauseStartedDateKey(enrollment.metadata?.pause_started_at);
   const completedAt = enrollment.completed_at;
-  const currentDay = resolvedStatus === 'paused' && pauseStartedAt
-    ? calculateProgramDayAtDateKey(
-        enrollment.selected_start_date,
-        pauseStartedAt,
-        enrollment.paused_days_total,
-      )
+  // An unknown pause boundary must not fall through to today's program day.
+  // Historical review then stops at Day 0 until a real pause date exists.
+  const currentDay = resolvedStatus === 'paused'
+    ? pauseStartedAt
+      ? calculateProgramDayAtDateKey(
+          enrollment.selected_start_date,
+          pauseStartedAt,
+          enrollment.paused_days_total,
+        )
+      : 0
     : resolvedStatus === 'completed' && completedAt
       ? Math.min(
           version.duration_days ?? Number.MAX_SAFE_INTEGER,

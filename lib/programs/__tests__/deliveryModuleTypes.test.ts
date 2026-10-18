@@ -66,6 +66,38 @@ describe('delivery module visibility', () => {
     ).toBe(false);
   });
 
+  test('hides historical days beyond Day 0 when a paused reached day is unknown', () => {
+    const dayZero: ProgramDeliveryModuleDefinition = {
+      ...weekModule,
+      id: 'day-0',
+      moduleType: 'prep',
+      dayStart: 0,
+      dayEnd: 0,
+    };
+    expect(
+      isDeliveryModuleVisible(dayZero, {
+        runtimeSummary: summary('paused', 0),
+        viewedDay: 0,
+      }),
+    ).toBe(true);
+    expect(
+      isDeliveryModuleVisible(weekModule, {
+        runtimeSummary: summary('paused', 0),
+        viewedDay: 1,
+      }),
+    ).toBe(false);
+    expect(
+      isDeliveryModuleVisible(weekModule, {
+        runtimeSummary: summary('paused', 0),
+      }),
+    ).toBe(false);
+    expect(
+      isDeliveryModuleVisible(weekModule, {
+        runtimeSummary: summary('active', 3),
+      }),
+    ).toBe(true);
+  });
+
   test('reviews a reached week when paused without a separate viewed day', () => {
     expect(
       isDeliveryModuleVisible(weekModule, {
