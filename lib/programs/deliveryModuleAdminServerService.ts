@@ -735,6 +735,17 @@ const PROTECTED_BLUEPRINT_VERSION_IDS = new Set<string>([
   UNTOUCHED_BASELINE_DRAFT.versionId,
 ]);
 
+const BLUEPRINT_METADATA_WRITE_ATTEMPTS = 2;
+
+type DraftBlueprintVersionRow = {
+  id: string;
+  program_id: string;
+  status: string;
+  duration_days: number | null;
+  metadata: Record<string, unknown> | null;
+  updated_at?: string | null;
+};
+
 export async function saveProgramBlueprintMetadataForDraft(input: {
   programId: string;
   programVersionId: string;
@@ -743,21 +754,28 @@ export async function saveProgramBlueprintMetadataForDraft(input: {
   if (PROTECTED_BLUEPRINT_VERSION_IDS.has(input.programVersionId)) {
     rejectComposition('Refusing to write Blueprint metadata onto a protected Baseline version.');
   }
+
+  for (let attempt = 0; attempt < BLUEPRINT_METADATA_WRITE_ATTEMPTS; attempt += 1) {
+    const saved = await writeDraftBlueprintMetadataOnce(input);
+    if (saved) return saved;
+  }
+  rejectComposition('Draft metadata changed during save. Unrelated metadata was not overwritten. Retry the blueprint save.');
+}
+
+async function writeDraftBlueprintMetadataOnce(input: {
+  programId: string;
+  programVersionId: string;
+  blueprint: unknown;
+}): Promise<Record<string, unknown> | null> {
   const { data, error } = await supabaseAdmin
     .from('program_versions')
-    .select('id, program_id, status, duration_days, metadata')
+    .select('id, program_id, status, duration_days, metadata, updated_at')
     .eq('id', input.programVersionId)
     .maybeSingle();
   if (error) {
     throw new Error(`saveProgramBlueprintMetadataForDraft failed: ${error.message}`);
   }
-  const version = data as {
-    id: string;
-    program_id: string;
-    status: string;
-    duration_days: number | null;
-    metadata: Record<string, unknown> | null;
-  } | null;
+  const version = data as DraftBlueprintVersionRow | null;
   const match = versionBelongsToProgram({
     programId: input.programId,
     version,
@@ -774,20 +792,24 @@ export async function saveProgramBlueprintMetadataForDraft(input: {
   if (version.duration_days == null || fields.days.length - 1 !== version.duration_days) {
     rejectComposition('Blueprint days must match the draft version duration, including Day 0.');
   }
+  if (typeof version.updated_at !== 'string' || version.updated_at.length === 0) {
+    rejectComposition('Draft metadata is missing its updated_at token and was not saved.');
+  }
   const metadata = mergeProgramBlueprintVersionMetadata(version.metadata, fields);
+  // updated_at is bumped by the existing program_versions trigger. A competing
+  // write changes that token, so this update misses and the retry merges the
+  // newer row instead of dropping its unrelated keys.
   const result = await supabaseAdmin
     .from('program_versions')
     .update({ metadata })
     .eq('id', input.programVersionId)
     .eq('program_id', input.programId)
     .eq('status', 'draft')
-    .select('id, program_id, status, duration_days, metadata, version_key')
-    .single();
+    .eq('updated_at', version.updated_at)
+    .select('id, program_id, status, duration_days, metadata, version_key, updated_at')
+    .maybeSingle();
   if (result.error) {
     throw new Error(`saveProgramBlueprintMetadataForDraft failed: ${result.error.message}`);
   }
-  if (!result.data) {
-    rejectComposition('Blueprint metadata was not saved because the version is no longer a draft.');
-  }
-  return result.data as Record<string, unknown>;
+  return (result.data as Record<string, unknown> | null) ?? null;
 }

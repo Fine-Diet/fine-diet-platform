@@ -156,9 +156,12 @@ export function MemberDayInteraction({
     }
   }
 
+  const savedObservationReady = !observation?.required || Boolean(savedResponse);
+  const checkinBlocksCompletion = checkinRequired && !checkinHandled;
+  const completionReady = savedObservationReady && !checkinBlocksCompletion;
+
   async function completeDay() {
-    if (!writable || completion) return;
-    if (observation?.required && !savedResponse) return;
+    if (!writable || completion || !completionReady) return;
     const generation = requestGeneration.current;
     setPending('complete');
     setError(null);
@@ -176,7 +179,6 @@ export function MemberDayInteraction({
     }
   }
 
-  const savedObservationReady = !observation?.required || Boolean(savedResponse);
   const twoDigit = String(day).padStart(2, '0');
 
   return (
@@ -232,7 +234,7 @@ export function MemberDayInteraction({
         <button
           type="button"
           onClick={() => { void completeDay(); }}
-          disabled={pending !== null || !savedObservationReady}
+          disabled={pending !== null || !completionReady}
           className="mt-4 h-12 w-full rounded-full border border-white/30 text-sm font-semibold hover:bg-white/5 disabled:opacity-60"
         >
           Mark day {twoDigit} completed

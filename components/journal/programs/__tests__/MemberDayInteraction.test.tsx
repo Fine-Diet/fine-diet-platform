@@ -185,4 +185,164 @@ describe('MemberDayInteraction', () => {
     expect(container.textContent).toContain('Day 07 completed');
     expect(completions).toBe(2);
   });
+
+  it('persists Day 0, reloads it, and shows a rejected completion', async () => {
+    const savedCompletion = {
+      id: 'completion-day-0',
+      enrollment_id: ENROLLMENT_ID,
+      program_version_id: VERSION_ID,
+      program_day: 0,
+      completed_at: '2026-10-17T18:30:00.000Z',
+    };
+    let stored: typeof savedCompletion | null = null;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      if (String(url).includes('observations')) {
+        if (method === 'GET') {
+          return jsonResponse({
+            draft_text: 'ready',
+            response_text: 'ready',
+            saved_at: '2026-10-17T18:20:00.000Z',
+            updated_at: '2026-10-17T18:20:00.000Z',
+          });
+        }
+        const body = JSON.parse(String(init?.body));
+        return jsonResponse({
+          draft_text: body.text,
+          response_text: body.text,
+          saved_at: '2026-10-17T18:21:00.000Z',
+          updated_at: '2026-10-17T18:21:00.000Z',
+        });
+      }
+      if (method === 'GET') return jsonResponse(stored);
+      const body = JSON.parse(String(init?.body));
+      if (body.day !== 0) {
+        return jsonResponse({
+          error: 'Only Day 0 is available before the Program starts.',
+          code: 'PROGRAM_DAY_NOT_UNLOCKED',
+        }, 409);
+      }
+      stored = savedCompletion;
+      return jsonResponse(stored);
+    });
+
+    const dayZero = panel({
+      day: 0,
+      observation: {
+        contentKey: 'baseline-candidate-day-0-note',
+        prompt: 'What do you want ready before Day 1?',
+        required: true,
+      },
+      checkinRequired: false,
+      checkinHandled: true,
+    });
+    await renderPanel(dayZero);
+    expect(container.querySelector('textarea')?.value).toBe('ready');
+    expect(container.textContent).toContain('Saved response: ready');
+
+    const complete = () => Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Mark day 00 completed');
+    await act(async () => {
+      complete()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.textContent).toContain('Day 00 completed');
+    expect(JSON.parse(String(fetchMock.mock.calls.find((call) => call[1]?.method === 'POST')?.[1].body))).toEqual({ day: 0 });
+
+    await act(async () => {
+      root.unmount();
+    });
+    root = createRoot(container);
+    await renderPanel(dayZero);
+    expect(container.textContent).toContain('Day 00 completed');
+    expect(container.textContent).toContain('Saved response: ready');
+    expect(fetchMock.mock.calls.filter((call) => call[1]?.method === 'POST')).toHaveLength(1);
+  });
+
+  it('keeps a rejected Day 0 completion uncommitted', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('observations')) {
+        return jsonResponse({
+          draft_text: 'ready',
+          response_text: 'ready',
+          saved_at: '2026-10-17T18:20:00.000Z',
+          updated_at: '2026-10-17T18:20:00.000Z',
+        });
+      }
+      if ((init?.method ?? 'GET') === 'GET') return jsonResponse(null);
+      return jsonResponse({
+        error: 'This day has no published delivery content and cannot be completed.',
+        code: 'PROGRAM_DAY_REQUIREMENTS_UNMET',
+      }, 409);
+    });
+
+    await renderPanel(panel({
+      day: 0,
+      checkinRequired: false,
+      checkinHandled: true,
+      observation: null,
+    }));
+    const complete = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Mark day 00 completed');
+    await act(async () => {
+      complete?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.textContent).toContain('no published delivery content');
+    expect(container.textContent).not.toContain('Day 00 completed');
+  });
+
+  it.each([
+    ['required', 7, false],
+    ['completed', 7, true],
+    ['skipped', 14, true],
+    ['stale', 21, false],
+  ] as const)('%s check-in on day %s is actionable: %s', async (state, day, actionable) => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('observations')) {
+        return jsonResponse({
+          draft_text: 'saved note',
+          response_text: 'saved note',
+          saved_at: '2026-10-17T18:00:00.000Z',
+          updated_at: '2026-10-17T18:00:00.000Z',
+        });
+      }
+      if ((init?.method ?? 'GET') === 'GET') return jsonResponse(null);
+      return jsonResponse({
+        id: 'completion-1',
+        enrollment_id: ENROLLMENT_ID,
+        program_version_id: VERSION_ID,
+        program_day: day,
+        completed_at: '2026-10-17T18:04:00.000Z',
+      });
+    });
+
+    await renderPanel(panel({
+      day,
+      checkinRequired: true,
+      checkinHandled: actionable,
+      observation: {
+        contentKey: `baseline-candidate-day-${day}-reflection`,
+        prompt: 'What pattern do you want to carry forward?',
+        required: true,
+      },
+    }));
+    const complete = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === `Mark day ${String(day).padStart(2, '0')} completed`) as HTMLButtonElement;
+    expect(['required', 'completed', 'skipped', 'stale']).toContain(state);
+    expect(complete.disabled).toBe(!actionable);
+    if (!actionable) {
+      expect(container.textContent).toContain('Complete or skip this day’s check-in');
+    }
+    await act(async () => {
+      complete.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const posts = fetchMock.mock.calls.filter((call) => call[1]?.method === 'POST');
+    if (actionable) {
+      expect(posts).toHaveLength(1);
+      expect(JSON.parse(String(posts[0][1].body))).toEqual({ day });
+      expect(container.textContent).toContain(`Day ${String(day).padStart(2, '0')} completed`);
+    } else {
+      expect(posts).toHaveLength(0);
+      expect(container.textContent).not.toContain(`Day ${String(day).padStart(2, '0')} completed`);
+    }
+  });
 });

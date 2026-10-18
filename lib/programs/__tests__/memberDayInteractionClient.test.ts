@@ -6,7 +6,9 @@ import {
   displayObservation,
   fetchProgramDayCompletion,
   fetchProgramDayObservation,
+  isMemberCheckinHandled,
   memberCompletionUrl,
+  memberDayPanelModel,
   memberObservationUrl,
   observationTargetForViewedDay,
   sameMemberDayIdentity,
@@ -67,6 +69,37 @@ describe('member day interaction ownership and lifecycle', () => {
     })).toBeNull();
     expect(checkinRequiredForDay(interactions, 7)).toBe(true);
     expect(checkinRequiredForDay(interactions, 6)).toBe(false);
+  });
+
+  it('keeps a required check-in closed until that same day is completed or skipped', () => {
+    const interactions = BASELINE_DAY_0_TO_21_BLUEPRINT.interactions;
+    for (const day of [7, 14, 21]) {
+      const modules = [{ id: `baseline-candidate-day-${day}-reflection`, dayStart: day, dayEnd: day }];
+      const model = (latestCheckin: { checkin_day: number; response_status: string } | null) => memberDayPanelModel({
+        status: 'active',
+        day,
+        enrollmentId: ENROLLMENT_ID,
+        versionId: VERSION_ID,
+        modules,
+        interactions,
+        latestCheckin,
+      });
+      expect(model(null)).toMatchObject({ checkinRequired: true, checkinHandled: false });
+      expect(model({ checkin_day: day, response_status: 'completed' }).checkinHandled).toBe(true);
+      expect(model({ checkin_day: day, response_status: 'skipped' }).checkinHandled).toBe(true);
+      const staleDay = day === 21 ? 14 : day + 7;
+      expect(model({ checkin_day: staleDay, response_status: 'completed' }).checkinHandled).toBe(false);
+      expect(isMemberCheckinHandled({ checkin_day: day, response_status: 'draft' }, day)).toBe(false);
+    }
+    expect(memberDayPanelModel({
+      status: 'pre_start',
+      day: 0,
+      enrollmentId: ENROLLMENT_ID,
+      versionId: VERSION_ID,
+      modules: [{ id: 'baseline-candidate-day-0-orientation', dayStart: 0, dayEnd: 0 }],
+      interactions,
+      latestCheckin: { checkin_day: 7, response_status: 'completed' },
+    })).toMatchObject({ writable: true, checkinRequired: false, checkinHandled: true, observation: null });
   });
 
   it('rejects a completion recorded for another version or day', () => {

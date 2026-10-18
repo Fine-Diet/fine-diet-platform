@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "next-env.d.ts",
-    "lib/programs/programDayInteractionServerService.ts",
+    "lib/programs/deliveryModuleAdminServerService.ts",
     "lib/programs/memberDayInteractionClient.ts",
     "lib/programs/baselineMemberBinding.ts",
     "lib/programs/baselineMemberDraftImport.ts",

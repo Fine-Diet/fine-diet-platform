@@ -1203,6 +1203,13 @@ function MemberProgramDeliveryExperience({
                 needsEnrollment || runtimeError ? undefined : onSetItemStatus
               }
             />
+            {runtimeSummary ? memberDayPanel({
+              runtimeSummary,
+              previewMode,
+              day: viewedDay,
+              modules: deliveryModules,
+              blueprint,
+            }) : null}
           </StackedPageSection>
         ) : (
           <>

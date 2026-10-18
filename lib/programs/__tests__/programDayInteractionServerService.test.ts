@@ -273,6 +273,29 @@ describe('enrollment lifecycle write authorization', () => {
     await completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 0 });
     expect(states.find((state) => state.table === 'program_delivery_modules')?.filters.status_visibility).toEqual(['pre_start']);
     expect(states.some((state) => state.table === 'program_day_completions' && state.write)).toBe(true);
+    expect(states.some((state) => state.table === 'program_enrollments')).toBe(false);
+  });
+
+  it('rejects Day 0 completion for another version and does not open Day 1 before start', async () => {
+    (getProgramRuntimeSummaryForPerson as jest.Mock).mockResolvedValue({ ...activeSummary, resolved_status: 'pre_start', current_day: 0 });
+    rows.program_delivery_modules = [publishedModule({
+      module_key: 'baseline-day-0-reflection',
+      metadata: {},
+      day_start: 0,
+      day_end: 0,
+      status_visibility: ['pre_start'],
+      program_version_id: OTHER_VERSION_ID,
+    })];
+    rows.program_checkin_templates = [];
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 0 }))
+      .rejects.toMatchObject({ code: PROGRAM_DAY_REQUIREMENTS_UNMET });
+    expect(states.some((state) => state.write)).toBe(false);
+
+    states = [];
+    rows = {};
+    await expect(completeProgramDay({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 1 }))
+      .rejects.toMatchObject({ code: PROGRAM_DAY_NOT_UNLOCKED });
+    expect(states.some((state) => state.write)).toBe(false);
   });
 
   it('returns an existing completed-day record through the read path without upserting', async () => {

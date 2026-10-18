@@ -1484,6 +1484,13 @@ export function ProgramDeliveryPreviewExperience({
                 needsEnrollment || runtimeError ? undefined : onSetItemStatus
               }
             />
+            {memberDayPanel({
+              runtimeSummary,
+              previewMode,
+              day: viewedDay,
+              modules: deliveryModules,
+              blueprint,
+            })}
           </StackedPageSection>
         ) : (
           <>
