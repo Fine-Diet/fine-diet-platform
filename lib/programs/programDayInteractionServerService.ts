@@ -48,7 +48,7 @@ type DeliveryModuleCompletionRow = {
   status_visibility: string[] | null;
 };
 
-function isEligiblePublishedDeliveryModule(
+export function isEligiblePublishedDeliveryModule(
   row: DeliveryModuleCompletionRow,
   summary: ProgramRuntimeSummary,
   day: number,

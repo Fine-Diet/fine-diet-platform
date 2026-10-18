@@ -373,11 +373,9 @@ describe('Baseline member draft import', () => {
       'version_label',
       'duration_days',
     ]);
-    expect(publication.gaps.map((gap) => gap.code)).toEqual([
-      'version-key-assigned-by-draft-rpc',
-      'version-metadata-not-accepted-by-draft-api',
-      'checkin-templates-not-in-module-import',
-    ]);
+    expect(publication.gaps).toEqual([]);
+    expect(publication.checkinSourceVersionId).toBe(PROTECTED_BASELINE_V1.versionId);
+    expect(publication.metadataWriter).toBe('saveProgramBlueprintMetadataForDraft');
     expect(publication.checkInDays).toEqual([7, 14, 21]);
     expect(payloads.every((payload) => (
       payload.day_end == null || payload.day_end <= publication.durationDays

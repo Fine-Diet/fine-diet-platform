@@ -89,6 +89,8 @@ BASELINE_DAY_0_TO_21_CANDIDATE.modules = [
     eyebrow: 'Day 00 · Setup',
     title: 'Let’s get you set up for Baseline',
     body: 'Use this space to get oriented and make a simple plan for the days ahead. Your usual meals are a useful place to begin.',
+    dayStart: 0,
+    dayEnd: 0,
     statusVisibility: ['pre_start', 'active'],
   },
   {
@@ -99,6 +101,8 @@ BASELINE_DAY_0_TO_21_CANDIDATE.modules = [
     eyebrow: 'Setup workspace',
     title: 'Build a meal map that fits your routine',
     body: 'Choose the setup action that is useful today. You can return to Day 0 after Baseline begins.',
+    dayStart: 0,
+    dayEnd: 0,
     statusVisibility: ['pre_start', 'active'],
     blocks: [
       {
@@ -124,6 +128,8 @@ BASELINE_DAY_0_TO_21_CANDIDATE.modules = [
     eyebrow: 'Create Meals',
     title: 'Create familiar meal options',
     body: 'Use the existing meal import and review flow to save an option you may want to repeat.',
+    dayStart: 0,
+    dayEnd: 0,
     statusVisibility: ['pre_start', 'active'],
     cta: {
       label: 'Open meal creation',
@@ -139,6 +145,8 @@ BASELINE_DAY_0_TO_21_CANDIDATE.modules = [
     eyebrow: 'Prepare Pantry',
     title: 'Get your pantry ready',
     body: 'Review what you already have and note anything you may want to pick up.',
+    dayStart: 0,
+    dayEnd: 0,
     statusVisibility: ['pre_start', 'active'],
     cta: {
       label: 'Pantry setup is unavailable',
@@ -154,6 +162,8 @@ BASELINE_DAY_0_TO_21_CANDIDATE.modules = [
     eyebrow: 'Program sequence',
     title: 'Your 21-day Baseline',
     body: 'The day rail follows the calendar selected for your enrollment. Schedule shows the three-week sequence.',
+    dayStart: 0,
+    dayEnd: 0,
     statusVisibility: ['pre_start', 'active'],
     blocks: [
       {

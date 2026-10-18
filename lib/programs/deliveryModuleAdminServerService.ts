@@ -20,6 +20,14 @@ import {
   metadataHasComposition,
   versionBelongsToProgram,
 } from './deliveryComposition';
+import {
+  PROTECTED_BASELINE_V1,
+  UNTOUCHED_BASELINE_DRAFT,
+} from './baselineMemberBinding';
+import {
+  mergeProgramBlueprintVersionMetadata,
+  parseProgramBlueprintVersionFields,
+} from './programBlueprint';
 import type { ProgramStatus } from './contentTypes';
 
 export type ProgramDeliveryModuleStatus = ProgramStatus;
@@ -720,4 +728,66 @@ export async function publishProgramVersion(input: {
     throw new Error('publishProgramVersion returned no version.');
   }
   return row as Record<string, unknown>;
+}
+
+const PROTECTED_BLUEPRINT_VERSION_IDS = new Set<string>([
+  PROTECTED_BASELINE_V1.versionId,
+  UNTOUCHED_BASELINE_DRAFT.versionId,
+]);
+
+export async function saveProgramBlueprintMetadataForDraft(input: {
+  programId: string;
+  programVersionId: string;
+  blueprint: unknown;
+}): Promise<Record<string, unknown>> {
+  if (PROTECTED_BLUEPRINT_VERSION_IDS.has(input.programVersionId)) {
+    rejectComposition('Refusing to write Blueprint metadata onto a protected Baseline version.');
+  }
+  const { data, error } = await supabaseAdmin
+    .from('program_versions')
+    .select('id, program_id, status, duration_days, metadata')
+    .eq('id', input.programVersionId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`saveProgramBlueprintMetadataForDraft failed: ${error.message}`);
+  }
+  const version = data as {
+    id: string;
+    program_id: string;
+    status: string;
+    duration_days: number | null;
+    metadata: Record<string, unknown> | null;
+  } | null;
+  const match = versionBelongsToProgram({
+    programId: input.programId,
+    version,
+  });
+  if (!match.ok || !version) {
+    const err = new Error(match.ok ? 'program_version_id does not belong to this program.' : match.message);
+    (err as Error & { code?: string }).code = 'VERSION_PROGRAM_MISMATCH';
+    throw err;
+  }
+  if (version.status !== 'draft') {
+    rejectComposition('Published program versions are immutable. Create a new draft version to make changes.');
+  }
+  const fields = parseProgramBlueprintVersionFields(input.blueprint);
+  if (version.duration_days == null || fields.days.length - 1 !== version.duration_days) {
+    rejectComposition('Blueprint days must match the draft version duration, including Day 0.');
+  }
+  const metadata = mergeProgramBlueprintVersionMetadata(version.metadata, fields);
+  const result = await supabaseAdmin
+    .from('program_versions')
+    .update({ metadata })
+    .eq('id', input.programVersionId)
+    .eq('program_id', input.programId)
+    .eq('status', 'draft')
+    .select('id, program_id, status, duration_days, metadata, version_key')
+    .single();
+  if (result.error) {
+    throw new Error(`saveProgramBlueprintMetadataForDraft failed: ${result.error.message}`);
+  }
+  if (!result.data) {
+    rejectComposition('Blueprint metadata was not saved because the version is no longer a draft.');
+  }
+  return result.data as Record<string, unknown>;
 }

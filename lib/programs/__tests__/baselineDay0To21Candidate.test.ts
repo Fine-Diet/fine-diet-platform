@@ -17,7 +17,10 @@ describe('Baseline Day 0–21 candidate', () => {
       payloads.map(() => true),
     );
     expect(new Set(payloads.map((payload) => payload.module_key)).size).toBe(payloads.length);
-    expect(new Set(payloads.flatMap((payload) => payload.day_start == null ? [] : [payload.day_start])).size).toBe(21);
+    expect(new Set(payloads.flatMap((payload) => payload.day_start == null ? [] : [payload.day_start])).size).toBe(22);
+    const dayZero = payloads.filter((payload) => payload.module_key.startsWith('baseline-candidate-day-0-'));
+    expect(dayZero).toHaveLength(5);
+    expect(dayZero.every((payload) => payload.day_start === 0 && payload.day_end === 0)).toBe(true);
     for (let day = 0; day <= 21; day += 1) {
       expect(payloads.some((payload) => payload.anchor_json.groupId === `baseline-candidate-day-${day}`)).toBe(true);
     }
