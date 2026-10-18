@@ -1,3 +1,10 @@
+import type { ProgramDeliveryModuleDefinition } from '../deliveryModuleTypes';
+import { isDeliveryModuleVisible } from '../deliveryModuleTypes';
+import {
+  filterMemberDeliveryModules,
+  selectHistoricalReviewModules,
+} from '../historicalReviewPolicy';
+import { buildProgramDayRail } from '../programDeliveryNavigation';
 import type { ProgramEnrollment } from '../runtimeTypes';
 
 let mockFrom!: jest.Mock;
@@ -192,6 +199,40 @@ function programHeaderRow() {
     description: null,
     storefront_href: null,
   };
+}
+
+function historicalModule(
+  id: string,
+  day: number,
+  moduleType: ProgramDeliveryModuleDefinition['moduleType'] = 'guide',
+): ProgramDeliveryModuleDefinition {
+  return {
+    id,
+    programSlug: 'baseline',
+    moduleType,
+    title: id,
+    body: id,
+    dayStart: day,
+    dayEnd: day,
+    statusVisibility: ['paused', 'completed'],
+  };
+}
+
+function mockRuntimeSummaryReads(
+  enrollment: ProgramEnrollment,
+  version: ReturnType<typeof publishedVersionRow> = publishedVersionRow(),
+  options: { checkinTemplate?: boolean } = {},
+) {
+  mockFrom.mockReset();
+  mockFrom
+    .mockReturnValueOnce(query({ data: enrollment }))
+    .mockReturnValueOnce(query({ data: version }))
+    .mockReturnValueOnce(query({ data: programHeaderRow() }))
+    .mockReturnValueOnce(query({ data: null }))
+    .mockReturnValueOnce(query({ data: null }));
+  if (options.checkinTemplate) {
+    mockFrom.mockReturnValueOnce(query({ data: null }));
+  }
 }
 
 describe('program runtime enrollment writes', () => {
@@ -869,6 +910,134 @@ describe('program runtime enrollment writes', () => {
     const derivedPause = await getProgramRuntimeSummary(pauseUntilOnly.id);
     expect(derivedPause?.resolved_status).toBe('paused');
     expect(derivedPause?.current_day).toBe(0);
+  });
+
+  test('fail-closes a future pause date at Day 0 and hides later historical days', async () => {
+    const now = new Date('2026-05-27T15:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(now);
+    const actualDay = calculateCurrentProgramDay({
+      selectedStartDate: '2026-05-20',
+      timezone: 'UTC',
+      now,
+    });
+    expect(actualDay).toBe(8);
+
+    const paused = baseEnrollment({
+      status: 'paused',
+      selected_start_date: '2026-05-20',
+      timezone: 'UTC',
+      metadata: { pause_started_at: '2026-06-10' },
+    });
+    mockRuntimeSummaryReads(paused, publishedVersionRow({ duration_days: 21 }));
+
+    const summary = await getProgramRuntimeSummary(paused.id);
+    expect(summary?.resolved_status).toBe('paused');
+    expect(summary?.current_day).toBe(0);
+
+    const modules = [
+      historicalModule('day-0', 0, 'prep'),
+      historicalModule('day-8', 8, 'week'),
+      historicalModule('day-22', 22, 'guide'),
+    ];
+    const reachedDay = summary?.current_day ?? 22;
+    expect(filterMemberDeliveryModules(modules, 'paused', reachedDay).map((module) => module.id)).toEqual(['day-0']);
+    expect(selectHistoricalReviewModules(modules, reachedDay).map((module) => module.id)).toEqual(['day-0']);
+    expect(isDeliveryModuleVisible(modules[2], {
+      runtimeSummary: summary,
+      viewedDay: 22,
+    })).toBe(false);
+    expect(isDeliveryModuleVisible(modules[1], {
+      runtimeSummary: summary,
+      viewedDay: 8,
+    })).toBe(false);
+    expect(isDeliveryModuleVisible(modules[0], {
+      runtimeSummary: summary,
+      viewedDay: 0,
+    })).toBe(true);
+
+    const rail = buildProgramDayRail({
+      durationDays: 22,
+      runtimeStatus: 'paused',
+      currentDay: reachedDay,
+    });
+    expect(rail.find((item) => item.day === 22)?.accessible).toBe(false);
+    expect(rail.filter((item) => item.accessible).map((item) => item.day)).toEqual([0]);
+  });
+
+  test('caps a trustworthy paused day by today and the published duration', async () => {
+    const now = new Date('2026-06-10T15:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(now);
+    const actualDay = calculateCurrentProgramDay({
+      selectedStartDate: '2026-05-01',
+      timezone: 'UTC',
+      now,
+    });
+    expect(actualDay).toBe(41);
+
+    const paused = baseEnrollment({
+      status: 'paused',
+      selected_start_date: '2026-05-01',
+      timezone: 'UTC',
+      metadata: { pause_started_at: '2026-06-01' },
+    });
+    mockRuntimeSummaryReads(paused, publishedVersionRow({ duration_days: 21 }), {
+      checkinTemplate: true,
+    });
+
+    const summary = await getProgramRuntimeSummary(paused.id);
+    expect(summary?.resolved_status).toBe('paused');
+    expect(summary?.current_day).toBe(21);
+    expect(summary!.current_day).toBeLessThanOrEqual(actualDay);
+    expect(summary!.current_day).toBeLessThanOrEqual(21);
+
+    const modules = [
+      historicalModule('day-0', 0, 'prep'),
+      historicalModule('day-21', 21, 'guide'),
+      historicalModule('day-32', 32, 'week'),
+    ];
+    expect(
+      filterMemberDeliveryModules(modules, 'paused', summary!.current_day).map((module) => module.id),
+    ).toEqual(['day-0', 'day-21']);
+    expect(isDeliveryModuleVisible(modules[2], {
+      runtimeSummary: summary,
+      viewedDay: 32,
+    })).toBe(false);
+  });
+
+  test('uses the enrollment timezone when deciding whether a pause date is still ahead', async () => {
+    // 2026-05-28 06:30 UTC is still 2026-05-27 in America/Los_Angeles.
+    const now = new Date('2026-05-28T06:30:00.000Z');
+    jest.useFakeTimers().setSystemTime(now);
+    const losAngelesToday = calculateCurrentProgramDay({
+      selectedStartDate: '2026-05-20',
+      timezone: 'America/Los_Angeles',
+      now,
+    });
+    expect(losAngelesToday).toBe(8);
+
+    mockRuntimeSummaryReads(baseEnrollment({
+      status: 'paused',
+      selected_start_date: '2026-05-20',
+      timezone: 'America/Los_Angeles',
+      metadata: { pause_started_at: '2026-05-27' },
+    }), publishedVersionRow(), { checkinTemplate: true });
+    const pausedToday = await getProgramRuntimeSummary('enrollment-1');
+    expect(pausedToday?.resolved_status).toBe('paused');
+    expect(pausedToday?.current_day).toBe(8);
+
+    mockRuntimeSummaryReads(baseEnrollment({
+      status: 'paused',
+      selected_start_date: '2026-05-20',
+      timezone: 'America/Los_Angeles',
+      metadata: { pause_started_at: '2026-05-28' },
+    }));
+    const pausedTomorrow = await getProgramRuntimeSummary('enrollment-1');
+    expect(pausedTomorrow?.resolved_status).toBe('paused');
+    expect(pausedTomorrow?.current_day).toBe(0);
+    expect(isDeliveryModuleVisible(historicalModule('day-9', 9, 'week'), {
+      runtimeSummary: pausedTomorrow,
+      viewedDay: 9,
+    })).toBe(false);
   });
 
   test('keeps calendar days for active and pre-start enrollments without pause metadata', async () => {

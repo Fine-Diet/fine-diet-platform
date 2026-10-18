@@ -327,6 +327,58 @@ function trustedPauseStartedDateKey(value: unknown): string | null {
   return value;
 }
 
+function publishedDurationCap(durationDays: number | null | undefined): number {
+  if (
+    typeof durationDays !== 'number' ||
+    !Number.isFinite(durationDays) ||
+    durationDays <= 0
+  ) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  return durationDays;
+}
+
+/**
+ * Historical day for a paused enrollment.
+ *
+ * Missing, malformed, impossible, and future pause dates are untrustworthy and
+ * resolve to Day 0. A real pause date that is not after today's enrollment
+ * calendar date is then bounded by today's program day and the published
+ * version duration. Date comparison uses the enrollment timezone.
+ */
+function resolvePausedHistoricalDay(args: {
+  selectedStartDate: string;
+  timezone?: string | null;
+  pauseStartedAt: unknown;
+  pausedDaysTotal?: number | null;
+  durationDays?: number | null;
+  now?: Date;
+}): number {
+  const pauseDateKey = trustedPauseStartedDateKey(args.pauseStartedAt);
+  if (!pauseDateKey) return 0;
+
+  const now = args.now ?? new Date();
+  const timezone = args.timezone || 'UTC';
+  const today = dateKeyInTimeZone(now, timezone);
+  if (pauseDateKey > today) return 0;
+
+  const pausedDay = calculateProgramDayAtDateKey(
+    args.selectedStartDate,
+    pauseDateKey,
+    args.pausedDaysTotal ?? 0,
+  );
+  const actualDay = calculateCurrentProgramDay({
+    selectedStartDate: args.selectedStartDate,
+    timezone,
+    pausedDaysTotal: args.pausedDaysTotal,
+    now,
+  });
+  return Math.max(
+    0,
+    Math.min(pausedDay, actualDay, publishedDurationCap(args.durationDays)),
+  );
+}
+
 /** Stored statuses that count as open (unique-open-enrollment constraint). */
 const OPEN_STORED_ENROLLMENT_STATUSES: readonly ProgramEnrollmentStatus[] = [
   'pre_start',
@@ -939,18 +991,20 @@ export async function getProgramRuntimeSummary(
 
   const now = new Date();
   const resolvedStatus = resolveEnrollmentStatus(enrollment, now, version.duration_days);
-  const pauseStartedAt = trustedPauseStartedDateKey(enrollment.metadata?.pause_started_at);
   const completedAt = enrollment.completed_at;
-  // An unknown pause boundary must not fall through to today's program day.
-  // Historical review then stops at Day 0 until a real pause date exists.
+  // An unknown or future pause boundary must not fall through to today's
+  // program day, or to a later day stored ahead of the member. Historical
+  // review then stops at Day 0. A trustworthy pause day is also capped by
+  // today's program day and the published version duration.
   const currentDay = resolvedStatus === 'paused'
-    ? pauseStartedAt
-      ? calculateProgramDayAtDateKey(
-          enrollment.selected_start_date,
-          pauseStartedAt,
-          enrollment.paused_days_total,
-        )
-      : 0
+    ? resolvePausedHistoricalDay({
+        selectedStartDate: enrollment.selected_start_date,
+        timezone: enrollment.timezone,
+        pauseStartedAt: enrollment.metadata?.pause_started_at,
+        pausedDaysTotal: enrollment.paused_days_total,
+        durationDays: version.duration_days,
+        now,
+      })
     : resolvedStatus === 'completed' && completedAt
       ? Math.min(
           version.duration_days ?? Number.MAX_SAFE_INTEGER,
