@@ -41,6 +41,7 @@ import {
   createProgramEnrollment,
   createProgramEnrollmentFromAccess,
   getProgramRuntimeSummary,
+  getProgramRuntimeSummaryForPerson,
   reconcileElapsedOpenEnrollment,
   respondToProgramCheckin,
   resolveEnrollmentStatus,
@@ -775,14 +776,14 @@ describe('program runtime enrollment writes', () => {
       // getLatestCheckinResponse
       .mockReturnValueOnce(query({ data: null }))
       // getLatestRecommendation
-      .mockReturnValueOnce(query({ data: null }))
-      // getCheckinTemplateForDay
       .mockReturnValueOnce(query({ data: null }));
 
     const summary = await getProgramRuntimeSummary(open.id);
     expect(summary?.enrollment.status).toBe('completed');
     expect(summary?.resolved_status).toBe('completed');
     expect(summary?.enrollment.completed_at).toBe('2026-05-22T12:00:00.000Z');
+    expect(summary?.next_checkin_template).toBeNull();
+    expect(mockFrom.mock.calls.map((call) => call[0])).not.toContain('program_checkin_templates');
   });
 
   test('lifecycle pause remains available for in-window active enrollments', async () => {
@@ -819,8 +820,6 @@ describe('program runtime enrollment writes', () => {
       // latest checkin
       .mockReturnValueOnce(query({ data: null }))
       // latest recommendation
-      .mockReturnValueOnce(query({ data: null }))
-      // checkin template
       .mockReturnValueOnce(query({ data: null }));
 
     const summary = await applyProgramEnrollmentLifecycleAction({
@@ -831,6 +830,7 @@ describe('program runtime enrollment writes', () => {
     });
 
     expect(summary.resolved_status).toBe('paused');
+    expect(summary.next_checkin_template).toBeNull();
   });
 
   test('runtime summary freezes the accessible day at pause start', async () => {
@@ -846,12 +846,12 @@ describe('program runtime enrollment writes', () => {
       .mockReturnValueOnce(query({ data: version }))
       .mockReturnValueOnce(query({ data: programHeaderRow() }))
       .mockReturnValueOnce(query({ data: null }))
-      .mockReturnValueOnce(query({ data: null }))
       .mockReturnValueOnce(query({ data: null }));
 
     const summary = await getProgramRuntimeSummary(paused.id);
     expect(summary?.resolved_status).toBe('paused');
     expect(summary?.current_day).toBe(3);
+    expect(summary?.next_checkin_template).toBeNull();
   });
 
   test('fail-closes paused historical access at Day 0 when pause_started_at is missing or invalid', async () => {
@@ -980,13 +980,12 @@ describe('program runtime enrollment writes', () => {
       timezone: 'UTC',
       metadata: { pause_started_at: '2026-06-01' },
     });
-    mockRuntimeSummaryReads(paused, publishedVersionRow({ duration_days: 21 }), {
-      checkinTemplate: true,
-    });
+    mockRuntimeSummaryReads(paused, publishedVersionRow({ duration_days: 21 }));
 
     const summary = await getProgramRuntimeSummary(paused.id);
     expect(summary?.resolved_status).toBe('paused');
     expect(summary?.current_day).toBe(21);
+    expect(summary?.next_checkin_template).toBeNull();
     expect(summary!.current_day).toBeLessThanOrEqual(actualDay);
     expect(summary!.current_day).toBeLessThanOrEqual(21);
 
@@ -1020,10 +1019,11 @@ describe('program runtime enrollment writes', () => {
       selected_start_date: '2026-05-20',
       timezone: 'America/Los_Angeles',
       metadata: { pause_started_at: '2026-05-27' },
-    }), publishedVersionRow(), { checkinTemplate: true });
+    }), publishedVersionRow());
     const pausedToday = await getProgramRuntimeSummary('enrollment-1');
     expect(pausedToday?.resolved_status).toBe('paused');
     expect(pausedToday?.current_day).toBe(8);
+    expect(pausedToday?.next_checkin_template).toBeNull();
 
     mockRuntimeSummaryReads(baseEnrollment({
       status: 'paused',
@@ -1058,6 +1058,7 @@ describe('program runtime enrollment writes', () => {
     const activeSummary = await getProgramRuntimeSummary(active.id);
     expect(activeSummary?.resolved_status).toBe('active');
     expect(activeSummary?.current_day).toBe(8);
+    expect(mockFrom.mock.calls.map((call) => call[0])).toContain('program_checkin_templates');
 
     const preStart = baseEnrollment({
       id: 'enrollment-pre-start',
@@ -1075,6 +1076,7 @@ describe('program runtime enrollment writes', () => {
     const preStartSummary = await getProgramRuntimeSummary(preStart.id);
     expect(preStartSummary?.resolved_status).toBe('pre_start');
     expect(preStartSummary?.current_day).toBe(0);
+    expect(preStartSummary?.next_checkin_template).toBeNull();
   });
 
   test('runtime summary freezes completed historical access at completion day', async () => {
@@ -1090,12 +1092,72 @@ describe('program runtime enrollment writes', () => {
       .mockReturnValueOnce(query({ data: version }))
       .mockReturnValueOnce(query({ data: programHeaderRow() }))
       .mockReturnValueOnce(query({ data: null }))
-      .mockReturnValueOnce(query({ data: null }))
       .mockReturnValueOnce(query({ data: null }));
 
     const summary = await getProgramRuntimeSummary(completed.id);
     expect(summary?.resolved_status).toBe('completed');
     expect(summary?.current_day).toBe(3);
+    expect(summary?.next_checkin_template).toBeNull();
+  });
+
+  test('person-scoped summary omits the check-in prompt and keeps the submitted response', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T12:00:00.000Z'));
+    const paused = baseEnrollment({
+      status: 'paused',
+      selected_start_date: '2026-05-20',
+      metadata: { pause_started_at: '2026-05-27' },
+    });
+    const responseRow = {
+      id: 'response-paused',
+      enrollment_id: paused.id,
+      checkin_template_id: 'template-7',
+      checkin_day: 7,
+      response_status: 'completed',
+      response_payload_json: { energy: 4 },
+      skipped_reason: null,
+      responded_at: '2026-05-26T12:00:00.000Z',
+      skipped_at: null,
+      input_snapshot_json: {},
+      computed_metrics_snapshot_json: {},
+      metadata: {},
+      created_at: '2026-05-26T12:00:00.000Z',
+      updated_at: '2026-05-26T12:00:00.000Z',
+    };
+    mockFrom
+      .mockReturnValueOnce(query({ data: { id: paused.id } }))
+      .mockReturnValueOnce(query({ data: paused }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: responseRow }))
+      .mockReturnValueOnce(query({ data: null }));
+
+    const summary = await getProgramRuntimeSummaryForPerson('person-1', paused.id);
+    expect(summary?.resolved_status).toBe('paused');
+    expect(summary?.current_day).toBe(8);
+    expect(summary?.next_checkin_template).toBeNull();
+    expect(summary?.latest_checkin_response?.response_payload_json).toEqual({ energy: 4 });
+    expect(mockFrom.mock.calls.map((call) => call[0])).not.toContain('program_checkin_templates');
+
+    mockFrom.mockReset();
+    const completedByTimestamp = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-20',
+      completed_at: '2026-05-22T18:00:00.000Z',
+    });
+    mockFrom
+      .mockReturnValueOnce(query({ data: { id: completedByTimestamp.id } }))
+      .mockReturnValueOnce(query({ data: completedByTimestamp }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      .mockReturnValueOnce(query({
+        data: { ...completedByTimestamp, status: 'completed' },
+      }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: responseRow }))
+      .mockReturnValueOnce(query({ data: null }));
+    const completed = await getProgramRuntimeSummaryForPerson('person-1', completedByTimestamp.id);
+    expect(completed?.resolved_status).toBe('completed');
+    expect(completed?.next_checkin_template).toBeNull();
+    expect(completed?.latest_checkin_response?.checkin_day).toBe(7);
   });
 
   test('future/pre-start and in-window active enrollments are not auto-completed', async () => {

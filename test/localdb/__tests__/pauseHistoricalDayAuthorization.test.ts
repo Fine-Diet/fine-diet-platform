@@ -23,6 +23,10 @@ const MIGRATION = path.join(
   REPO_ROOT,
   'supabase/migrations/20261018171709_pause_historical_day_authorization.sql',
 );
+const BOUNDARY_MIGRATION = path.join(
+  REPO_ROOT,
+  'supabase/migrations/20261018185853_historical_member_read_boundary.sql',
+);
 
 const PROGRAM = '10000000-0000-4000-8000-000000000101';
 const DRAFT_PROGRAM = '10000000-0000-4000-8000-000000000102';
@@ -40,6 +44,8 @@ const ENROLLMENT = '50000000-0000-4000-8000-000000000501';
 
 const PRODUCTION_MODULES_MD5 = '4e25cc673cb3338492f0acdfd59dad00';
 const PRODUCTION_TEMPLATES_MD5 = '1cb96566428950ef81841a77f27b75de';
+const CEILING_MODULES_MD5 = '534d15dd7eb8ecf57d6e4be9660ea868';
+const CEILING_TEMPLATES_MD5 = '140f4be7bf64266cc653ee6d51706101';
 
 const FIXTURE_SQL = `
 CREATE SCHEMA IF NOT EXISTS auth;
@@ -97,9 +103,13 @@ CREATE TABLE public.program_delivery_modules (
   program_id uuid NOT NULL,
   program_version_id uuid,
   module_key text NOT NULL,
+  module_type text NOT NULL,
   status text NOT NULL,
   status_visibility text[] NOT NULL,
-  day_start integer
+  day_start integer,
+  day_end integer,
+  body text NOT NULL,
+  cta_json jsonb NOT NULL
 );
 
 CREATE TABLE public.program_checkin_templates (
@@ -107,7 +117,16 @@ CREATE TABLE public.program_checkin_templates (
   program_version_id uuid NOT NULL,
   title text NOT NULL,
   status text NOT NULL,
-  checkin_day integer NOT NULL
+  checkin_day integer NOT NULL,
+  prompt_md text,
+  questions_json jsonb NOT NULL
+);
+
+CREATE TABLE public.program_checkin_responses (
+  id uuid PRIMARY KEY,
+  enrollment_id uuid NOT NULL,
+  response_status text NOT NULL,
+  response_payload_json jsonb NOT NULL
 );
 
 CREATE SCHEMA programs_private;
@@ -133,6 +152,18 @@ ALTER TABLE public.program_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.program_enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.program_delivery_modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.program_checkin_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.program_checkin_responses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can read own program_checkin_responses"
+  ON public.program_checkin_responses FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.program_enrollments AS e
+      WHERE e.id = program_checkin_responses.enrollment_id
+        AND e.person_id IN (SELECT programs_private.current_person_ids())
+    )
+  );
 
 CREATE POLICY "Authenticated can read published programs"
   ON public.programs FOR SELECT TO authenticated
@@ -159,7 +190,8 @@ CREATE POLICY "Users can read own program_enrollments"
   USING (person_id IN (SELECT programs_private.current_person_ids()));
 
 GRANT SELECT ON public.programs, public.program_versions, public.program_enrollments,
-  public.program_delivery_modules, public.program_checkin_templates
+  public.program_delivery_modules, public.program_checkin_templates,
+  public.program_checkin_responses
   TO authenticated;
 `;
 
@@ -205,14 +237,19 @@ let owner: Client;
 let utcToday = '';
 let laToday = '';
 let beforePolicies: PolicySnapshot[] = [];
+let afterCeilingPolicies: PolicySnapshot[] = [];
 let afterPolicies: PolicySnapshot[] = [];
 let beforeGrants: GrantSnapshot[] = [];
+let afterCeilingGrants: GrantSnapshot[] = [];
 let afterGrants: GrantSnapshot[] = [];
 let beforeFunctions: FunctionSnapshot[] = [];
+let afterCeilingFunctions: FunctionSnapshot[] = [];
 let afterFunctions: FunctionSnapshot[] = [];
 let beforeSchemaUse = { authenticated: false, anon: false };
+let afterCeilingSchemaUse = { authenticated: false, anon: false };
 let afterSchemaUse = { authenticated: false, anon: false };
 let beforeFutureModules: string[] = [];
+let afterCeilingFutureModules: string[] = [];
 let beforeMalformedCode: string | null = null;
 let postgresVersion = '';
 
@@ -286,6 +323,43 @@ async function readTemplates(authUserId: string): Promise<string[]> {
   );
 }
 
+async function readModuleDetails(authUserId: string): Promise<string[]> {
+  return asRole(
+    'authenticated',
+    authUserId,
+    `SELECT module_key || '|' || module_type || '|' || body || '|' || cta_json::text AS key
+     FROM public.program_delivery_modules
+     ORDER BY module_key`,
+  );
+}
+
+async function readResponses(authUserId: string): Promise<string[]> {
+  return asRole(
+    'authenticated',
+    authUserId,
+    `SELECT response_payload_json->>'energy' AS key
+     FROM public.program_checkin_responses
+     ORDER BY id`,
+  );
+}
+
+async function deniedCode(sql: string): Promise<string> {
+  const client = await cluster.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [MEMBER_AUTH]);
+    await client.query('SET LOCAL ROLE authenticated');
+    await client.query(sql);
+    await client.query('ROLLBACK');
+    return 'allowed';
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    return (error as { code?: string }).code ?? 'unknown';
+  } finally {
+    await client.end();
+  }
+}
+
 async function setEnrollment(input: {
   status: string;
   start: string;
@@ -340,7 +414,8 @@ async function snapshotPolicies(): Promise<PolicySnapshot[]> {
          'program_versions',
          'program_enrollments',
          'program_delivery_modules',
-         'program_checkin_templates'
+         'program_checkin_templates',
+         'program_checkin_responses'
        )
      ORDER BY c.relname, p.policyname`,
   );
@@ -357,7 +432,8 @@ async function snapshotGrants(): Promise<GrantSnapshot[]> {
          'program_versions',
          'program_enrollments',
          'program_delivery_modules',
-         'program_checkin_templates'
+         'program_checkin_templates',
+         'program_checkin_responses'
        )
        AND grantee IN ('authenticated', 'anon', 'service_role', 'PUBLIC')
      ORDER BY table_name, grantee, privilege_type`,
@@ -454,48 +530,62 @@ beforeAll(async () => {
     ],
   );
 
-  const modules: Array<[string, string, string, string, string, number | null]> = [
-    ['paused-day-0', PROGRAM, VERSION, 'published', '{paused,pre_start,completed}', 0],
-    ['paused-day-3', PROGRAM, VERSION, 'published', '{paused,completed}', 3],
-    ['paused-day-8', PROGRAM, VERSION, 'published', '{paused}', 8],
-    ['paused-day-21', PROGRAM, VERSION, 'published', '{paused}', 21],
-    ['paused-day-22', PROGRAM, VERSION, 'published', '{paused}', 22],
-    ['paused-day-32', PROGRAM, VERSION, 'published', '{paused}', 32],
-    ['paused-unbounded', PROGRAM, VERSION, 'published', '{paused}', null],
-    ['active-day-1', PROGRAM, VERSION, 'published', '{active}', 1],
-    ['active-day-8', PROGRAM, VERSION, 'published', '{active}', 8],
-    ['active-day-22', PROGRAM, VERSION, 'published', '{active}', 22],
-    ['draft-day-1', PROGRAM, VERSION, 'draft', '{paused,active}', 1],
-    ['other-version-day-1', PROGRAM, OTHER_VERSION, 'published', '{paused,active}', 1],
-    ['draft-program-day-1', DRAFT_PROGRAM, DRAFT_PROGRAM_VERSION, 'published', '{active,paused}', 1],
-    ['stranger-day-1', OTHER_PROGRAM, STRANGER_VERSION, 'published', '{active}', 1],
+  const modules: Array<[string, string, string, string, string, string, number | null, number | null, string, string]> = [
+    ['paused-day-0', PROGRAM, VERSION, 'guide', 'published', '{paused,pre_start,completed}', 0, 0, 'Day 0 guide', '{}'],
+    ['paused-day-3', PROGRAM, VERSION, 'guide', 'published', '{paused,completed}', 3, 3, 'Reached guide', '{"label":"Read","href":"/guide/3"}'],
+    ['paused-day-8', PROGRAM, VERSION, 'week', 'published', '{paused}', 8, 8, 'Day 8 week', '{}'],
+    ['paused-day-21', PROGRAM, VERSION, 'practice_card', 'published', '{paused}', 21, 21, 'Day 21 practice', '{}'],
+    ['paused-day-22', PROGRAM, VERSION, 'roadmap', 'published', '{paused}', 22, 22, 'Day 22 roadmap', '{}'],
+    ['paused-day-32', PROGRAM, VERSION, 'capacity_support', 'published', '{paused}', 32, 32, 'Day 32 support', '{}'],
+    ['paused-unbounded', PROGRAM, VERSION, 'guide', 'published', '{paused}', null, null, 'Unbounded guide', '{"label":"Open","href":"/guide"}'],
+    ['interactive-checkin-unbounded', PROGRAM, VERSION, 'checkin_prompt', 'published', '{paused,completed}', null, null, 'LIVE CHECKIN BODY', '{"label":"Submit","href":"/check-in"}'],
+    ['interactive-checkin-day3', PROGRAM, VERSION, 'checkin_prompt', 'published', '{paused,completed}', 3, 3, 'DAY 3 CHECKIN', '{"label":"Answer","href":"/check-in/3"}'],
+    ['interactive-recommendation-day3', PROGRAM, VERSION, 'recommendation_prompt', 'published', '{paused,completed}', 3, 3, 'DAY 3 RECOMMENDATION', '{}'],
+    ['guide-missing-end', PROGRAM, VERSION, 'guide', 'published', '{paused,completed}', 3, null, 'Missing end', '{}'],
+    ['guide-inverted', PROGRAM, VERSION, 'prep', 'published', '{paused,completed}', 5, 2, 'Inverted range', '{}'],
+    ['active-unbounded', PROGRAM, VERSION, 'guide', 'published', '{active}', null, null, 'Active unbounded', '{}'],
+    ['prestart-unbounded', PROGRAM, VERSION, 'guide', 'published', '{pre_start}', null, null, 'Pre-start unbounded', '{}'],
+    ['active-day-1', PROGRAM, VERSION, 'guide', 'published', '{active}', 1, 1, 'Active day 1', '{}'],
+    ['active-day-8', PROGRAM, VERSION, 'guide', 'published', '{active}', 8, 8, 'Active day 8', '{}'],
+    ['active-day-22', PROGRAM, VERSION, 'guide', 'published', '{active}', 22, 22, 'Active day 22', '{}'],
+    ['draft-day-1', PROGRAM, VERSION, 'guide', 'draft', '{paused,active}', 1, 1, 'Draft', '{}'],
+    ['other-version-day-1', PROGRAM, OTHER_VERSION, 'guide', 'published', '{paused,active}', 1, 1, 'Other version', '{}'],
+    ['draft-program-day-1', DRAFT_PROGRAM, DRAFT_PROGRAM_VERSION, 'guide', 'published', '{active,paused}', 1, 1, 'Draft program', '{}'],
+    ['stranger-day-1', OTHER_PROGRAM, STRANGER_VERSION, 'guide', 'published', '{active}', 1, 1, 'Stranger', '{}'],
   ];
-  for (const [key, programId, versionId, status, visibility, dayStart] of modules) {
+  for (const [key, programId, versionId, moduleType, status, visibility, dayStart, dayEnd, body, cta] of modules) {
     await owner.query(
       `INSERT INTO public.program_delivery_modules (
-         id, program_id, program_version_id, module_key, status, status_visibility, day_start
-       ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::text[], $6)`,
-      [programId, versionId, key, status, visibility, dayStart],
+         id, program_id, program_version_id, module_key, module_type, status,
+         status_visibility, day_start, day_end, body, cta_json
+       ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10::jsonb)`,
+      [programId, versionId, key, moduleType, status, visibility, dayStart, dayEnd, body, cta],
     );
   }
 
-  const templates: Array<[string, string, string, number]> = [
-    ['checkin-3', VERSION, 'published', 3],
-    ['checkin-8', VERSION, 'published', 8],
-    ['checkin-21', VERSION, 'published', 21],
-    ['checkin-22', VERSION, 'published', 22],
-    ['checkin-draft', VERSION, 'draft', 1],
-    ['checkin-other-version', OTHER_VERSION, 'published', 1],
-    ['checkin-stranger', STRANGER_VERSION, 'published', 1],
+  const templates: Array<[string, string, string, number, string, string]> = [
+    ['checkin-3', VERSION, 'published', 3, 'How do you feel on day 3?', '[{"id":"q3","kind":"text"}]'],
+    ['checkin-8', VERSION, 'published', 8, 'How do you feel on day 8?', '[{"id":"q8","kind":"text"}]'],
+    ['checkin-21', VERSION, 'published', 21, 'Day 21 question', '[{"id":"q21"}]'],
+    ['checkin-22', VERSION, 'published', 22, 'Future question', '[{"id":"q22"}]'],
+    ['checkin-draft', VERSION, 'draft', 1, 'Draft question', '[]'],
+    ['checkin-other-version', OTHER_VERSION, 'published', 1, 'Other version question', '[]'],
+    ['checkin-stranger', STRANGER_VERSION, 'published', 1, 'Stranger question', '[]'],
   ];
-  for (const [title, versionId, status, day] of templates) {
+  for (const [title, versionId, status, day, prompt, questions] of templates) {
     await owner.query(
       `INSERT INTO public.program_checkin_templates (
-         id, program_version_id, title, status, checkin_day
-       ) VALUES (gen_random_uuid(), $1, $2, $3, $4)`,
-      [versionId, title, status, day],
+         id, program_version_id, title, status, checkin_day, prompt_md, questions_json
+       ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::jsonb)`,
+      [versionId, title, status, day, prompt, questions],
     );
   }
+  await owner.query(
+    `INSERT INTO public.program_checkin_responses (
+       id, enrollment_id, response_status, response_payload_json
+     ) VALUES ($1, $2, 'completed', '{"energy":4}'::jsonb)`,
+    ['60000000-0000-4000-8000-000000000601', ENROLLMENT],
+  );
 
   beforePolicies = await snapshotPolicies();
   beforeGrants = await snapshotGrants();
@@ -522,6 +612,23 @@ beforeAll(async () => {
   });
 
   await applySqlFile(owner, MIGRATION);
+  afterCeilingPolicies = await snapshotPolicies();
+  afterCeilingGrants = await snapshotGrants();
+  afterCeilingFunctions = await snapshotFunctions();
+  afterCeilingSchemaUse = await snapshotSchemaUse();
+  const futurePause = await owner.query(
+    `SELECT ($1::date - 7)::text AS start, ($1::date + 14)::text AS pause`,
+    [utcToday],
+  );
+  await setEnrollment({
+    status: 'paused',
+    start: futurePause.rows[0].start as string,
+    timezone: 'UTC',
+    pause: futurePause.rows[0].pause as string,
+  });
+  afterCeilingFutureModules = await readModules(MEMBER_AUTH);
+
+  await applySqlFile(owner, BOUNDARY_MIGRATION);
   afterPolicies = await snapshotPolicies();
   afterGrants = await snapshotGrants();
   afterFunctions = await snapshotFunctions();
@@ -545,13 +652,22 @@ describe('paused historical day authorization', () => {
   });
 
   test('changes only the paused arms and preserves grants, RLS, and neighboring policies', () => {
-    expect(afterGrants).toEqual(beforeGrants);
-    expect(afterSchemaUse).toEqual(beforeSchemaUse);
-    expect(afterSchemaUse).toEqual({ authenticated: true, anon: false });
+    expect(afterCeilingGrants).toEqual(beforeGrants);
+    expect(afterCeilingSchemaUse).toEqual(beforeSchemaUse);
+    expect(afterCeilingSchemaUse).toEqual({ authenticated: true, anon: false });
+    const ceilingModules = afterCeilingPolicies.find((row) => row.policyname === 'Members can read enrolled available program_delivery_modules');
+    const ceilingTemplates = afterCeilingPolicies.find((row) => row.policyname === 'Users can read own available program_checkin_templates');
+    expect(ceilingModules?.qual_md5).toBe(CEILING_MODULES_MD5);
+    expect(ceilingTemplates?.qual_md5).toBe(CEILING_TEMPLATES_MD5);
+    expect(afterCeilingFutureModules).toEqual([
+      'interactive-checkin-unbounded',
+      'paused-day-0',
+      'paused-unbounded',
+    ]);
 
     const relevant = (rows: PolicySnapshot[]) => rows.filter((row) => row.policyname);
     for (const before of relevant(beforePolicies)) {
-      const after = relevant(afterPolicies).find((row) => row.policyname === before.policyname);
+      const after = relevant(afterCeilingPolicies).find((row) => row.policyname === before.policyname);
       expect(after?.roles).toEqual(before.roles);
       expect(after?.cmd).toBe(before.cmd);
       expect(after?.rls).toBe(true);
@@ -573,7 +689,7 @@ describe('paused historical day authorization', () => {
       }
     }
 
-    const helper = afterFunctions.find((row) => row.proname === 'paused_historical_day');
+    const helper = afterCeilingFunctions.find((row) => row.proname === 'paused_historical_day');
     expect(helper).toMatchObject({
       prosecdef: false,
       args: 'selected_start_date date, time_zone text, pause_started_at text, paused_days_total integer, duration_days integer',
@@ -584,7 +700,7 @@ describe('paused historical day authorization', () => {
     });
     expect(helper?.proconfig?.join(' ')).toContain('search_path=');
     const personIdsBefore = beforeFunctions.find((row) => row.proname === 'current_person_ids');
-    const personIdsAfter = afterFunctions.find((row) => row.proname === 'current_person_ids');
+    const personIdsAfter = afterCeilingFunctions.find((row) => row.proname === 'current_person_ids');
     expect(personIdsAfter).toEqual(personIdsBefore);
     expect(personIdsAfter).toMatchObject({
       prosecdef: true,
@@ -611,7 +727,7 @@ describe('paused historical day authorization', () => {
       timezone: 'UTC',
       pause: startForDay22.rows[0].pause as string,
     });
-    expect(await readModules(MEMBER_AUTH)).toEqual(['paused-day-0', 'paused-unbounded']);
+    expect(await readModules(MEMBER_AUTH)).toEqual(['paused-day-0']);
     expect(await readTemplates(MEMBER_AUTH)).toEqual([]);
 
     const laTomorrow = await owner.query(`SELECT ($1::date + 1)::text AS pause`, [laToday]);
@@ -627,7 +743,7 @@ describe('paused historical day authorization', () => {
        WHERE id = $2`,
       [laToday, ENROLLMENT],
     );
-    expect(await readModules(MEMBER_AUTH)).toEqual(['paused-day-0', 'paused-unbounded']);
+    expect(await readModules(MEMBER_AUTH)).toEqual(['paused-day-0']);
     expect(await readTemplates(MEMBER_AUTH)).toEqual([]);
 
     await setEnrollment({
@@ -646,9 +762,16 @@ describe('paused historical day authorization', () => {
       'paused-day-0',
       'paused-day-3',
       'paused-day-8',
-      'paused-unbounded',
     ]);
-    expect(await readTemplates(MEMBER_AUTH)).toEqual(['checkin-3', 'checkin-8']);
+    expect(await readModuleDetails(MEMBER_AUTH)).toEqual(expect.arrayContaining([
+      'paused-day-3|guide|Reached guide|{"href": "/guide/3", "label": "Read"}',
+    ]));
+    expect(await readModuleDetails(MEMBER_AUTH)).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('LIVE CHECKIN BODY'),
+      expect.stringContaining('DAY 3 CHECKIN'),
+    ]));
+    expect(await readTemplates(MEMBER_AUTH)).toEqual([]);
+    expect(await readResponses(MEMBER_AUTH)).toEqual(['4']);
   });
 
   test('fails closed on malformed pause values without a query exception', async () => {
@@ -674,7 +797,7 @@ describe('paused historical day authorization', () => {
          WHERE id = $2`,
         [utcToday, ENROLLMENT],
       );
-      await expect(readModules(MEMBER_AUTH)).resolves.toEqual(['paused-day-0', 'paused-unbounded']);
+      await expect(readModules(MEMBER_AUTH)).resolves.toEqual(['paused-day-0']);
       await expect(readTemplates(MEMBER_AUTH)).resolves.toEqual([]);
     }
   });
@@ -693,9 +816,8 @@ describe('paused historical day authorization', () => {
     expect(await readModules(MEMBER_AUTH)).toEqual([
       'paused-day-0',
       'paused-day-3',
-      'paused-unbounded',
     ]);
-    expect(await readTemplates(MEMBER_AUTH)).toEqual(['checkin-3']);
+    expect(await readTemplates(MEMBER_AUTH)).toEqual([]);
 
     const capped = await owner.query(
       `SELECT ($1::date - 40)::text AS start, ($1::date - 10)::text AS pause`,
@@ -712,9 +834,8 @@ describe('paused historical day authorization', () => {
       'paused-day-21',
       'paused-day-3',
       'paused-day-8',
-      'paused-unbounded',
     ]);
-    expect(await readTemplates(MEMBER_AUTH)).toEqual(['checkin-21', 'checkin-3', 'checkin-8']);
+    expect(await readTemplates(MEMBER_AUTH)).toEqual([]);
     expect(await readModules(MEMBER_AUTH)).not.toEqual(expect.arrayContaining(['paused-day-22', 'paused-day-32']));
   });
 
@@ -728,7 +849,7 @@ describe('paused historical day authorization', () => {
       `UPDATE public.program_enrollments SET selected_start_date = ($1::date - 7) WHERE id = $2`,
       [utcToday, ENROLLMENT],
     );
-    expect(await readModules(MEMBER_AUTH)).toEqual(['active-day-1', 'active-day-8']);
+    expect(await readModules(MEMBER_AUTH)).toEqual(['active-day-1', 'active-day-8', 'active-unbounded']);
     expect(await readTemplates(MEMBER_AUTH)).toEqual(['checkin-3', 'checkin-8']);
 
     await setEnrollment({
@@ -740,7 +861,7 @@ describe('paused historical day authorization', () => {
       `UPDATE public.program_enrollments SET selected_start_date = ($1::date + 3) WHERE id = $2`,
       [utcToday, ENROLLMENT],
     );
-    expect(await readModules(MEMBER_AUTH)).toEqual(['paused-day-0']);
+    expect(await readModules(MEMBER_AUTH)).toEqual(['paused-day-0', 'prestart-unbounded']);
     expect(await readTemplates(MEMBER_AUTH)).toEqual([]);
 
     const completed = await owner.query(
@@ -755,7 +876,17 @@ describe('paused historical day authorization', () => {
       completedAt: completed.rows[0].completed_at as string,
     });
     expect(await readModules(MEMBER_AUTH)).toEqual(['paused-day-0', 'paused-day-3']);
-    expect(await readTemplates(MEMBER_AUTH)).toEqual(['checkin-3']);
+    expect(await readTemplates(MEMBER_AUTH)).toEqual([]);
+
+    await setEnrollment({
+      status: 'active',
+      start: completed.rows[0].start as string,
+      timezone: 'UTC',
+      completedAt: completed.rows[0].completed_at as string,
+    });
+    expect(await readModules(MEMBER_AUTH)).toEqual(['paused-day-0', 'paused-day-3']);
+    expect(await readTemplates(MEMBER_AUTH)).toEqual([]);
+    expect(await readResponses(MEMBER_AUTH)).toEqual(['4']);
 
     await setEnrollment({
       status: 'cancelled',
@@ -781,10 +912,56 @@ describe('paused historical day authorization', () => {
     });
     expect(await readModules(STRANGER_AUTH)).toEqual(['stranger-day-1']);
     expect(await readTemplates(STRANGER_AUTH)).toEqual(['checkin-stranger']);
+    expect(await readResponses(STRANGER_AUTH)).toEqual([]);
     expect(await readModules(MEMBER_AUTH)).not.toContain('draft-day-1');
     expect(await readModules(MEMBER_AUTH)).not.toContain('other-version-day-1');
     expect(await readModules(MEMBER_AUTH)).not.toContain('draft-program-day-1');
     expect(await readModules(MEMBER_AUTH)).not.toContain('stranger-day-1');
+    expect(await deniedCode(
+      `INSERT INTO public.program_checkin_templates (
+         id, program_version_id, title, status, checkin_day, questions_json
+       ) VALUES (gen_random_uuid(), '${VERSION}', 'injected', 'published', 1, '[]'::jsonb)`,
+    )).toBe('42501');
+    expect(await deniedCode(
+      `UPDATE public.program_delivery_modules SET body = 'rewritten' WHERE module_key = 'paused-day-3'`,
+    )).toBe('42501');
+    expect(await deniedCode(
+      `INSERT INTO public.program_checkin_responses (
+         id, enrollment_id, response_status, response_payload_json
+       ) VALUES (gen_random_uuid(), '${ENROLLMENT}', 'completed', '{}'::jsonb)`,
+    )).toBe('42501');
+  });
+
+  test('keeps grants and non-historical policies while replacing the historical predicate', () => {
+    expect(afterGrants).toEqual(beforeGrants);
+    expect(afterFunctions).toEqual(afterCeilingFunctions);
+    expect(afterSchemaUse).toEqual(afterCeilingSchemaUse);
+
+    const relevant = (rows: PolicySnapshot[]) => rows.filter((row) => row.policyname);
+    for (const before of relevant(afterCeilingPolicies)) {
+      const after = relevant(afterPolicies).find((row) => row.policyname === before.policyname);
+      expect(after?.roles).toEqual(before.roles);
+      expect(after?.cmd).toBe(before.cmd);
+      expect(after?.rls).toBe(true);
+      expect(after?.force_rls).toBe(before.force_rls);
+      if (
+        before.policyname === 'Members can read enrolled available program_delivery_modules'
+        || before.policyname === 'Users can read own available program_checkin_templates'
+      ) {
+        expect(after?.qual_md5).not.toBe(before.qual_md5);
+      } else {
+        expect(after?.qual_md5).toBe(before.qual_md5);
+      }
+    }
+
+    const modules = afterPolicies.find((row) => row.policyname === 'Members can read enrolled available program_delivery_modules');
+    const templates = afterPolicies.find((row) => row.policyname === 'Users can read own available program_checkin_templates');
+    expect(modules?.qual).toContain('practice_card');
+    expect(modules?.qual).toContain('capacity_support');
+    expect(modules?.qual).toContain('day_end IS NOT NULL');
+    expect(modules?.qual).not.toContain('checkin_prompt');
+    expect(modules?.qual).not.toContain('recommendation_prompt');
+    expect(templates?.qual?.toLowerCase()).toContain('false');
   });
 
   test('uses the enrollment zone for the same pause date and denies anon execution', async () => {

@@ -1020,7 +1020,12 @@ export async function getProgramRuntimeSummary(
         pausedDaysTotal: enrollment.paused_days_total,
         now,
       });
-  const nextTemplate = await getCheckinTemplateForDay(version.id, currentDay);
+  // Paused and completed review is informational. The check-in prompt stays
+  // off this response; submitted responses remain on latest_checkin_response.
+  const historicalReview = resolvedStatus === 'paused' || resolvedStatus === 'completed';
+  const nextTemplate = historicalReview
+    ? null
+    : await getCheckinTemplateForDay(version.id, currentDay);
 
   return {
     enrollment,
