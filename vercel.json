@@ -11,7 +11,8 @@
       "feat/baseline-day-interaction-backend-r1": false,
       "fix/baseline-empty-day-completion-guard-v1": false,
       "feat/baseline-days-0-21-member-integration": false,
-      "feat/issue210-member-auth-h1-h3": false
+      "feat/issue210-member-auth-h1-h3": false,
+      "feat/baseline-canary-safe-version-routing": false
     }
   }
 }
