@@ -232,7 +232,7 @@ describe('Program delivery UI pass', () => {
     expect(container.textContent).toContain('Return to today');
   });
 
-  test('does not offer Setup navigation when paused visibility excludes it', async () => {
+  test('offers reached Setup review when paused and keeps future days locked', async () => {
     await renderExperience(root, {
       runtimeSummary: runtime('paused', 4),
       deliveryModules: BASELINE_DAY_0_TO_21_CANDIDATE.modules,
@@ -244,12 +244,17 @@ describe('Program delivery UI pass', () => {
     await act(async () => {
       schedule?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(
-      Array.from(container.querySelectorAll('button')).some(
-        (button) => button.querySelector('p')?.textContent === 'Setup',
-      ),
-    ).toBe(false);
-    expect(container.textContent).toContain('Setup');
+    const setup = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.querySelector('p')?.textContent === 'Setup',
+    );
+    expect(setup).toBeTruthy();
+    expect(container.textContent).not.toContain('Check-in due');
+    await act(async () => {
+      buttonByLabel(container, 'Day 5, locked')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+    });
+    expect(container.textContent).toContain('Day 5 unlocks on its Program date.');
   });
 
   test('plays authored Day 0 audio and ignores another day or the development file', async () => {

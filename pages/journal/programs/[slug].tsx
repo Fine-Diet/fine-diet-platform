@@ -25,6 +25,10 @@ import { ProgramDeliveryExperience } from '@/components/journal/programs/Program
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { resolveMemberBlueprintBinding } from '@/lib/programs/baselineMemberBinding';
+import {
+  isHistoricalReviewStatus,
+  selectHistoricalReviewModules,
+} from '@/lib/programs/historicalReviewPolicy';
 import { isProgramRuntimeEnabled } from '@/lib/programs/programRuntimeRegistry';
 import type { ProgramDeliveryModuleDefinition } from '@/lib/programs/deliveryModuleTypes';
 import type {
@@ -1001,11 +1005,14 @@ export default function JournalProgramDetailBySlugPage() {
         }
       : null,
   });
-  const memberDeliveryModules = memberBlueprint.kind === 'published-blueprint'
+  const sourcedDeliveryModules = memberBlueprint.kind === 'published-blueprint'
     ? memberBlueprint.modules
     : memberBlueprint.kind === 'unavailable'
       ? []
       : allDeliveryModules;
+  const memberDeliveryModules = runtimeSummary && isHistoricalReviewStatus(runtimeSummary.resolved_status)
+    ? selectHistoricalReviewModules(sourcedDeliveryModules, runtimeSummary.current_day)
+    : sourcedDeliveryModules;
   const prepDeliveryModules = allDeliveryModules.filter(
     (module) => module.moduleType === 'prep' || module.moduleType === 'roadmap',
   );

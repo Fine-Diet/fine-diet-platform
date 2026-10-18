@@ -1,3 +1,4 @@
+import { isHistoricalReviewStatus, isSafeHistoricalModule } from './historicalReviewPolicy';
 import type {
   ProgramCapacity,
   ProgramEnrollmentStatus,
@@ -216,6 +217,11 @@ export function isDeliveryModuleVisible(
   ctx: ProgramDeliveryRuntimeContext,
 ): boolean {
   const status = statusForSummary(ctx.runtimeSummary);
+  if (isHistoricalReviewStatus(status)) {
+    const reachedDay = ctx.runtimeSummary?.current_day ?? 0;
+    const viewedDay = ctx.viewedDay ?? reachedDay;
+    return isSafeHistoricalModule(module, { viewedDay, reachedDay });
+  }
   if (!module.statusVisibility.includes(status)) return false;
   if (!conditionMatches(module.showWhen, ctx)) return false;
 

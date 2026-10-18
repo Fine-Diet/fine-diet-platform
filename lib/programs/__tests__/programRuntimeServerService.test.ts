@@ -264,6 +264,144 @@ describe('program runtime enrollment writes', () => {
     }));
   });
 
+  test('refuses a fresh ordinary enrollment when the catalogue prerequisite is unmet', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    mockHasEntitlement.mockResolvedValue(true);
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: { ...programHeaderRow(), slug: 'digestive-foundations', id: 'program-digestive' } }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow({ program_id: 'program-digestive', metadata: {} }) }))
+      .mockReturnValueOnce(query({ data: [] }));
+
+    await expect(createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'digestive-foundations',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    })).rejects.toMatchObject({ code: 'PROGRAM_PREREQUISITE_UNMET' });
+    expect(mockFrom).toHaveBeenCalledTimes(4);
+  });
+
+  test('enrolls after the same person has a completed prerequisite, including by assignment', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const created = baseEnrollment({
+      id: 'enrollment-digestive',
+      program_slug: 'digestive-foundations',
+      program_id: 'program-digestive',
+      source_type: 'assignment',
+      entitlement_key: null,
+      assignment_id: 'assignment-1',
+    });
+    const insertQuery = query({ singleData: created });
+    mockHasEntitlement.mockResolvedValue(false);
+    mockListAssignments.mockResolvedValue({
+      rows: [{ id: 'assignment-1' }],
+      total: 1,
+      limit: 1,
+      offset: 0,
+    });
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: { ...programHeaderRow(), id: 'program-digestive', slug: 'digestive-foundations' } }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow({ id: 'version-digestive', program_id: 'program-digestive' }) }))
+      .mockReturnValueOnce(query({ data: [baseEnrollment({ status: 'completed', program_slug: 'baseline', completed_at: '2026-05-01T00:00:00.000Z' })] }))
+      .mockReturnValueOnce(query({ data: { id: 'assignment-1' } }))
+      .mockReturnValueOnce(insertQuery);
+
+    const out = await createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'digestive-foundations',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    });
+
+    expect(out.id).toBe('enrollment-digestive');
+    expect(insertQuery.insert).toHaveBeenCalled();
+  });
+
+  test('does not treat another person completion row as this person prerequisite', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    mockHasEntitlement.mockResolvedValue(true);
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: { ...programHeaderRow(), id: 'program-digestive', slug: 'digestive-foundations' } }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow({ program_id: 'program-digestive' }) }))
+      .mockReturnValueOnce(query({ data: [baseEnrollment({ person_id: 'person-2', status: 'completed', program_slug: 'baseline', completed_at: '2026-05-01T00:00:00.000Z' })] }));
+
+    await expect(createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'digestive-foundations',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    })).rejects.toMatchObject({ code: 'PROGRAM_PREREQUISITE_UNMET' });
+  });
+
+  test('refuses ordinary enrollment into a validation-only published version', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    mockHasEntitlement.mockResolvedValue(true);
+    mockListAssignments.mockResolvedValue({ rows: [{ id: 'assignment-1' }], total: 1, limit: 1, offset: 0 });
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow({ metadata: { content_status: 'validation_only' } }) }));
+
+    await expect(createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'digestive-foundations',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    })).rejects.toMatchObject({ code: 'PROGRAM_VALIDATION_ONLY' });
+    expect(mockFrom).toHaveBeenCalledTimes(3);
+  });
+
+  test('keeps an existing open validation-only enrollment idempotent', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const existing = baseEnrollment({
+      program_slug: 'digestive-foundations',
+      status: 'active',
+    });
+    mockHasEntitlement.mockResolvedValue(true);
+    mockFrom
+      .mockReturnValueOnce(query({ data: existing }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }));
+
+    const out = await createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'digestive-foundations',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    });
+
+    expect(out.id).toBe(existing.id);
+    expect(mockFrom).toHaveBeenCalledTimes(2);
+  });
+
+  test('lets a verified admin grant bypass prerequisite and validation-only gates', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const created = baseEnrollment({ id: 'qa-enrollment', program_slug: 'digestive-foundations' });
+    const insertQuery = query({ singleData: created });
+    mockHasEntitlement.mockResolvedValue(true);
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: { ...programHeaderRow(), id: 'program-digestive', slug: 'digestive-foundations' } }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow({
+        program_id: 'program-digestive',
+        metadata: { content_status: 'validation_only' },
+      }) }))
+      .mockReturnValueOnce(insertQuery);
+
+    const out = await createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'digestive-foundations',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+      authorization: 'verified_admin_grant',
+    });
+
+    expect(out.id).toBe('qa-enrollment');
+    expect(insertQuery.insert).toHaveBeenCalled();
+  });
+
   test('throws when the person has no entitlement or assignment access', async () => {
     mockHasEntitlement.mockResolvedValue(false);
     mockListAssignments.mockResolvedValue({ rows: [], total: 0, limit: 1, offset: 0 });
@@ -769,6 +907,22 @@ describe('program runtime check-in responses', () => {
       responseStatus: 'skipped', skippedReason: 'No template available',
     })).rejects.toMatchObject({ code: 'PROGRAM_CHECKIN_TEMPLATE_DENIED' });
     expect(mockFrom).toHaveBeenCalledTimes(3);
+  });
+
+  test('refuses new check-in writes for paused and completed enrollments', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T00:00:00.000Z'));
+    for (const status of ['paused', 'completed'] as const) {
+      mockFrom
+        .mockReturnValueOnce(query({ data: baseEnrollment({ status, selected_start_date: '2026-05-20' }) }))
+        .mockReturnValueOnce(query({ data: publishedVersionRow() }));
+      await expect(respondToProgramCheckin({
+        personId: 'person-1',
+        enrollmentId: 'enrollment-1',
+        checkinDay: 7,
+        responseStatus: 'completed',
+        responsesJson: { energy: 3 },
+      })).rejects.toMatchObject({ code: 'PROGRAM_CHECKIN_NOT_AVAILABLE' });
+    }
   });
 
   test('refuses check-in responses for future program days', async () => {

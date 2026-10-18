@@ -8,6 +8,14 @@
 
 import { hasEntitlement } from '@/lib/access/accessService';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import {
+  declaredPrerequisiteSlug,
+  isValidationOnlyMetadata,
+  isVerifiedAdminGrant,
+  PROGRAM_PREREQUISITE_UNMET,
+  PROGRAM_VALIDATION_ONLY,
+  type ServerEnrollmentAuthorization,
+} from './enrollmentAuthorization';
 import { listAssignments } from '@/lib/plans/programAssignmentServerService';
 import {
   BASELINE_RECOMMENDATION_PROGRAM_DAY,
@@ -583,8 +591,36 @@ export async function listEnrollmentsForPerson(
   return ((data ?? []) as ProgramEnrollmentRow[]).map(rowToEnrollment);
 }
 
+async function personHasCompletedProgram(
+  personId: string,
+  programSlug: string,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('program_enrollments')
+    .select('*')
+    .eq('person_id', personId)
+    .eq('program_slug', programSlug);
+  if (error) throw new Error(`completed enrollment lookup failed: ${error.message}`);
+  const rows = Array.isArray(data) ? data : [];
+  for (const row of rows) {
+    const enrollment = rowToEnrollment(row as ProgramEnrollmentRow);
+    if (enrollment.person_id !== personId || enrollment.program_slug !== programSlug) continue;
+    if (enrollment.status === 'completed' || enrollment.completed_at) return true;
+    if (enrollment.status === 'cancelled') continue;
+    const version = await getVersionById(enrollment.program_version_id);
+    if (
+      resolveEnrollmentStatus(enrollment, new Date(), version?.duration_days) === 'completed'
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function createProgramEnrollment(
-  input: CreateProgramEnrollmentInput,
+  input: CreateProgramEnrollmentInput & {
+    authorization?: ServerEnrollmentAuthorization;
+  },
 ): Promise<ProgramEnrollment> {
   const slug = normalizeSlug(input.programSlug);
   if (!input.personId) throw new Error('personId is required.');
@@ -614,6 +650,22 @@ export async function createProgramEnrollment(
     );
     (err as Error & { code?: string }).code = 'PROGRAM_VERSION_NOT_PUBLISHED';
     throw err;
+  }
+
+  const adminGrant = isVerifiedAdminGrant(input.authorization);
+  if (!adminGrant && isValidationOnlyMetadata(version.metadata)) {
+    const err = new Error('This program version is not open for member enrollment.');
+    (err as Error & { code?: string }).code = PROGRAM_VALIDATION_ONLY;
+    throw err;
+  }
+  const requiredSlug = declaredPrerequisiteSlug(slug);
+  if (!adminGrant && requiredSlug) {
+    const completed = await personHasCompletedProgram(input.personId, requiredSlug);
+    if (!completed) {
+      const err = new Error(`Complete ${requiredSlug} before starting this program.`);
+      (err as Error & { code?: string }).code = PROGRAM_PREREQUISITE_UNMET;
+      throw err;
+    }
   }
 
   const source = await verifyEnrollmentSource({
@@ -672,7 +724,9 @@ export async function createProgramEnrollmentFromAccess(
   input: Omit<
     CreateProgramEnrollmentInput,
     'sourceType' | 'assignmentId' | 'entitlementKey'
-  >,
+  > & {
+    authorization?: ServerEnrollmentAuthorization;
+  },
 ): Promise<ProgramEnrollment> {
   const slug = normalizeSlug(input.programSlug);
   const source = await resolveEnrollmentSourceFromAccess({

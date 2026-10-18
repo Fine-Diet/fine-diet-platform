@@ -66,11 +66,38 @@ describe('delivery module visibility', () => {
     ).toBe(false);
   });
 
-  test('hides active modules for paused state', () => {
+  test('reviews a reached week when paused without a separate viewed day', () => {
     expect(
       isDeliveryModuleVisible(weekModule, {
         runtimeSummary: summary('paused', 3),
       }),
+    ).toBe(true);
+  });
+
+  test('shows already reached informational modules for paused and completed review', () => {
+    expect(
+      isDeliveryModuleVisible(weekModule, {
+        runtimeSummary: summary('paused', 3),
+        viewedDay: 3,
+      }),
+    ).toBe(true);
+    expect(
+      isDeliveryModuleVisible(weekModule, {
+        runtimeSummary: summary('completed', 7),
+        viewedDay: 7,
+      }),
+    ).toBe(true);
+    expect(
+      isDeliveryModuleVisible(
+        { ...weekModule, id: 'future-week', dayStart: 8, dayEnd: 14 },
+        { runtimeSummary: summary('paused', 3), viewedDay: 8 },
+      ),
+    ).toBe(false);
+    expect(
+      isDeliveryModuleVisible(
+        { ...weekModule, id: 'day-3-checkin', moduleType: 'checkin_prompt', dayStart: 3, dayEnd: 3 },
+        { runtimeSummary: summary('paused', 3), viewedDay: 3 },
+      ),
     ).toBe(false);
   });
 

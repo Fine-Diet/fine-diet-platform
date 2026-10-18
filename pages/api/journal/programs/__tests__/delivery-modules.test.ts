@@ -188,14 +188,26 @@ describe('member delivery authorization', () => {
   });
 
   test('keeps completed members within their historical accessible day', async () => {
+    getDeliveryMock.mockResolvedValue({
+      source: 'admin',
+      modules: [
+        { id: 'day-0', moduleType: 'prep', dayStart: 0, dayEnd: 0, statusVisibility: ['pre_start', 'active'] },
+        { id: 'day-2', moduleType: 'practice_card', dayStart: 2, dayEnd: 2, statusVisibility: ['active'] },
+        { id: 'day-3', moduleType: 'guide', dayStart: 3, dayEnd: 3, statusVisibility: ['active'] },
+        { id: 'future', moduleType: 'week', dayStart: 8, dayEnd: 14, statusVisibility: ['active'] },
+        { id: 'checkin', moduleType: 'checkin_prompt', dayStart: 2, dayEnd: 2, statusVisibility: ['active'], cta: { label: 'Check in', href: '/check-in' } },
+        { id: 'always', moduleType: 'prep', dayStart: null, dayEnd: null, statusVisibility: ['active'] },
+      ],
+    });
     getSummaryMock.mockResolvedValue(summary({
-      current_day: 21,
+      current_day: 2,
       resolved_status: 'completed',
     }));
     const res = makeResponse();
     await handler({ method: 'GET', query: { slug: 'gut-reset' } } as any, res);
     expect(res.body.modules.map((module: { id: string }) => module.id)).toEqual([
-      'day-0', 'day-2', 'day-3', 'always',
+      'day-0', 'day-2',
     ]);
+    expect(res.body.modules.every((module: { cta?: unknown }) => module.cta == null)).toBe(true);
   });
 });

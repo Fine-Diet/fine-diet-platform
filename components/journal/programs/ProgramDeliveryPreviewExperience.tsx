@@ -19,6 +19,7 @@ import {
   useState,
 } from 'react';
 import { MemberDayInteraction } from '@/components/journal/programs/MemberDayInteraction';
+import { isHistoricalReviewStatus } from '@/lib/programs/historicalReviewPolicy';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
@@ -897,8 +898,11 @@ export function ProgramDeliveryPreviewExperience({
     authorizedDay,
   );
   const viewedDay = selectedDay;
+  const historicalReview = isHistoricalReviewStatus(runtimeSummary?.resolved_status);
   const membershipCheckinDue =
-    selectedDay === runtimeSummary?.current_day && isCheckinDue(runtimeSummary);
+    !historicalReview &&
+    selectedDay === runtimeSummary?.current_day &&
+    isCheckinDue(runtimeSummary);
   const visibilityCtx = {
     runtimeSummary,
     checkinDue: membershipCheckinDue,
