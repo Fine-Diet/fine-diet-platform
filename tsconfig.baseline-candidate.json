@@ -2,9 +2,18 @@
   "extends": "./tsconfig.json",
   "include": [
     "next-env.d.ts",
-    "lib/programs/programDayInteractionServerService.ts",
+    "lib/programs/deliveryModuleAdminServerService.ts",
+    "lib/programs/memberDayInteractionClient.ts",
+    "lib/programs/baselineMemberBinding.ts",
+    "lib/programs/baselineMemberDraftImport.ts",
+    "components/journal/programs/MemberDayInteraction.tsx",
+    "components/journal/programs/MemberBlueprintUnavailable.tsx",
+    "components/journal/programs/ProgramDeliveryExperience.tsx",
+    "components/journal/programs/ProgramDeliveryPreviewExperience.tsx",
+    "pages/journal/programs/[slug].tsx",
     "pages/api/journal/programs/enrollments/[id]/observations.ts",
-    "pages/api/journal/programs/enrollments/[id]/complete-day.ts"
+    "pages/api/journal/programs/enrollments/[id]/complete-day.ts",
+    "pages/api/admin/programs/[id]/versions/[versionId]/blueprint.ts"
   ],
   "exclude": ["node_modules", "test", "**/__tests__/**"]
 }

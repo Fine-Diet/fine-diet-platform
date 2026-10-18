@@ -20,6 +20,14 @@ import {
   metadataHasComposition,
   versionBelongsToProgram,
 } from './deliveryComposition';
+import {
+  PROTECTED_BASELINE_V1,
+  UNTOUCHED_BASELINE_DRAFT,
+} from './baselineMemberBinding';
+import {
+  PROGRAM_BLUEPRINT_METADATA_KEY,
+  parseProgramBlueprintVersionFields,
+} from './programBlueprint';
 import type { ProgramStatus } from './contentTypes';
 
 export type ProgramDeliveryModuleStatus = ProgramStatus;
@@ -720,4 +728,118 @@ export async function publishProgramVersion(input: {
     throw new Error('publishProgramVersion returned no version.');
   }
   return row as Record<string, unknown>;
+}
+
+const MERGE_PROGRAM_BLUEPRINT_V1_METADATA_RPC = 'merge_program_blueprint_v1_metadata';
+
+const PROTECTED_BLUEPRINT_VERSION_IDS = new Set<string>([
+  PROTECTED_BASELINE_V1.versionId,
+  UNTOUCHED_BASELINE_DRAFT.versionId,
+]);
+
+type DraftBlueprintVersionRow = {
+  id: string;
+  program_id: string;
+  status: string;
+  duration_days: number | null;
+};
+
+function throwBlueprintRpcError(error: { message?: string }): never {
+  const message = error.message ?? '';
+  if (/does not belong/i.test(message)) {
+    const err = new Error('program_version_id does not belong to this program.');
+    (err as Error & { code?: string }).code = 'VERSION_PROGRAM_MISMATCH';
+    throw err;
+  }
+  if (/protected Baseline/i.test(message)) {
+    rejectComposition('Refusing to write Blueprint metadata onto a protected Baseline version.');
+  }
+  if (/immutable|only draft/i.test(message)) {
+    rejectComposition('Published program versions are immutable. Create a new draft version to make changes.');
+  }
+  if (/not found/i.test(message)) {
+    const err = new Error('Program version not found.');
+    (err as Error & { code?: string }).code = 'VERSION_PROGRAM_MISMATCH';
+    throw err;
+  }
+  if (/was not saved|must be a JSON object/i.test(message)) {
+    throw new Error('Blueprint metadata was not saved.');
+  }
+  throw new Error(`saveProgramBlueprintMetadataForDraft failed: ${message}`);
+}
+
+function persistedBlueprintRow(
+  data: unknown,
+  input: { programId: string; programVersionId: string },
+): Record<string, unknown> {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== 'object') {
+    throw new Error('Blueprint metadata was not saved.');
+  }
+  const saved = row as Record<string, unknown>;
+  const metadata = saved.metadata;
+  const blueprint = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? (metadata as Record<string, unknown>)[PROGRAM_BLUEPRINT_METADATA_KEY]
+    : undefined;
+  if (
+    saved.id !== input.programVersionId
+    || saved.program_id !== input.programId
+    || saved.status !== 'draft'
+    || !blueprint
+    || typeof blueprint !== 'object'
+    || Array.isArray(blueprint)
+  ) {
+    throw new Error('Blueprint metadata was not saved.');
+  }
+  return saved;
+}
+
+/**
+ * Persists programBlueprintV1 through merge_program_blueprint_v1_metadata.
+ * PostgreSQL locks the draft row and merges that single key into the latest
+ * metadata document. Zod, ownership, draft, and duration checks stay here.
+ * The service never sends a client-built metadata document or an updated_at token.
+ */
+export async function saveProgramBlueprintMetadataForDraft(input: {
+  programId: string;
+  programVersionId: string;
+  blueprint: unknown;
+}): Promise<Record<string, unknown>> {
+  if (PROTECTED_BLUEPRINT_VERSION_IDS.has(input.programVersionId)) {
+    rejectComposition('Refusing to write Blueprint metadata onto a protected Baseline version.');
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('program_versions')
+    .select('id, program_id, status, duration_days')
+    .eq('id', input.programVersionId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`saveProgramBlueprintMetadataForDraft failed: ${error.message}`);
+  }
+  const version = data as DraftBlueprintVersionRow | null;
+  const match = versionBelongsToProgram({
+    programId: input.programId,
+    version,
+  });
+  if (!match.ok || !version) {
+    const err = new Error(match.ok ? 'program_version_id does not belong to this program.' : match.message);
+    (err as Error & { code?: string }).code = 'VERSION_PROGRAM_MISMATCH';
+    throw err;
+  }
+  if (version.status !== 'draft') {
+    rejectComposition('Published program versions are immutable. Create a new draft version to make changes.');
+  }
+  const fields = parseProgramBlueprintVersionFields(input.blueprint);
+  if (version.duration_days == null || fields.days.length - 1 !== version.duration_days) {
+    rejectComposition('Blueprint days must match the draft version duration, including Day 0.');
+  }
+
+  const result = await supabaseAdmin.rpc(MERGE_PROGRAM_BLUEPRINT_V1_METADATA_RPC, {
+    p_program_id: input.programId,
+    p_program_version_id: input.programVersionId,
+    p_program_blueprint_v1: fields,
+  });
+  if (result.error) throwBlueprintRpcError(result.error);
+  return persistedBlueprintRow(result.data, input);
 }

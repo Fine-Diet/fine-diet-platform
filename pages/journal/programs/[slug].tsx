@@ -17,12 +17,14 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { MemberBlueprintUnavailable } from '@/components/journal/programs/MemberBlueprintUnavailable';
 import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
 import { ProgramDeliveryExperience } from '@/components/journal/programs/ProgramDeliveryExperience';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import { resolveMemberBlueprintBinding } from '@/lib/programs/baselineMemberBinding';
 import { isProgramRuntimeEnabled } from '@/lib/programs/programRuntimeRegistry';
 import type { ProgramDeliveryModuleDefinition } from '@/lib/programs/deliveryModuleTypes';
 import type {
@@ -761,9 +763,16 @@ export default function JournalProgramDetailBySlugPage() {
   const [progressError, setProgressError] = useState<string | null>(null);
   const [deliveryModules, setDeliveryModules] =
     useState<ProgramDeliveryModuleDefinition[] | null>(null);
+  const [runtimePersonId, setRuntimePersonId] = useState<string | null>(null);
+  const [deliveryVersionId, setDeliveryVersionId] = useState<string | null>(null);
+  const [deliveryRouteSlug, setDeliveryRouteSlug] = useState<string | null>(null);
+  const loadGeneration = useRef(0);
 
   useEffect(() => {
     if (!slugStr) return;
+    const generation = ++loadGeneration.current;
+    const requestedSlug = slugStr;
+    const current = () => loadGeneration.current === generation;
     setLoading(true);
     setError(null);
     setRuntimeError(null);
@@ -773,11 +782,15 @@ export default function JournalProgramDetailBySlugPage() {
     setHasPublishedRuntimeDelivery(false);
     setProgressSummary(null);
     setDeliveryModules(null);
+    setRuntimePersonId(null);
+    setDeliveryVersionId(null);
+    setDeliveryRouteSlug(null);
     (async () => {
       try {
         const resp = await fetch(
-          `/api/journal/programs/${encodeURIComponent(slugStr)}`,
+          `/api/journal/programs/${encodeURIComponent(requestedSlug)}`,
         );
+        if (!current()) return;
         if (resp.status === 404) {
           setNotFound(true);
           return;
@@ -787,11 +800,13 @@ export default function JournalProgramDetailBySlugPage() {
           throw new Error(body.error ?? 'Failed to load program.');
         }
         const detail = (await resp.json()) as ProgramLibraryDetail;
+        if (!current()) return;
         setData(detail);
         setProgressSummary(detail.progress_summary ?? null);
 
         try {
           const runtimeResp = await fetch('/api/journal/programs/runtime-summary');
+          if (!current()) return;
           if (!runtimeResp.ok) {
             const body = await runtimeResp.json().catch(() => ({}));
             throw new Error(body.error ?? 'Failed to load runtime summary.');
@@ -800,9 +815,13 @@ export default function JournalProgramDetailBySlugPage() {
             (await runtimeResp.json()) as ProgramRuntimeSummaryList;
           const summary = selectDisplayRuntimeSummaryForSlug(
             runtimeBody.summaries,
-            slugStr,
+            requestedSlug,
           );
+          if (!current()) return;
           setRuntimeSummary(summary);
+          setRuntimePersonId(runtimeBody.person_id);
+          setDeliveryRouteSlug(requestedSlug);
+          setDeliveryVersionId(summary?.version.id ?? null);
 
           // The server derives the enrolled version and accessible day range.
           // For an entitled/assigned member with no enrollment, the same API
@@ -812,7 +831,7 @@ export default function JournalProgramDetailBySlugPage() {
           const hasProgramAccess =
             detail.has_entitlement || detail.access_state === 'assigned_only';
           if (shouldRequestProgramRuntimeDelivery({
-            registeredRuntimeProgram: isProgramRuntimeEnabled(slugStr),
+            registeredRuntimeProgram: isProgramRuntimeEnabled(requestedSlug),
             hasRuntimeSummary: Boolean(summary),
             hasProgramAccess,
           })) {
@@ -821,15 +840,17 @@ export default function JournalProgramDetailBySlugPage() {
               : '';
             const deliveryResp = await fetch(
               `/api/journal/programs/${encodeURIComponent(
-                slugStr,
+                requestedSlug,
               )}/delivery-modules${versionParam}`,
             );
+            if (!current()) return;
             if (deliveryResp.ok) {
               const deliveryBody = (await deliveryResp.json()) as {
                 source: string;
                 modules: ProgramDeliveryModuleDefinition[];
               };
               setDeliveryModules(deliveryBody.modules);
+              setDeliveryVersionId(summary?.version.id ?? null);
               setHasPublishedRuntimeDelivery(
                 hasPublishedRuntimeDeliverySource(deliveryBody.source),
               );
@@ -839,20 +860,22 @@ export default function JournalProgramDetailBySlugPage() {
             }
           }
         } catch (runtimeErr) {
+          if (!current()) return;
           setRuntimeError(
             runtimeErr instanceof Error
               ? runtimeErr.message
               : 'Failed to load runtime summary.',
           );
-          if (isProgramRuntimeEnabled(slugStr)) {
+          if (isProgramRuntimeEnabled(requestedSlug)) {
             setDeliveryModules([]);
           }
           setHasPublishedRuntimeDelivery(false);
         }
       } catch (err) {
+        if (!current()) return;
         setError(err instanceof Error ? err.message : 'Failed to load.');
       } finally {
-        setLoading(false);
+        if (current()) setLoading(false);
       }
     })();
   }, [slugStr]);
@@ -911,16 +934,24 @@ export default function JournalProgramDetailBySlugPage() {
   async function handleRuntimeSummaryUpdate(
     summary: ProgramRuntimeSummary,
   ): Promise<void> {
+    const requestedSlug = slugStr;
+    if (!requestedSlug) return;
+    if (summary.program.slug !== requestedSlug) return;
+    if (runtimePersonId && summary.enrollment.person_id !== runtimePersonId) return;
+    const generation = ++loadGeneration.current;
+    const current = () => loadGeneration.current === generation;
     setRuntimeSummary(summary);
     setDeliveryModules([]);
-    if (!slugStr) return;
+    setDeliveryVersionId(summary.version.id);
+    setDeliveryRouteSlug(requestedSlug);
 
     try {
       const response = await fetch(
         `/api/journal/programs/${encodeURIComponent(
-          slugStr,
+          requestedSlug,
         )}/delivery-modules?version_id=${encodeURIComponent(summary.version.id)}`,
       );
+      if (!current()) return;
       if (!response.ok) {
         setDeliveryModules([]);
         setHasPublishedRuntimeDelivery(false);
@@ -930,11 +961,14 @@ export default function JournalProgramDetailBySlugPage() {
         source: string;
         modules: ProgramDeliveryModuleDefinition[];
       };
+      if (!current()) return;
       setDeliveryModules(body.modules);
+      setDeliveryVersionId(summary.version.id);
       setHasPublishedRuntimeDelivery(
         hasPublishedRuntimeDeliverySource(body.source),
       );
     } catch {
+      if (!current()) return;
       // Do not render stale modules from a previously authorized version.
       setDeliveryModules([]);
       setHasPublishedRuntimeDelivery(false);
@@ -954,6 +988,24 @@ export default function JournalProgramDetailBySlugPage() {
     hasPublishedRuntimeDelivery,
   });
   const allDeliveryModules = deliveryModules ?? [];
+  const memberBlueprint = resolveMemberBlueprintBinding({
+    programSlug: slugStr ?? '',
+    summary: runtimeSummary,
+    modules: allDeliveryModules,
+    authorizedPersonId: runtimePersonId,
+    response: deliveryVersionId
+      ? {
+          routeSlug: deliveryRouteSlug ?? '',
+          personId: runtimePersonId,
+          versionId: deliveryVersionId,
+        }
+      : null,
+  });
+  const memberDeliveryModules = memberBlueprint.kind === 'published-blueprint'
+    ? memberBlueprint.modules
+    : memberBlueprint.kind === 'unavailable'
+      ? []
+      : allDeliveryModules;
   const prepDeliveryModules = allDeliveryModules.filter(
     (module) => module.moduleType === 'prep' || module.moduleType === 'roadmap',
   );
@@ -961,13 +1013,22 @@ export default function JournalProgramDetailBySlugPage() {
     (module) => module.moduleType !== 'prep' && module.moduleType !== 'roadmap',
   );
 
+  if (!loading && !error && !notFound && data && memberBlueprint.kind === 'unavailable') {
+    return <MemberBlueprintUnavailable />;
+  }
+
   if (!loading && !error && !notFound && data && isRuntimeProgram) {
     return (
       <ProgramDeliveryExperience
         data={data}
         runtimeSummary={runtimeSummary}
         progressSummary={progressSummary}
-        deliveryModules={allDeliveryModules}
+        deliveryModules={memberDeliveryModules}
+        blueprint={
+          memberBlueprint.kind === 'published-blueprint'
+            ? memberBlueprint.config
+            : undefined
+        }
         runtimeError={runtimeError}
         restartRequested={router.query.restart === '1'}
         onRuntimeSummaryUpdate={(summary) => {

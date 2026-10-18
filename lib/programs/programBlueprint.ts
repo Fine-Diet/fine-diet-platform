@@ -263,6 +263,17 @@ export function toProgramBlueprintVersionFields(blueprint: ProgramBlueprint): Pr
   });
 }
 
+/** Replace only the blueprint key. Every other metadata entry stays in place. */
+export function mergeProgramBlueprintVersionMetadata(
+  existing: Record<string, unknown> | null | undefined,
+  fields: ProgramBlueprintVersionFields,
+): Record<string, unknown> {
+  return {
+    ...(existing ?? {}),
+    [PROGRAM_BLUEPRINT_METADATA_KEY]: fields,
+  };
+}
+
 export function programBlueprintRuntimeConfig(blueprint: ProgramBlueprint): ProgramBlueprintRuntimeConfig {
   return {
     programSlug: blueprint.identity.slug,

@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { MemberDayInteraction } from '@/components/journal/programs/MemberDayInteraction';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
@@ -40,6 +41,7 @@ import {
   type ProgramDeliveryModuleDefinition,
   type ProgramDeliveryRoadmapBlock,
 } from '@/lib/programs/deliveryModuleTypes';
+import { memberDayPanelModel } from '@/lib/programs/memberDayInteractionClient';
 import { getProgramBlueprintAsset, type ProgramBlueprintDeliveryConfig } from '@/lib/programs/programBlueprint';
 import type { ProgramLibraryDetail } from '@/lib/programs/programLibraryServerService';
 import {
@@ -75,6 +77,29 @@ import {
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 type DeliveryView = 'day' | 'schedule';
+
+function memberDayPanel(input: {
+  runtimeSummary: ProgramRuntimeSummary | null;
+  previewMode: boolean;
+  day: number;
+  modules: ProgramDeliveryModuleDefinition[];
+  blueprint?: ProgramBlueprintDeliveryConfig;
+}) {
+  if (input.previewMode || !input.runtimeSummary) return null;
+  return (
+    <MemberDayInteraction
+      {...memberDayPanelModel({
+        status: input.runtimeSummary.resolved_status,
+        day: input.day,
+        enrollmentId: input.runtimeSummary.enrollment.id,
+        versionId: input.runtimeSummary.version.id,
+        modules: input.modules,
+        interactions: input.blueprint?.interactions ?? null,
+        latestCheckin: input.runtimeSummary.latest_checkin_response,
+      })}
+    />
+  );
+}
 
 interface ProgramDeliveryExperienceProps {
   data: ProgramLibraryDetail;
@@ -851,17 +876,25 @@ export function ProgramDeliveryPreviewExperience({
     setSelectedDay(resolvedInitialDay);
   }, [initialSelectedDay, resolvedInitialDay, runtimeSummary?.enrollment.id]);
 
-  const duration = resolveProgramDuration(runtimeSummary, deliveryModules);
+  const memberRuntime = !previewMode && blueprint && !('modules' in blueprint)
+    ? blueprint
+    : null;
+  const duration = memberRuntime
+    ? memberRuntime.version.durationDays
+    : resolveProgramDuration(runtimeSummary, deliveryModules);
+  const authorizedDay = memberRuntime && runtimeSummary?.resolved_status === 'pre_start'
+    ? 0
+    : runtimeSummary?.current_day ?? 0;
   const rail = buildProgramDayRail({
     durationDays: duration,
     runtimeStatus: runtimeSummary?.resolved_status ?? 'not_started',
-    currentDay: runtimeSummary?.current_day ?? 0,
+    currentDay: authorizedDay,
   });
   const numberedRail = numberedProgramDayRail(rail);
   const returnDay = authorizedReturnDay(
     rail,
     runtimeSummary?.resolved_status ?? 'not_started',
-    runtimeSummary?.current_day ?? 0,
+    authorizedDay,
   );
   const viewedDay = selectedDay;
   const membershipCheckinDue =
@@ -1357,6 +1390,13 @@ export function ProgramDeliveryPreviewExperience({
                 onUpdated={onRuntimeSummaryUpdate}
               />
             )}
+            {memberDayPanel({
+              runtimeSummary,
+              previewMode,
+              day: viewedDay,
+              modules: deliveryModules,
+              blueprint,
+            })}
             <ProgramResources
               data={data}
               progressSummary={progressSummary}
@@ -1444,6 +1484,13 @@ export function ProgramDeliveryPreviewExperience({
                 needsEnrollment || runtimeError ? undefined : onSetItemStatus
               }
             />
+            {memberDayPanel({
+              runtimeSummary,
+              previewMode,
+              day: viewedDay,
+              modules: deliveryModules,
+              blueprint,
+            })}
           </StackedPageSection>
         ) : (
           <>
@@ -1554,7 +1601,15 @@ export function ProgramDeliveryPreviewExperience({
               contentClassName="max-w-[950px] justify-center px-10 sm:px-[4rem]"
               style={blueprintTokens ? { backgroundColor: blueprintTokens.completionSurface, color: blueprintTokens.darkForeground } : undefined}
             >
-              {!authoredOrder &&
+              {!previewMode && runtimeSummary ? (
+                memberDayPanel({
+                  runtimeSummary,
+                  previewMode,
+                  day: viewedDay,
+                  modules: deliveryModules,
+                  blueprint,
+                })
+              ) : !authoredOrder &&
               selectedDay === runtimeSummary?.current_day &&
               progressSummary?.resume_content_item_id &&
               onSetItemStatus ? (

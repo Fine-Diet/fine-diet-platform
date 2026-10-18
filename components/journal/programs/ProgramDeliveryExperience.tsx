@@ -20,9 +20,14 @@ import {
 } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
+import { MemberDayInteraction } from '@/components/journal/programs/MemberDayInteraction';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
 import { ProgramDeliveryPreviewExperience } from '@/components/journal/programs/ProgramDeliveryPreviewExperience';
-import type { ProgramBlueprintDeliveryConfig } from '@/lib/programs/programBlueprint';
+import type {
+  ProgramBlueprintDeliveryConfig,
+  ProgramBlueprintRuntimeConfig,
+} from '@/lib/programs/programBlueprint';
+import { memberDayPanelModel } from '@/lib/programs/memberDayInteractionClient';
 import {
   StackedPageHero,
   StackedPageSection,
@@ -91,6 +96,43 @@ interface ProgramDeliveryExperienceProps {
     itemId: string,
     status: ProgramProgressStatus,
   ) => Promise<void>;
+}
+
+function publishedMemberBlueprint(
+  blueprint: ProgramBlueprintDeliveryConfig | undefined,
+  runtimeSummary: ProgramRuntimeSummary | null,
+  previewMode: boolean,
+): ProgramBlueprintRuntimeConfig | null {
+  if (previewMode || !blueprint || !runtimeSummary || 'modules' in blueprint) return null;
+  if (runtimeSummary.version.status !== 'published') return null;
+  if (runtimeSummary.enrollment.program_version_id !== runtimeSummary.version.id) return null;
+  if (runtimeSummary.program.slug !== blueprint.programSlug) return null;
+  if (runtimeSummary.version.version_key !== blueprint.version.key) return null;
+  if (runtimeSummary.version.duration_days !== blueprint.version.durationDays) return null;
+  return blueprint;
+}
+
+function memberDayPanel(input: {
+  runtimeSummary: ProgramRuntimeSummary | null;
+  previewMode: boolean;
+  day: number;
+  modules: ProgramDeliveryModuleDefinition[];
+  blueprint?: ProgramBlueprintDeliveryConfig;
+}) {
+  if (input.previewMode || !input.runtimeSummary) return null;
+  return (
+    <MemberDayInteraction
+      {...memberDayPanelModel({
+        status: input.runtimeSummary.resolved_status,
+        day: input.day,
+        enrollmentId: input.runtimeSummary.enrollment.id,
+        versionId: input.runtimeSummary.version.id,
+        modules: input.modules,
+        interactions: input.blueprint?.interactions ?? null,
+        latestCheckin: input.runtimeSummary.latest_checkin_response,
+      })}
+    />
+  );
 }
 
 function programImage(slug: string): string | null {
@@ -646,6 +688,9 @@ export function ProgramDeliveryExperience(props: ProgramDeliveryExperienceProps)
   if (props.previewMode && props.blueprint) {
     return <ProgramDeliveryPreviewExperience {...props} />;
   }
+  if (publishedMemberBlueprint(props.blueprint, props.runtimeSummary ?? null, false)) {
+    return <ProgramDeliveryPreviewExperience {...props} previewMode={false} />;
+  }
   return <MemberProgramDeliveryExperience {...props} />;
 }
 
@@ -654,6 +699,7 @@ function MemberProgramDeliveryExperience({
   runtimeSummary,
   progressSummary,
   deliveryModules,
+  blueprint,
   runtimeError = null,
   previewMode = false,
   compositionSource = 'delivery',
@@ -687,11 +733,21 @@ function MemberProgramDeliveryExperience({
     setSelectedDay(resolveInitialProgramDay(runtimeSummary));
   }, [runtimeSummary?.enrollment.id, runtimeSummary?.current_day]);
 
-  const duration = resolveProgramDuration(runtimeSummary, deliveryModules);
+  const memberBlueprint = publishedMemberBlueprint(
+    blueprint,
+    runtimeSummary,
+    previewMode,
+  );
+  const duration = memberBlueprint
+    ? memberBlueprint.version.durationDays
+    : resolveProgramDuration(runtimeSummary, deliveryModules);
+  const authorizedDay = memberBlueprint && runtimeSummary?.resolved_status === 'pre_start'
+    ? 0
+    : runtimeSummary?.current_day ?? 0;
   const rail = buildProgramDayRail({
     durationDays: duration,
     runtimeStatus: runtimeSummary?.resolved_status ?? 'not_started',
-    currentDay: runtimeSummary?.current_day ?? 0,
+    currentDay: authorizedDay,
   });
   const viewedDay = selectedDay;
   const membershipCheckinDue =
@@ -1076,10 +1132,18 @@ function MemberProgramDeliveryExperience({
                 needsEnrollment || runtimeError ? undefined : onSetItemStatus
               }
             />
-            <p className="mt-8 text-sm text-white/60">
-              Day completion is not available. Catalogue item progress is not
-              day completion.
-            </p>
+            {runtimeSummary ? memberDayPanel({
+              runtimeSummary,
+              previewMode,
+              day: viewedDay,
+              modules: deliveryModules,
+              blueprint,
+            }) : (
+              <p className="mt-8 text-sm text-white/60">
+                Day completion requires an enrollment. Catalogue item progress is not
+                day completion.
+              </p>
+            )}
           </StackedPageSection>
         ) : showDayZero ? (
           <StackedPageSection
@@ -1139,6 +1203,13 @@ function MemberProgramDeliveryExperience({
                 needsEnrollment || runtimeError ? undefined : onSetItemStatus
               }
             />
+            {runtimeSummary ? memberDayPanel({
+              runtimeSummary,
+              previewMode,
+              day: viewedDay,
+              modules: deliveryModules,
+              blueprint,
+            }) : null}
           </StackedPageSection>
         ) : (
           <>
@@ -1245,7 +1316,15 @@ function MemberProgramDeliveryExperience({
               className="bg-[#1b1711] pb-24 pt-10"
               contentClassName="max-w-[1000px]"
             >
-              {!authoredOrder &&
+              {data.slug === 'baseline' && runtimeSummary ? (
+                memberDayPanel({
+                  runtimeSummary,
+                  previewMode,
+                  day: viewedDay,
+                  modules: deliveryModules,
+                  blueprint,
+                })
+              ) : !authoredOrder &&
               selectedDay === runtimeSummary?.current_day &&
               progressSummary?.resume_content_item_id &&
               onSetItemStatus ? (

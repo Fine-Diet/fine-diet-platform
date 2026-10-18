@@ -225,7 +225,43 @@ describe('program runtime enrollment writes', () => {
     });
 
     expect(out.id).toBe(existing.id);
+    expect(out.program_version_id).toBe('version-1');
     expect(mockFrom).toHaveBeenCalledTimes(2);
+  });
+
+  test('selects a generated published version for a member without an open enrollment', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const latestPublished = publishedVersionRow({
+      id: '30000000-0000-4000-8000-000000000003',
+      version_key: 'v3-a1b2c3d4',
+      version_number: 3,
+    });
+    const created = baseEnrollment({
+      id: 'enrollment-new',
+      status: 'active',
+      selected_start_date: '2026-05-22',
+      program_version_id: '30000000-0000-4000-8000-000000000003',
+      started_at: '2026-05-22T12:00:00.000Z',
+    });
+    const insertQuery = query({ singleData: created });
+    mockHasEntitlement.mockResolvedValue(true);
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: latestPublished }))
+      .mockReturnValueOnce(insertQuery);
+
+    const out = await createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'baseline',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    });
+
+    expect(out.program_version_id).toBe('30000000-0000-4000-8000-000000000003');
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      program_version_id: '30000000-0000-4000-8000-000000000003',
+    }));
   });
 
   test('throws when the person has no entitlement or assignment access', async () => {
