@@ -35,11 +35,16 @@ jest.mock('@/lib/plans/programAssignmentServerService', () => {
 });
 
 import {
+  DEFAULT_ENROLLMENT_VERSION_METADATA_KEY,
+  readConfiguredDefaultEnrollmentVersion,
+} from '../enrollmentAuthorization';
+import {
   applyProgramEnrollmentLifecycleAction,
   calculateCurrentProgramDay,
   createOrUpdateBaselineRecommendationForEnrollment,
   createProgramEnrollment,
   createProgramEnrollmentFromAccess,
+  getLatestPublishedProgramVersionForSlug,
   getProgramRuntimeSummary,
   getProgramRuntimeSummaryForPerson,
   reconcileElapsedOpenEnrollment,
@@ -707,6 +712,7 @@ describe('program runtime enrollment writes', () => {
           timezone: 'UTC',
           sourceType: 'admin_grant',
           programVersionId: `version-${status}`,
+          authorization: 'verified_admin_grant',
         }),
       ).rejects.toMatchObject({ code: 'PROGRAM_VERSION_NOT_PUBLISHED' });
     }
@@ -1195,6 +1201,399 @@ describe('program runtime enrollment writes', () => {
     });
     expect(out.status).toBe('paused');
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+
+describe('canary-safe default enrollment version', () => {
+  const v1Id = 'version-v1';
+  const v3Id = 'version-v3';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    mockHasEntitlement.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  function headerWithDefault(versionId: unknown) {
+    return {
+      ...programHeaderRow(),
+      metadata: {
+        [DEFAULT_ENROLLMENT_VERSION_METADATA_KEY]: versionId,
+      },
+    };
+  }
+
+  function enroll(input: {
+    personId?: string;
+    programSlug?: string;
+    programVersionId?: string;
+    authorization?: 'verified_admin_grant';
+  } = {}) {
+    return createProgramEnrollmentFromAccess({
+      personId: input.personId ?? 'person-1',
+      programSlug: input.programSlug ?? 'baseline',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+      programVersionId: input.programVersionId,
+      authorization: input.authorization,
+    });
+  }
+
+  test('treats a missing or blank default as unconfigured and a non-string as invalid', () => {
+    expect(readConfiguredDefaultEnrollmentVersion(undefined)).toEqual({ status: 'absent' });
+    expect(readConfiguredDefaultEnrollmentVersion({})).toEqual({ status: 'absent' });
+    expect(readConfiguredDefaultEnrollmentVersion({
+      [DEFAULT_ENROLLMENT_VERSION_METADATA_KEY]: null,
+    })).toEqual({ status: 'absent' });
+    expect(readConfiguredDefaultEnrollmentVersion({
+      [DEFAULT_ENROLLMENT_VERSION_METADATA_KEY]: '   ',
+    })).toEqual({ status: 'absent' });
+    expect(readConfiguredDefaultEnrollmentVersion({
+      [DEFAULT_ENROLLMENT_VERSION_METADATA_KEY]: `  ${v1Id}  `,
+    })).toEqual({ status: 'configured', versionId: v1Id });
+    expect(readConfiguredDefaultEnrollmentVersion({
+      [DEFAULT_ENROLLMENT_VERSION_METADATA_KEY]: 3,
+    })).toEqual({ status: 'invalid' });
+    expect(readConfiguredDefaultEnrollmentVersion([])).toEqual({ status: 'invalid' });
+  });
+
+  test('keeps latest-published selection when no default is configured', async () => {
+    const latest = publishedVersionRow({
+      id: 'version-latest',
+      version_number: 3,
+      version_key: 'baseline-v3',
+    });
+    const latestQuery = query({ data: latest });
+    const created = baseEnrollment({
+      id: 'enrollment-latest',
+      program_version_id: 'version-latest',
+      selected_start_date: '2026-05-22',
+      started_at: '2026-05-22T12:00:00.000Z',
+    });
+    const insertQuery = query({ singleData: created });
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({
+        data: {
+          ...programHeaderRow(),
+          metadata: { seeded_by: 'seedBaselineProgramRuntime' },
+        },
+      }))
+      .mockReturnValueOnce(latestQuery)
+      .mockReturnValueOnce(insertQuery);
+
+    const out = await enroll();
+
+    expect(out.program_version_id).toBe('version-latest');
+    expect(latestQuery.eq).toHaveBeenCalledWith('program_id', 'program-1');
+    expect(latestQuery.eq).toHaveBeenCalledWith('status', 'published');
+    expect(latestQuery.order).toHaveBeenCalledWith('version_number', { ascending: false });
+  });
+
+  test('keeps ordinary enrollment and Day 0 preview on v1 after v3 is published', async () => {
+    const v1 = publishedVersionRow({
+      id: v1Id,
+      version_number: 1,
+      version_key: 'baseline-v1',
+    });
+    const created = baseEnrollment({
+      id: 'enrollment-v1',
+      program_version_id: v1Id,
+      selected_start_date: '2026-05-22',
+      started_at: '2026-05-22T12:00:00.000Z',
+    });
+    const versionQuery = query({ data: v1 });
+    const insertQuery = query({ singleData: created });
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault(v1Id) }))
+      .mockReturnValueOnce(versionQuery)
+      .mockReturnValueOnce(insertQuery);
+
+    const out = await enroll();
+
+    expect(out.program_version_id).toBe(v1Id);
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      program_version_id: v1Id,
+    }));
+    expect(versionQuery.eq).toHaveBeenCalledWith('id', v1Id);
+    expect(versionQuery.eq).not.toHaveBeenCalledWith('status', 'published');
+    expect(versionQuery.order).not.toHaveBeenCalled();
+    expect(mockFrom).toHaveBeenCalledTimes(4);
+
+    const previewQuery = query({ data: v1 });
+    mockFrom.mockReset();
+    mockFrom
+      .mockReturnValueOnce(query({ data: headerWithDefault(v1Id) }))
+      .mockReturnValueOnce(previewQuery);
+
+    const preview = await getLatestPublishedProgramVersionForSlug('baseline');
+
+    expect(preview?.id).toBe(v1Id);
+    expect(preview?.status).toBe('published');
+    expect(previewQuery.eq).toHaveBeenCalledWith('id', v1Id);
+    expect(previewQuery.order).not.toHaveBeenCalled();
+  });
+
+  test('rejects an invalid configured default without selecting another published version', async () => {
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault(3) }));
+    await expect(enroll()).rejects.toMatchObject({
+      code: 'PROGRAM_DEFAULT_VERSION_INVALID',
+    });
+    expect(mockFrom).toHaveBeenCalledTimes(2);
+
+    mockFrom.mockReset();
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault(v1Id) }))
+      .mockReturnValueOnce(query({ data: null }));
+    await expect(enroll()).rejects.toMatchObject({
+      code: 'PROGRAM_DEFAULT_VERSION_INVALID',
+    });
+
+    mockFrom.mockReset();
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault('version-draft') }))
+      .mockReturnValueOnce(query({
+        data: publishedVersionRow({ id: 'version-draft', status: 'draft', version_number: 3 }),
+      }));
+    await expect(enroll()).rejects.toMatchObject({
+      code: 'PROGRAM_DEFAULT_VERSION_INVALID',
+    });
+
+    mockFrom.mockReset();
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault('version-foreign') }))
+      .mockReturnValueOnce(query({
+        data: publishedVersionRow({
+          id: 'version-foreign',
+          program_id: 'program-other',
+          version_number: 3,
+        }),
+      }));
+    await expect(enroll()).rejects.toMatchObject({
+      code: 'PROGRAM_DEFAULT_VERSION_INVALID',
+    });
+
+    mockFrom.mockReset();
+    mockFrom
+      .mockReturnValueOnce(query({ data: headerWithDefault(v3Id) }))
+      .mockReturnValueOnce(query({
+        data: publishedVersionRow({ id: v3Id, status: 'draft', version_number: 3 }),
+      }));
+    await expect(getLatestPublishedProgramVersionForSlug('baseline')).rejects.toMatchObject({
+      code: 'PROGRAM_DEFAULT_VERSION_INVALID',
+    });
+  });
+
+  test('lets a verified admin target published v3 while the default remains v1', async () => {
+    const v3 = publishedVersionRow({
+      id: v3Id,
+      version_number: 3,
+      version_key: 'baseline-v3',
+    });
+    const created = baseEnrollment({
+      id: 'enrollment-v3',
+      program_version_id: v3Id,
+      selected_start_date: '2026-05-22',
+      started_at: '2026-05-22T12:00:00.000Z',
+    });
+    const versionQuery = query({ data: v3 });
+    const insertQuery = query({ singleData: created });
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault(v1Id) }))
+      .mockReturnValueOnce(versionQuery)
+      .mockReturnValueOnce(insertQuery);
+
+    const out = await enroll({
+      programVersionId: v3Id,
+      authorization: 'verified_admin_grant',
+    });
+
+    expect(out.program_version_id).toBe(v3Id);
+    expect(versionQuery.eq).toHaveBeenCalledWith('id', v3Id);
+    expect(versionQuery.eq).not.toHaveBeenCalledWith('id', v1Id);
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      program_version_id: v3Id,
+    }));
+  });
+
+  test('refuses an ordinary caller that supplies a program version', async () => {
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault(v1Id) }));
+
+    await expect(enroll({ programVersionId: v3Id })).rejects.toMatchObject({
+      code: 'PROGRAM_VERSION_SELECTION_DENIED',
+    });
+    expect(mockFrom).toHaveBeenCalledTimes(2);
+  });
+
+  test('refuses a verified admin target that is draft or owned by another program', async () => {
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({
+        data: publishedVersionRow({ id: 'version-draft', status: 'draft' }),
+      }));
+    await expect(enroll({
+      programVersionId: 'version-draft',
+      authorization: 'verified_admin_grant',
+    })).rejects.toMatchObject({ code: 'PROGRAM_VERSION_NOT_PUBLISHED' });
+
+    mockFrom.mockReset();
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({
+        data: publishedVersionRow({
+          id: 'version-foreign',
+          program_id: 'program-other',
+        }),
+      }));
+    await expect(enroll({
+      programVersionId: 'version-foreign',
+      authorization: 'verified_admin_grant',
+    })).rejects.toThrow(/No matching published runtime version/);
+    expect(mockFrom).toHaveBeenCalledTimes(3);
+  });
+
+  test('keeps an existing enrollment pinned when the default or admin target changes', async () => {
+    const existing = baseEnrollment({
+      program_version_id: v1Id,
+      status: 'active',
+      selected_start_date: '2026-05-20',
+    });
+    mockFrom
+      .mockReturnValueOnce(query({ data: existing }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow({ id: v1Id }) }));
+
+    const out = await enroll({
+      programVersionId: v3Id,
+      authorization: 'verified_admin_grant',
+    });
+
+    expect(out.id).toBe(existing.id);
+    expect(out.program_version_id).toBe(v1Id);
+    expect(mockFrom).toHaveBeenCalledTimes(2);
+  });
+
+  test('applies a switched default only to a later new enrollment', async () => {
+    const existing = baseEnrollment({
+      id: 'enrollment-kept',
+      program_version_id: v1Id,
+      status: 'active',
+      selected_start_date: '2026-05-20',
+    });
+    mockFrom
+      .mockReturnValueOnce(query({ data: existing }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow({ id: v1Id }) }));
+
+    const pinned = await enroll();
+    expect(pinned.program_version_id).toBe(v1Id);
+
+    const created = baseEnrollment({
+      id: 'enrollment-fresh',
+      person_id: 'person-2',
+      program_version_id: v3Id,
+      selected_start_date: '2026-05-22',
+      started_at: '2026-05-22T12:00:00.000Z',
+    });
+    const insertQuery = query({ singleData: created });
+    mockFrom.mockReset();
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault(v3Id) }))
+      .mockReturnValueOnce(query({
+        data: publishedVersionRow({
+          id: v3Id,
+          version_number: 3,
+          version_key: 'baseline-v3',
+        }),
+      }))
+      .mockReturnValueOnce(insertQuery);
+
+    const fresh = await enroll({ personId: 'person-2' });
+
+    expect(fresh.id).toBe('enrollment-fresh');
+    expect(fresh.program_version_id).toBe(v3Id);
+    expect(pinned.program_version_id).toBe(v1Id);
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      person_id: 'person-2',
+      program_version_id: v3Id,
+    }));
+  });
+
+  test('still applies validation-only and prerequisite gates to the configured default', async () => {
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault(v1Id) }))
+      .mockReturnValueOnce(query({
+        data: publishedVersionRow({
+          id: v1Id,
+          metadata: { content_status: 'validation_only' },
+        }),
+      }));
+    await expect(enroll()).rejects.toMatchObject({ code: 'PROGRAM_VALIDATION_ONLY' });
+
+    mockFrom.mockReset();
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({
+        data: {
+          ...headerWithDefault('version-digestive'),
+          id: 'program-digestive',
+          slug: 'digestive-foundations',
+        },
+      }))
+      .mockReturnValueOnce(query({
+        data: publishedVersionRow({
+          id: 'version-digestive',
+          program_id: 'program-digestive',
+        }),
+      }))
+      .mockReturnValueOnce(query({ data: [] }));
+    await expect(enroll({ programSlug: 'digestive-foundations' })).rejects.toMatchObject({
+      code: 'PROGRAM_PREREQUISITE_UNMET',
+    });
+  });
+
+  test('still lets a verified admin grant enroll in an explicitly targeted validation-only version', async () => {
+    const created = baseEnrollment({
+      id: 'qa-enrollment',
+      program_version_id: v3Id,
+    });
+    const insertQuery = query({ singleData: created });
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: headerWithDefault(v1Id) }))
+      .mockReturnValueOnce(query({
+        data: publishedVersionRow({
+          id: v3Id,
+          version_number: 3,
+          metadata: { content_status: 'validation_only' },
+        }),
+      }))
+      .mockReturnValueOnce(insertQuery);
+
+    const out = await enroll({
+      programVersionId: v3Id,
+      authorization: 'verified_admin_grant',
+    });
+
+    expect(out.id).toBe('qa-enrollment');
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      program_version_id: v3Id,
+    }));
   });
 });
 

@@ -12,8 +12,11 @@ import {
   declaredPrerequisiteSlug,
   isValidationOnlyMetadata,
   isVerifiedAdminGrant,
+  PROGRAM_DEFAULT_VERSION_INVALID,
   PROGRAM_PREREQUISITE_UNMET,
   PROGRAM_VALIDATION_ONLY,
+  PROGRAM_VERSION_SELECTION_DENIED,
+  readConfiguredDefaultEnrollmentVersion,
   type ServerEnrollmentAuthorization,
 } from './enrollmentAuthorization';
 import { listAssignments } from '@/lib/plans/programAssignmentServerService';
@@ -51,6 +54,7 @@ interface ProgramHeaderRow {
   tagline: string | null;
   description: string | null;
   storefront_href: string | null;
+  metadata?: JsonObject | null;
 }
 
 interface ProgramVersionRow {
@@ -490,7 +494,7 @@ export async function reconcileElapsedOpenEnrollment(
 async function getProgramBySlug(slug: string): Promise<ProgramHeaderRow | null> {
   const { data, error } = await supabaseAdmin
     .from('programs')
-    .select('id, slug, title, tagline, description, storefront_href')
+    .select('id, slug, title, tagline, description, storefront_href, metadata')
     .eq('slug', slug)
     .maybeSingle();
   if (error) throw new Error(`program lookup failed: ${error.message}`);
@@ -523,15 +527,68 @@ async function getLatestPublishedVersion(
   return data ? rowToVersion(data as ProgramVersionRow) : null;
 }
 
-/** Resolve the current published version for a program slug. Used only for
- * the authorized pre-enrollment Day 0 preview; enrolled members must use the
- * immutable version recorded on their enrollment. */
+function throwDefaultVersionInvalid(slug: string): never {
+  const err = new Error(
+    `Configured default enrollment version for '${slug}' is not a published version of that program.`,
+  );
+  (err as Error & { code?: string }).code = PROGRAM_DEFAULT_VERSION_INVALID;
+  throw err;
+}
+
+function assertExplicitPublishedVersion(
+  version: ProgramVersion | null,
+  programId: string,
+  slug: string,
+): ProgramVersion {
+  if (!version || version.program_id !== programId) {
+    throw new Error(`No matching published runtime version for '${slug}'.`);
+  }
+  if (version.status !== 'published') {
+    const err = new Error(
+      `Program version '${version.id}' is not published for '${slug}'.`,
+    );
+    (err as Error & { code?: string }).code = 'PROGRAM_VERSION_NOT_PUBLISHED';
+    throw err;
+  }
+  return version;
+}
+
+/** Server-controlled version for a new enrollment or pre-enrollment preview.
+ * An absent pointer keeps latest-published selection. A configured pointer
+ * must name a published version of this program; invalid configuration throws
+ * and never falls back to a newer published version. */
+async function resolveDefaultPublishedVersion(
+  program: ProgramHeaderRow,
+): Promise<ProgramVersion | null> {
+  const configured = readConfiguredDefaultEnrollmentVersion(program.metadata);
+  if (configured.status === 'invalid') {
+    throwDefaultVersionInvalid(program.slug);
+  }
+  if (configured.status === 'absent') {
+    return getLatestPublishedVersion(program.id);
+  }
+  const version = await getVersionById(configured.versionId);
+  if (
+    !version ||
+    version.program_id !== program.id ||
+    version.status !== 'published'
+  ) {
+    throwDefaultVersionInvalid(program.slug);
+  }
+  return version;
+}
+
+/** Resolve the published version shown before enrollment. Enrolled members
+ * must use the immutable version recorded on their enrollment. When
+ * `programs.metadata.defaultEnrollmentVersionId` is unset, this is the latest
+ * published version. A configured default is used instead and fails closed
+ * when it is missing, unpublished, or owned by another program. */
 export async function getLatestPublishedProgramVersionForSlug(
   programSlug: string,
 ): Promise<ProgramVersion | null> {
   const program = await getProgramBySlug(programSlug);
   if (!program) return null;
-  return getLatestPublishedVersion(program.id);
+  return resolveDefaultPublishedVersion(program);
 }
 
 async function verifyEnrollmentSource(input: {
@@ -691,6 +748,39 @@ async function personHasCompletedProgram(
   return false;
 }
 
+/** Read-only check for an admin grant that will also enroll. An existing open
+ * enrollment is already version-pinned, so this returns without selecting a
+ * new target. A new enrollment must resolve to a published version of the
+ * program before any entitlement or assignment is written. */
+export async function assertAdminGrantEnrollmentTarget(input: {
+  personId: string;
+  programSlug: string;
+  programVersionId?: string | null;
+}): Promise<void> {
+  const slug = normalizeSlug(input.programSlug);
+  if (!input.personId || !slug) {
+    throw new Error('personId and programSlug are required.');
+  }
+
+  const existing = await getActiveEnrollmentForPersonProgram(input.personId, slug);
+  if (existing) return;
+
+  const program = await getProgramBySlug(slug);
+  if (!program) throw new Error(`Program '${slug}' was not found.`);
+
+  const requestedVersionId = input.programVersionId?.trim() ?? '';
+  const version = requestedVersionId
+    ? assertExplicitPublishedVersion(
+        await getVersionById(requestedVersionId),
+        program.id,
+        slug,
+      )
+    : await resolveDefaultPublishedVersion(program);
+  if (!version || version.program_id !== program.id || version.status !== 'published') {
+    throw new Error(`No matching published runtime version for '${slug}'.`);
+  }
+}
+
 export async function createProgramEnrollment(
   input: CreateProgramEnrollmentInput & {
     authorization?: ServerEnrollmentAuthorization;
@@ -710,20 +800,26 @@ export async function createProgramEnrollment(
   const program = await getProgramBySlug(slug);
   if (!program) throw new Error(`Program '${slug}' was not found.`);
 
-  const version = input.programVersionId
-    ? await getVersionById(input.programVersionId)
-    : await getLatestPublishedVersion(program.id);
-  if (!version || version.program_id !== program.id) {
-    throw new Error(`No matching published runtime version for '${slug}'.`);
-  }
-  // Explicit version ids must still be published; latest-published path already
-  // filters status=published.
-  if (version.status !== 'published') {
+  // Exact version targeting is an admin grant capability. An ordinary caller
+  // that supplies an id is rejected rather than enrolled into the default.
+  const requestedVersionId = input.programVersionId?.trim() ?? '';
+  if (requestedVersionId && !isVerifiedAdminGrant(input.authorization)) {
     const err = new Error(
-      `Program version '${version.id}' is not published for '${slug}'.`,
+      'Program version selection requires a verified admin grant.',
     );
-    (err as Error & { code?: string }).code = 'PROGRAM_VERSION_NOT_PUBLISHED';
+    (err as Error & { code?: string }).code = PROGRAM_VERSION_SELECTION_DENIED;
     throw err;
+  }
+
+  const version = requestedVersionId
+    ? assertExplicitPublishedVersion(
+        await getVersionById(requestedVersionId),
+        program.id,
+        slug,
+      )
+    : await resolveDefaultPublishedVersion(program);
+  if (!version || version.program_id !== program.id || version.status !== 'published') {
+    throw new Error(`No matching published runtime version for '${slug}'.`);
   }
 
   const adminGrant = isVerifiedAdminGrant(input.authorization);

@@ -2,7 +2,9 @@
  * POST /api/admin/programs/grant-access
  *
  * Admin-only helper for granting published guided-program access without
- * relying on public product or checkout pages.
+ * relying on public product or checkout routes. An optional
+ * `program_version_id` targets one published version after the admin role
+ * check. Ordinary member enrollment cannot supply that id.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -10,6 +12,7 @@ import { z } from 'zod';
 import { requireRoleFromApi } from '@/lib/authServer';
 import { handleAdminEntitlementGrant as ensureProgramAssignmentFromAdminEntitlement } from '@/lib/plans/programAssignmentAutomationServerService';
 import {
+  assertAdminGrantEnrollmentTarget,
   createProgramEnrollmentFromAccess,
   getProgramRuntimeSummaryForPerson,
 } from '@/lib/programs/programRuntimeServerService';
@@ -40,6 +43,7 @@ const GrantProgramAccessSchema = z
       .nullable(),
     timezone: z.string().trim().min(1).max(128).optional().nullable(),
     current_capacity: z.enum(['low', 'steady', 'high']).optional().nullable(),
+    program_version_id: z.string().uuid().optional().nullable(),
   })
   .superRefine((value, ctx) => {
     if (
@@ -166,6 +170,14 @@ export default async function handler(
     const grantableProgram = program as GrantableProgramRow;
     const entitlementKey = `program:${grantableProgram.slug}`;
 
+    if (parsed.data.create_enrollment_now) {
+      await assertAdminGrantEnrollmentTarget({
+        personId: parsed.data.person_id,
+        programSlug,
+        programVersionId: parsed.data.program_version_id,
+      });
+    }
+
     let entitlement = await findActiveEntitlement(
       parsed.data.person_id,
       entitlementKey,
@@ -234,6 +246,9 @@ export default async function handler(
         currentCapacity:
           (parsed.data.current_capacity as ProgramCapacity | null | undefined) ??
           undefined,
+        ...(parsed.data.program_version_id
+          ? { programVersionId: parsed.data.program_version_id }
+          : {}),
         authorization: 'verified_admin_grant',
       });
       enrollmentSummary = await getProgramRuntimeSummaryForPerson(
@@ -257,11 +272,15 @@ export default async function handler(
       code === 'PROGRAM_ENTITLEMENT_DENIED' ||
       code === 'PROGRAM_ASSIGNMENT_DENIED'
         ? 403
-        : /No matching published runtime version|not found/i.test(
-              err instanceof Error ? err.message : '',
-            )
-          ? 404
-          : 500;
+        : code === 'PROGRAM_VERSION_NOT_PUBLISHED'
+          ? 400
+          : code === 'PROGRAM_DEFAULT_VERSION_INVALID'
+            ? 409
+            : /No matching published runtime version|not found/i.test(
+                  err instanceof Error ? err.message : '',
+                )
+              ? 404
+              : 500;
     console.error('[admin/programs/grant-access] error:', err);
     return res.status(status).json({
       error: err instanceof Error ? err.message : 'Server error',

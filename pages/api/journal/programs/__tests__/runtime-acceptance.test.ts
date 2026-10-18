@@ -143,6 +143,19 @@ describe('journal program runtime HTTP acceptance', () => {
     await enrollHandler({ method: 'POST', body: { program_slug: 'Bad Slug', selected_start_date: 'yesterday' } } as any, invalidRes.res as any);
     expect(invalidRes.out.statusCode).toBe(400);
 
+    const forgedRes = response();
+    await enrollHandler({
+      method: 'POST',
+      body: {
+        program_slug: 'digestive-foundations',
+        selected_start_date: '2026-10-09',
+        program_version_id: '30000000-0000-4000-8000-000000000099',
+        authorization: 'verified_admin_grant',
+      },
+    } as any, forgedRes.res as any);
+    expect(forgedRes.out.statusCode).toBe(400);
+    expect(mockCreateEnrollment).not.toHaveBeenCalled();
+
     mockCreateEnrollment.mockRejectedValueOnce(Object.assign(
       new Error('Complete baseline before starting this program.'),
       { code: 'PROGRAM_PREREQUISITE_UNMET' },
@@ -154,12 +167,12 @@ describe('journal program runtime HTTP acceptance', () => {
       body: {
         program_slug: 'digestive-foundations',
         selected_start_date: '2026-10-09',
-        authorization: 'verified_admin_grant',
         content_status: 'published',
       },
     } as any, prerequisiteRes.res as any);
     expect(prerequisiteRes.out.statusCode).toBe(403);
     expect(mockCreateEnrollment.mock.calls.at(-1)?.[0]).not.toHaveProperty('authorization');
+    expect(mockCreateEnrollment.mock.calls.at(-1)?.[0]).not.toHaveProperty('programVersionId');
 
     mockRespondCheckin.mockRejectedValueOnce(Object.assign(new Error('Enrollment not found for person.'), { code: 'PROGRAM_ENROLLMENT_NOT_FOUND' }));
     jest.spyOn(console, 'error').mockImplementation(() => {});

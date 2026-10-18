@@ -137,6 +137,13 @@ export default async function handler(
       ),
     });
   } catch (err) {
+    const code = (err as Error & { code?: string }).code;
+    if (code === 'PROGRAM_DEFAULT_VERSION_INVALID') {
+      console.error('[journal/programs/[slug]/delivery-modules] error:', err);
+      return res.status(409).json({
+        error: err instanceof Error ? err.message : 'Configured program version is unavailable',
+      });
+    }
     console.error('[journal/programs/[slug]/delivery-modules] error:', err);
     return res.status(500).json({
       error: err instanceof Error ? err.message : 'Server error',
