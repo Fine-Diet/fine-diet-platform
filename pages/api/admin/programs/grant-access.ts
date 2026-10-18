@@ -234,6 +234,7 @@ export default async function handler(
         currentCapacity:
           (parsed.data.current_capacity as ProgramCapacity | null | undefined) ??
           undefined,
+        authorization: 'verified_admin_grant',
       });
       enrollmentSummary = await getProgramRuntimeSummaryForPerson(
         parsed.data.person_id,

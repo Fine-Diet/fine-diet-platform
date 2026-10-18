@@ -290,7 +290,7 @@ describe('delivery composition authoring', () => {
     ]);
   });
 
-  test('shows a day 0 range before enrollment and during future start, and still hides a paused week', () => {
+  test('shows a day 0 range before enrollment and during future start, and a reached paused week', () => {
     const dayZero = moduleDef({
       id: 'harbor-setup',
       moduleType: 'prep',
@@ -321,7 +321,7 @@ describe('delivery composition authoring', () => {
         }),
         { runtimeSummary: summary('paused', 3), viewedDay: 3 },
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   test('uses the viewed day media for a second program and does not fall back to test audio', () => {

@@ -20,6 +20,10 @@ import {
   getProgramRuntimeSummaryForPerson,
   listEnrollmentsForPerson,
 } from '@/lib/programs/programRuntimeServerService';
+import {
+  filterMemberDeliveryModules,
+  rejectDeliveryVersion,
+} from '@/lib/programs/historicalReviewPolicy';
 import type { ProgramEnrollmentStatus } from '@/lib/programs/runtimeTypes';
 
 export default async function handler(
@@ -77,10 +81,16 @@ export default async function handler(
       if (!summary || summary.enrollment.program_slug !== slug.toLowerCase()) {
         return res.status(403).json({ error: 'Program enrollment unavailable' });
       }
-      if (requestedVersionId && requestedVersionId !== summary.version.id) {
+      const versionRejection = rejectDeliveryVersion({
+        requestedVersionId,
+        enrolledVersionId: summary.version.id,
+        versionStatus: summary.version.status,
+        responseVersionId: requestedVersionId,
+      });
+      if (versionRejection === 'foreign-version' || versionRejection === 'stale-response') {
         return res.status(403).json({ error: 'Requested version is not enrolled' });
       }
-      if (summary.version.status !== 'published') {
+      if (versionRejection === 'draft-content') {
         return res.status(403).json({ error: 'Enrolled program version unavailable' });
       }
       if (summary.resolved_status === 'cancelled') {
@@ -98,8 +108,16 @@ export default async function handler(
       if (!version || version.status !== 'published') {
         return res.status(404).json({ error: 'Published program version unavailable' });
       }
-      if (requestedVersionId && requestedVersionId !== version.id) {
+      const previewRejection = rejectDeliveryVersion({
+        requestedVersionId,
+        enrolledVersionId: version.id,
+        versionStatus: version.status,
+      });
+      if (previewRejection === 'foreign-version') {
         return res.status(403).json({ error: 'Requested version is not available' });
+      }
+      if (previewRejection === 'draft-content') {
+        return res.status(404).json({ error: 'Published program version unavailable' });
       }
       versionId = version.id;
       // Entitled or assigned members may see the pre-start overview only.
@@ -112,10 +130,10 @@ export default async function handler(
     });
     return res.status(200).json({
       ...result,
-      modules: result.modules.filter(
-        (module) =>
-          module.statusVisibility.includes(authorizedStatus) &&
-          (module.dayStart == null || module.dayStart <= maximumAccessibleDay),
+      modules: filterMemberDeliveryModules(
+        result.modules,
+        authorizedStatus,
+        maximumAccessibleDay,
       ),
     });
   } catch (err) {

@@ -98,6 +98,7 @@ describe('journal program runtime HTTP acceptance', () => {
     } as any, enrollRes.res as any);
     expect(enrollRes.out.statusCode).toBe(201);
     expect(mockCreateEnrollment).toHaveBeenCalledWith(expect.objectContaining({ personId, programSlug: 'gut-reset' }));
+    expect(mockCreateEnrollment.mock.calls[0][0]).not.toHaveProperty('authorization');
     expect(mockGetSummary).toHaveBeenCalledWith(personId, enrollmentId);
 
     const pauseRes = response();
@@ -141,6 +142,24 @@ describe('journal program runtime HTTP acceptance', () => {
     const invalidRes = response();
     await enrollHandler({ method: 'POST', body: { program_slug: 'Bad Slug', selected_start_date: 'yesterday' } } as any, invalidRes.res as any);
     expect(invalidRes.out.statusCode).toBe(400);
+
+    mockCreateEnrollment.mockRejectedValueOnce(Object.assign(
+      new Error('Complete baseline before starting this program.'),
+      { code: 'PROGRAM_PREREQUISITE_UNMET' },
+    ));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const prerequisiteRes = response();
+    await enrollHandler({
+      method: 'POST',
+      body: {
+        program_slug: 'digestive-foundations',
+        selected_start_date: '2026-10-09',
+        authorization: 'verified_admin_grant',
+        content_status: 'published',
+      },
+    } as any, prerequisiteRes.res as any);
+    expect(prerequisiteRes.out.statusCode).toBe(403);
+    expect(mockCreateEnrollment.mock.calls.at(-1)?.[0]).not.toHaveProperty('authorization');
 
     mockRespondCheckin.mockRejectedValueOnce(Object.assign(new Error('Enrollment not found for person.'), { code: 'PROGRAM_ENROLLMENT_NOT_FOUND' }));
     jest.spyOn(console, 'error').mockImplementation(() => {});

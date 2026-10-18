@@ -112,7 +112,9 @@ export default async function handler(
     const status =
       code === 'PROGRAM_ACCESS_DENIED' ||
       code === 'PROGRAM_ENTITLEMENT_DENIED' ||
-      code === 'PROGRAM_ASSIGNMENT_DENIED'
+      code === 'PROGRAM_ASSIGNMENT_DENIED' ||
+      code === 'PROGRAM_PREREQUISITE_UNMET' ||
+      code === 'PROGRAM_VALIDATION_ONLY'
         ? 403
         : /No matching published runtime version|not found/i.test(
               err instanceof Error ? err.message : '',

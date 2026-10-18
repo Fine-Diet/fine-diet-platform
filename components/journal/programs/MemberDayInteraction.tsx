@@ -188,17 +188,16 @@ export function MemberDayInteraction({
       )}
       {observation && (
         <div className="mt-4">
-          <label className="block text-sm text-white/80" htmlFor={`program-day-observation-${day}`}>
-            {observation.prompt}
-          </label>
-          <textarea
-            id={`program-day-observation-${day}`}
-            aria-label="Observation"
-            value={editorText}
-            readOnly={!writable}
-            onChange={(event) => setEditorText(event.target.value)}
-            className="mt-2 min-h-28 w-full rounded-2xl border border-white/20 bg-black/20 px-3 py-2 text-sm text-white"
-          />
+          <p className="block text-sm text-white/80">{observation.prompt}</p>
+          {writable ? (
+            <textarea
+              id={`program-day-observation-${day}`}
+              aria-label="Observation"
+              value={editorText}
+              onChange={(event) => setEditorText(event.target.value)}
+              className="mt-2 min-h-28 w-full rounded-2xl border border-white/20 bg-black/20 px-3 py-2 text-sm text-white"
+            />
+          ) : null}
           {savedResponse && (
             <p className="mt-2 text-xs text-white/60">
               Saved response: {savedResponse}
@@ -216,7 +215,7 @@ export function MemberDayInteraction({
           )}
         </div>
       )}
-      {checkinRequired && !checkinHandled && (
+      {writable && checkinRequired && !checkinHandled && (
         <p className="mt-4 text-sm text-white/70">
           Complete or skip this day’s check-in before completing the day.
         </p>

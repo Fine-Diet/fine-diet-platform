@@ -8,6 +8,14 @@
 
 import { hasEntitlement } from '@/lib/access/accessService';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import {
+  declaredPrerequisiteSlug,
+  isValidationOnlyMetadata,
+  isVerifiedAdminGrant,
+  PROGRAM_PREREQUISITE_UNMET,
+  PROGRAM_VALIDATION_ONLY,
+  type ServerEnrollmentAuthorization,
+} from './enrollmentAuthorization';
 import { listAssignments } from '@/lib/plans/programAssignmentServerService';
 import {
   BASELINE_RECOMMENDATION_PROGRAM_DAY,
@@ -304,6 +312,73 @@ function calculateProgramDayAtDateKey(
   return Math.max(1, rawDay - Math.max(pausedDaysTotal, 0));
 }
 
+/** A pause boundary is trustworthy only as a real calendar date key. */
+function trustedPauseStartedDateKey(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  if (
+    utc.getUTCFullYear() !== year ||
+    utc.getUTCMonth() !== month - 1 ||
+    utc.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return value;
+}
+
+function publishedDurationCap(durationDays: number | null | undefined): number {
+  if (
+    typeof durationDays !== 'number' ||
+    !Number.isFinite(durationDays) ||
+    durationDays <= 0
+  ) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  return durationDays;
+}
+
+/**
+ * Historical day for a paused enrollment.
+ *
+ * Missing, malformed, impossible, and future pause dates are untrustworthy and
+ * resolve to Day 0. A real pause date that is not after today's enrollment
+ * calendar date is then bounded by today's program day and the published
+ * version duration. Date comparison uses the enrollment timezone.
+ */
+function resolvePausedHistoricalDay(args: {
+  selectedStartDate: string;
+  timezone?: string | null;
+  pauseStartedAt: unknown;
+  pausedDaysTotal?: number | null;
+  durationDays?: number | null;
+  now?: Date;
+}): number {
+  const pauseDateKey = trustedPauseStartedDateKey(args.pauseStartedAt);
+  if (!pauseDateKey) return 0;
+
+  const now = args.now ?? new Date();
+  const timezone = args.timezone || 'UTC';
+  const today = dateKeyInTimeZone(now, timezone);
+  if (pauseDateKey > today) return 0;
+
+  const pausedDay = calculateProgramDayAtDateKey(
+    args.selectedStartDate,
+    pauseDateKey,
+    args.pausedDaysTotal ?? 0,
+  );
+  const actualDay = calculateCurrentProgramDay({
+    selectedStartDate: args.selectedStartDate,
+    timezone,
+    pausedDaysTotal: args.pausedDaysTotal,
+    now,
+  });
+  return Math.max(
+    0,
+    Math.min(pausedDay, actualDay, publishedDurationCap(args.durationDays)),
+  );
+}
+
 /** Stored statuses that count as open (unique-open-enrollment constraint). */
 const OPEN_STORED_ENROLLMENT_STATUSES: readonly ProgramEnrollmentStatus[] = [
   'pre_start',
@@ -583,8 +658,43 @@ export async function listEnrollmentsForPerson(
   return ((data ?? []) as ProgramEnrollmentRow[]).map(rowToEnrollment);
 }
 
+async function personHasCompletedProgram(
+  personId: string,
+  programSlug: string,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('program_enrollments')
+    .select('*')
+    .eq('person_id', personId)
+    .eq('program_slug', programSlug);
+  if (error) throw new Error(`completed enrollment lookup failed: ${error.message}`);
+  const rows = Array.isArray(data) ? data : [];
+  for (const row of rows) {
+    const enrollment = rowToEnrollment(row as ProgramEnrollmentRow);
+    if (enrollment.person_id !== personId || enrollment.program_slug !== programSlug) continue;
+    // Same completion rule as program availability: resolveEnrollmentStatus.
+    // Cancelled stays cancelled even when completed_at is still populated, so
+    // that timestamp alone cannot satisfy a prerequisite. Explicit completion
+    // and a non-cancelled completed_at still resolve without a version read.
+    const resolvedDurationDays =
+      enrollment.status === 'cancelled' ||
+      enrollment.status === 'completed' ||
+      Boolean(enrollment.completed_at)
+        ? undefined
+        : (await getVersionById(enrollment.program_version_id))?.duration_days;
+    if (
+      resolveEnrollmentStatus(enrollment, new Date(), resolvedDurationDays) === 'completed'
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function createProgramEnrollment(
-  input: CreateProgramEnrollmentInput,
+  input: CreateProgramEnrollmentInput & {
+    authorization?: ServerEnrollmentAuthorization;
+  },
 ): Promise<ProgramEnrollment> {
   const slug = normalizeSlug(input.programSlug);
   if (!input.personId) throw new Error('personId is required.');
@@ -614,6 +724,22 @@ export async function createProgramEnrollment(
     );
     (err as Error & { code?: string }).code = 'PROGRAM_VERSION_NOT_PUBLISHED';
     throw err;
+  }
+
+  const adminGrant = isVerifiedAdminGrant(input.authorization);
+  if (!adminGrant && isValidationOnlyMetadata(version.metadata)) {
+    const err = new Error('This program version is not open for member enrollment.');
+    (err as Error & { code?: string }).code = PROGRAM_VALIDATION_ONLY;
+    throw err;
+  }
+  const requiredSlug = declaredPrerequisiteSlug(slug);
+  if (!adminGrant && requiredSlug) {
+    const completed = await personHasCompletedProgram(input.personId, requiredSlug);
+    if (!completed) {
+      const err = new Error(`Complete ${requiredSlug} before starting this program.`);
+      (err as Error & { code?: string }).code = PROGRAM_PREREQUISITE_UNMET;
+      throw err;
+    }
   }
 
   const source = await verifyEnrollmentSource({
@@ -672,7 +798,9 @@ export async function createProgramEnrollmentFromAccess(
   input: Omit<
     CreateProgramEnrollmentInput,
     'sourceType' | 'assignmentId' | 'entitlementKey'
-  >,
+  > & {
+    authorization?: ServerEnrollmentAuthorization;
+  },
 ): Promise<ProgramEnrollment> {
   const slug = normalizeSlug(input.programSlug);
   const source = await resolveEnrollmentSourceFromAccess({
@@ -863,17 +991,20 @@ export async function getProgramRuntimeSummary(
 
   const now = new Date();
   const resolvedStatus = resolveEnrollmentStatus(enrollment, now, version.duration_days);
-  const pauseStartedAt =
-    typeof enrollment.metadata?.pause_started_at === 'string'
-      ? enrollment.metadata.pause_started_at
-      : null;
   const completedAt = enrollment.completed_at;
-  const currentDay = resolvedStatus === 'paused' && pauseStartedAt
-    ? calculateProgramDayAtDateKey(
-        enrollment.selected_start_date,
-        pauseStartedAt,
-        enrollment.paused_days_total,
-      )
+  // An unknown or future pause boundary must not fall through to today's
+  // program day, or to a later day stored ahead of the member. Historical
+  // review then stops at Day 0. A trustworthy pause day is also capped by
+  // today's program day and the published version duration.
+  const currentDay = resolvedStatus === 'paused'
+    ? resolvePausedHistoricalDay({
+        selectedStartDate: enrollment.selected_start_date,
+        timezone: enrollment.timezone,
+        pauseStartedAt: enrollment.metadata?.pause_started_at,
+        pausedDaysTotal: enrollment.paused_days_total,
+        durationDays: version.duration_days,
+        now,
+      })
     : resolvedStatus === 'completed' && completedAt
       ? Math.min(
           version.duration_days ?? Number.MAX_SAFE_INTEGER,
@@ -889,7 +1020,12 @@ export async function getProgramRuntimeSummary(
         pausedDaysTotal: enrollment.paused_days_total,
         now,
       });
-  const nextTemplate = await getCheckinTemplateForDay(version.id, currentDay);
+  // Paused and completed review is informational. The check-in prompt stays
+  // off this response; submitted responses remain on latest_checkin_response.
+  const historicalReview = resolvedStatus === 'paused' || resolvedStatus === 'completed';
+  const nextTemplate = historicalReview
+    ? null
+    : await getCheckinTemplateForDay(version.id, currentDay);
 
   return {
     enrollment,

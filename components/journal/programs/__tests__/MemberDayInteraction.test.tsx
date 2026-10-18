@@ -137,10 +137,12 @@ describe('MemberDayInteraction', () => {
     }));
 
     expect(container.textContent).toContain('This enrollment is paused');
+    expect(container.textContent).toContain('saved note');
     expect(container.textContent).toContain('Day 07 completed');
-    expect(container.querySelector('textarea')?.readOnly).toBe(true);
+    expect(container.querySelector('textarea')).toBeNull();
     expect(container.textContent).not.toContain('Save observation');
     expect(container.textContent).not.toContain('Mark day 07 completed');
+    expect(container.textContent).not.toContain('Complete or skip this day’s check-in');
   });
 
   it('shows a published-content failure and retries the same completion', async () => {
@@ -344,5 +346,30 @@ describe('MemberDayInteraction', () => {
       expect(posts).toHaveLength(0);
       expect(container.textContent).not.toContain(`Day ${String(day).padStart(2, '0')} completed`);
     }
+  });
+
+  test('historical review shows a saved observation without write controls or check-in actions', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('observations')) {
+        return jsonResponse({
+          draft_text: 'saved note',
+          response_text: 'saved note',
+          saved_at: '2026-10-17T18:00:00.000Z',
+          updated_at: '2026-10-17T18:00:00.000Z',
+        });
+      }
+      return jsonResponse(null);
+    });
+    await renderPanel(panel({
+      writable: false,
+      readOnlyReason: 'This enrollment is paused. Saved responses stay available to read.',
+      checkinRequired: true,
+      checkinHandled: false,
+    }));
+    expect(container.textContent).toContain('saved note');
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(container.querySelector('button')).toBeNull();
+    expect(container.textContent).not.toContain('Complete or skip this day’s check-in');
+    expect(fetchMock.mock.calls.every((call) => (call[1]?.method ?? 'GET') === 'GET')).toBe(true);
   });
 });
