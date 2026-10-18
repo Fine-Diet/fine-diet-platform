@@ -117,6 +117,21 @@ describe('member delivery authorization', () => {
     expect(getDeliveryMock).not.toHaveBeenCalled();
   });
 
+  test('does not render a Day 0 preview when the configured default version is invalid', async () => {
+    listEnrollmentsMock.mockResolvedValue([]);
+    getLatestVersionMock.mockRejectedValue(Object.assign(
+      new Error('Configured default enrollment version for \'baseline\' is not a published version of that program.'),
+      { code: 'PROGRAM_DEFAULT_VERSION_INVALID' },
+    ));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = makeResponse();
+    await handler({ method: 'GET', query: { slug: 'baseline' } } as any, res);
+
+    expect(res.statusCode).toBe(409);
+    expect(getDeliveryMock).not.toHaveBeenCalled();
+  });
+
   test('returns Day 0 for an entitled member of a newly published, unregistered Program before enrollment', async () => {
     getDetailMock.mockResolvedValue({
       slug: 'newly-published-program',

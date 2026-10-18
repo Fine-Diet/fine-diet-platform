@@ -85,6 +85,20 @@ export default async function handler(
   const personId = await resolveWriteTargetPerson(req, res, ctx);
   if (!personId) return;
 
+  const rawBody = req.body;
+  if (rawBody && typeof rawBody === 'object' && !Array.isArray(rawBody)) {
+    const record = rawBody as Record<string, unknown>;
+    if (
+      'program_version_id' in record ||
+      'programVersionId' in record ||
+      'authorization' in record
+    ) {
+      return res.status(400).json({
+        error: 'Program version and authorization cannot be selected on this route.',
+      });
+    }
+  }
+
   const parsed = EnrollSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -114,9 +128,12 @@ export default async function handler(
       code === 'PROGRAM_ENTITLEMENT_DENIED' ||
       code === 'PROGRAM_ASSIGNMENT_DENIED' ||
       code === 'PROGRAM_PREREQUISITE_UNMET' ||
-      code === 'PROGRAM_VALIDATION_ONLY'
+      code === 'PROGRAM_VALIDATION_ONLY' ||
+      code === 'PROGRAM_VERSION_SELECTION_DENIED'
         ? 403
-        : /No matching published runtime version|not found/i.test(
+        : code === 'PROGRAM_DEFAULT_VERSION_INVALID'
+          ? 409
+          : /No matching published runtime version|not found/i.test(
               err instanceof Error ? err.message : '',
             )
           ? 404
