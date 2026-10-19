@@ -35,6 +35,11 @@ jest.mock('@/lib/programs/programRuntimeServerService', () => {
 
 import handler from '../[slug]/delivery-modules';
 import { BASELINE_DAY_0_TO_21_BLUEPRINT } from '@/lib/programs/baselineDay0To21Candidate';
+import {
+  BASELINE_PREP_DELIVERY_MODULES,
+  BASELINE_WEEK_DELIVERY_MODULES,
+} from '@/lib/programs/baselineDeliveryModules';
+import { PROTECTED_BASELINE_V1 } from '@/lib/programs/baselineMemberBinding';
 import { resolveCanonicalMemberDelivery } from '@/lib/programs/canonicalMemberDelivery';
 import {
   PROGRAM_BLUEPRINT_METADATA_KEY,
@@ -133,11 +138,16 @@ function makeResponse() {
   return res;
 }
 
-async function deliver(status: ProgramEnrollmentStatus, currentDay: number, modules = publishedModules()) {
+async function deliver(
+  status: ProgramEnrollmentStatus,
+  currentDay: number,
+  modules = publishedModules(),
+  source: 'admin' | 'baseline_code' | 'code' | 'none' = 'admin',
+) {
   const runtime = summary(status, currentDay);
   listEnrollmentsMock.mockResolvedValue([runtime.enrollment]);
   getSummaryMock.mockResolvedValue(runtime);
-  getDeliveryMock.mockResolvedValue({ source: 'admin', modules });
+  getDeliveryMock.mockResolvedValue({ source, modules });
   const res = makeResponse();
   await handler(
     { method: 'GET', query: { slug: 'baseline', version_id: VERSION_ID } } as never,
@@ -273,5 +283,101 @@ describe('canonical Baseline member delivery', () => {
     expect(wrongPerson.binding).toEqual({ kind: 'unavailable', reason: 'wrong-person' });
     expect(wrongPerson.deliveryModules).toEqual([]);
     expect(JSON.stringify(wrongPerson.deliveryModules)).not.toContain('body:');
+  });
+
+  test('returns 409 when the published Baseline source is empty', async () => {
+    for (const source of ['none', 'admin'] as const) {
+      const runtime = summary('pre_start', 0);
+      listEnrollmentsMock.mockResolvedValue([runtime.enrollment]);
+      getSummaryMock.mockResolvedValue(runtime);
+      getDeliveryMock.mockResolvedValue({ source, modules: [] });
+      const res = makeResponse();
+      await handler(
+        {
+          method: 'GET',
+          query: { slug: 'baseline', version_id: VERSION_ID, source: 'baseline_code' },
+        } as never,
+        res as never,
+      );
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toEqual({ error: 'Published Baseline delivery is unavailable' });
+      expect(JSON.stringify(res.body)).not.toContain('body:');
+    }
+  });
+
+  test('returns 409 for an entirely foreign Baseline module set', async () => {
+    const foreignOnly = [{
+      ...publishedModules()[0],
+      id: 'baseline-v1-day-0-orientation',
+      body: 'body:entirely-foreign',
+    }];
+    const { res } = await deliver('pre_start', 0, foreignOnly);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.modules).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain('body:entirely-foreign');
+  });
+
+  test('keeps a mixed foreign and malformed Baseline source denied', async () => {
+    const mixed = publishedModules();
+    mixed.push({
+      ...mixed[0],
+      id: 'baseline-v1-foreign',
+      body: 'body:mixed-foreign',
+    });
+    mixed[8] = { ...mixed[8], dayEnd: 21, body: 'body:mixed-malformed' };
+    const { res } = await deliver('active', 1, mixed);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.modules).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain('body:mixed-foreign');
+    expect(JSON.stringify(res.body)).not.toContain('body:mixed-malformed');
+  });
+
+  test('keeps legacy code-owned Baseline delivery functional', async () => {
+    const runtime = summary('pre_start', 0);
+    runtime.version = {
+      ...runtime.version,
+      id: PROTECTED_BASELINE_V1.versionId,
+      version_key: PROTECTED_BASELINE_V1.versionKey,
+      metadata: {},
+    };
+    runtime.enrollment = {
+      ...runtime.enrollment,
+      program_version_id: PROTECTED_BASELINE_V1.versionId,
+    };
+    const modules = [...BASELINE_PREP_DELIVERY_MODULES, ...BASELINE_WEEK_DELIVERY_MODULES];
+    listEnrollmentsMock.mockResolvedValue([runtime.enrollment]);
+    getSummaryMock.mockResolvedValue(runtime);
+    getDeliveryMock.mockResolvedValue({ source: 'baseline_code', modules });
+    const res = makeResponse();
+    await handler(
+      {
+        method: 'GET',
+        query: { slug: 'baseline', version_id: PROTECTED_BASELINE_V1.versionId },
+      } as never,
+      res as never,
+    );
+    const presented = resolveCanonicalMemberDelivery({
+      programSlug: 'baseline',
+      summary: runtime,
+      modules: res.body.modules ?? [],
+      authorizedPersonId: PERSON_ID,
+      response: {
+        routeSlug: 'baseline',
+        personId: PERSON_ID,
+        versionId: PROTECTED_BASELINE_V1.versionId,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.source).toBe('baseline_code');
+    expect(res.body.modules?.map((module) => module.id)).toEqual(
+      BASELINE_PREP_DELIVERY_MODULES.map((module) => module.id),
+    );
+    expect(JSON.stringify(res.body.modules)).not.toContain('baseline-week-1-focus');
+    expect(presented.binding).toEqual({ kind: 'legacy-member', reason: 'protected-version' });
+    expect(presented.deliveryModules.map((module) => module.id)).toContain('baseline-prep-overview');
   });
 });

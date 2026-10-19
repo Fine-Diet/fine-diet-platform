@@ -74,6 +74,7 @@ export default async function handler(
     let versionId: string;
     let maximumAccessibleDay = 0;
     let authorizedStatus: ProgramEnrollmentStatus = 'pre_start';
+    let trustedProgramSlug = detail.slug;
     if (enrollment) {
       const summary = await getProgramRuntimeSummaryForPerson(
         personId,
@@ -99,6 +100,7 @@ export default async function handler(
       }
       versionId = summary.version.id;
       authorizedStatus = summary.resolved_status;
+      trustedProgramSlug = summary.program?.slug || summary.enrollment.program_slug;
       maximumAccessibleDay = memberMaximumAccessibleDay(
         summary.resolved_status,
         summary.current_day,
@@ -129,7 +131,8 @@ export default async function handler(
       programVersionId: versionId,
     });
     const decision = authorizePublishedBaselineDelivery({
-      programSlug: slug,
+      programSlug: trustedProgramSlug,
+      source: result.source,
       modules: result.modules,
       status: authorizedStatus,
       maximumAccessibleDay,

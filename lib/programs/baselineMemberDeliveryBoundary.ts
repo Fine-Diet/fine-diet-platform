@@ -12,6 +12,7 @@ import {
   baselineMemberModuleBound,
   classifyPublishedBaselineModules,
 } from './baselineMemberModuleIdentity';
+import type { DeliveryModuleSource } from './deliveryModuleDeliveryServerService';
 import type { ProgramEnrollmentStatus } from './runtimeTypes';
 
 /**
@@ -120,8 +121,17 @@ export function assessBaselineMemberModules(
   return 'authorized-subset';
 }
 
+/**
+ * Authorize member delivery.
+ *
+ * `source` is the server delivery result (`admin`, `baseline_code`, `code`,
+ * or `none`). It is not a request parameter. The published Baseline launch
+ * requires the exact module set before day filtering. The seeded
+ * `baseline_code` fallback and every other program keep generic filtering.
+ */
 export function authorizePublishedBaselineDelivery<T extends ProgramDeliveryModuleDefinition>(input: {
   programSlug: string;
+  source: DeliveryModuleSource;
   modules: readonly T[];
   status: ProgramDeliveryStatusVisibility;
   maximumAccessibleDay: number;
@@ -129,21 +139,23 @@ export function authorizePublishedBaselineDelivery<T extends ProgramDeliveryModu
   kind: 'unavailable';
   reason: 'incomplete-content' | 'wrong-version-modules' | 'malformed-content';
 } {
+  const deliverFiltered = () => ({
+    kind: 'deliver' as const,
+    modules: filterMemberDeliveryModules(
+      input.modules,
+      input.status,
+      input.maximumAccessibleDay,
+    ),
+  });
+  const publishedBaselineLaunch = input.programSlug.trim().toLowerCase() === 'baseline'
+    && input.source !== 'baseline_code';
+  if (!publishedBaselineLaunch) return deliverFiltered();
+
   const assessment = assessBaselineMemberModules(input.modules, {
     status: input.status,
     maximumAccessibleDay: input.maximumAccessibleDay,
   });
-  if (assessment === 'unrelated' || input.programSlug.trim().toLowerCase() !== 'baseline') {
-    return {
-      kind: 'deliver',
-      modules: filterMemberDeliveryModules(
-        input.modules,
-        input.status,
-        input.maximumAccessibleDay,
-      ),
-    };
-  }
-  if (assessment === 'foreign') {
+  if (assessment === 'foreign' || (assessment === 'unrelated' && input.modules.length > 0)) {
     return { kind: 'unavailable', reason: 'wrong-version-modules' };
   }
   if (assessment === 'malformed') {
@@ -152,12 +164,5 @@ export function authorizePublishedBaselineDelivery<T extends ProgramDeliveryModu
   if (assessment !== 'exact') {
     return { kind: 'unavailable', reason: 'incomplete-content' };
   }
-  return {
-    kind: 'deliver',
-    modules: filterMemberDeliveryModules(
-      input.modules,
-      input.status,
-      input.maximumAccessibleDay,
-    ),
-  };
+  return deliverFiltered();
 }
