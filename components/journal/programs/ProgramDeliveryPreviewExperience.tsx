@@ -44,6 +44,10 @@ import {
 } from '@/lib/programs/deliveryModuleTypes';
 import { memberDayPanelModel } from '@/lib/programs/memberDayInteractionClient';
 import { getProgramBlueprintAsset, type ProgramBlueprintDeliveryConfig } from '@/lib/programs/programBlueprint';
+import {
+  programDayBeadClass as dayBeadClass,
+  programDayBeadStyle,
+} from '@/lib/programs/programDayBeadClass';
 import type { ProgramLibraryDetail } from '@/lib/programs/programLibraryServerService';
 import {
   authorizedReturnDay,
@@ -623,19 +627,6 @@ function dayRailAriaLabel(item: ProgramDayRailItem, selected: boolean): string {
   return `Day ${item.day}, ${selected ? 'selected, ' : ''}${state}`;
 }
 
-function dayBeadClass(item: ProgramDayRailItem, selected: boolean): string {
-  const chrome =
-    'flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white md:h-8 md:min-w-8 md:px-2.5';
-  if (item.state === 'current') {
-    return `${chrome} bg-[#55789b] text-black${
-      selected ? ' ring-2 ring-white ring-offset-2 ring-offset-black/30' : ''
-    }`;
-  }
-  if (selected) return `${chrome} bg-white text-black ring-2 ring-white`;
-  if (item.accessible) return `${chrome} border border-transparent bg-white/50 text-black`;
-  return `${chrome} border border-white/50 text-white/50`;
-}
-
 function scheduleWithSetupFirst(
   items: ProgramDeliveryRoadmapBlock['items'],
 ): ProgramDeliveryRoadmapBlock['items'] {
@@ -1154,11 +1145,7 @@ export function ProgramDeliveryPreviewExperience({
                             aria-label={dayRailAriaLabel(item, selected)}
                             onClick={() => openRailDay(item)}
                             className={dayBeadClass(item, selected)}
-                            style={item.state === 'current' && blueprintTokens ? {
-                              backgroundColor: blueprintTokens.accentSurface,
-                              color: blueprintTokens.accentForeground,
-                              borderColor: blueprintTokens.accentSurface,
-                            } : undefined}
+                            style={programDayBeadStyle(item, blueprintTokens)}
                           >
                             {item.state === 'locked' && (
                               <Lock className="h-2.5 w-2.5" />

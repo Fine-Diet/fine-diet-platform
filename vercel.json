@@ -15,7 +15,8 @@
       "feat/baseline-canary-safe-version-routing": false,
       "fix/baseline-member-rendering": false,
       "codex/baseline-roadmap-loading": false,
-      "codex/baseline-launch-ui-convergence": false
+      "codex/baseline-launch-ui-convergence": false,
+      "codex/baseline-day-circle-alignment": false
     }
   }
 }
