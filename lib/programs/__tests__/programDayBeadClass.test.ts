@@ -41,11 +41,15 @@ describe('program day circle visual states', () => {
     expect(review).not.toContain('ring-2');
   });
 
-  it('keeps locked days muted and leaves their state and lock icon rendering to the caller', () => {
+  it('gives locked days a softer translucent fill while keeping them muted', () => {
     const locked = programDayBeadClass(day('locked', false), false);
+    const selectedLocked = programDayBeadClass(day('locked', false), true);
+    const accessible = programDayBeadClass(day('review', true), false);
 
-    expect(locked).toContain('border border-white/50 text-white/50');
-    expect(locked).not.toContain('bg-white');
+    expect(locked).toContain('border border-white/50 bg-white/20 text-white/50');
+    expect(selectedLocked).toContain('border border-white/50 bg-white/20 text-white/50');
+    expect(selectedLocked).not.toContain('ring-2');
+    expect(accessible).toContain('bg-white/50 text-black');
   });
 
   it('uses authored accent colors for the current day in both renderers', () => {

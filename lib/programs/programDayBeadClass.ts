@@ -25,6 +25,10 @@ export function programDayBeadClass(
     }`;
   }
 
+  if (item.state === 'locked') {
+    return `${chrome} border border-white/50 bg-white/20 text-white/50`;
+  }
+
   if (selected) return `${chrome} bg-white text-black ring-2 ring-white`;
   if (item.accessible) {
     return `${chrome} border border-transparent bg-white/50 text-black`;
