@@ -3,6 +3,7 @@ import type {
   ProgramDeliveryModuleType,
   ProgramDeliveryStatusVisibility,
 } from './deliveryModuleTypes';
+import type { ProgramEnrollmentStatus } from './runtimeTypes';
 
 /**
  * Paused and completed members may review informational content for days
@@ -21,6 +22,15 @@ export function isHistoricalReviewStatus(
   status: string | null | undefined,
 ): status is 'paused' | 'completed' {
   return status === 'paused' || status === 'completed';
+}
+
+/** Day cap shared by the delivery API and the member Blueprint binding. */
+export function memberMaximumAccessibleDay(
+  status: ProgramEnrollmentStatus | ProgramDeliveryStatusVisibility,
+  currentDay: number,
+): number {
+  if (status === 'pre_start') return 0;
+  return currentDay;
 }
 
 export function isSafeHistoricalModule(
