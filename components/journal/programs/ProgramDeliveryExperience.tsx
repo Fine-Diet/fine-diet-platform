@@ -22,6 +22,10 @@ import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
 import { MemberDayInteraction } from '@/components/journal/programs/MemberDayInteraction';
 import { isHistoricalReviewStatus } from '@/lib/programs/historicalReviewPolicy';
+import {
+  programDayBeadClass,
+  programDayBeadStyle,
+} from '@/lib/programs/programDayBeadClass';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
 import { ProgramDeliveryPreviewExperience } from '@/components/journal/programs/ProgramDeliveryPreviewExperience';
 import type {
@@ -907,7 +911,7 @@ function MemberProgramDeliveryExperience({
               >
                 <div className="py-1">
                   <div
-                    className="flex min-w-max gap-1.5 px-1"
+                    className="flex min-w-max gap-1 px-1"
                   >
                     {rail.map((item) => (
                       <button
@@ -929,13 +933,14 @@ function MemberProgramDeliveryExperience({
                           setView('day');
                           setSelectedDay(item.day);
                         }}
-                        className={`flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-semibold ${
-                          item.state === 'current'
-                            ? 'border-[#55789b] bg-[#55789b] text-black'
-                            : item.accessible
-                              ? 'border-white/50 bg-white/50 text-black'
-                              : 'border-white/50 text-white/50'
-                        }`}
+                        className={programDayBeadClass(
+                          item,
+                          selectedDay === item.day,
+                        )}
+                        style={programDayBeadStyle(
+                          item,
+                          memberBlueprint?.presentation.tokens,
+                        )}
                       >
                         {item.state === 'locked' && (
                           <Lock className="h-2.5 w-2.5" />
