@@ -48,11 +48,13 @@ function dependencyFiles(entry: string): string[] {
 
 describe('member browser import boundary', () => {
   it('does not reach the authored candidate from the member page or binding', () => {
-    const page = path.join(ROOT, 'pages/journal/programs/[slug].tsx');
+    const page = path.join(ROOT, 'pages/app/programs/[slug].tsx');
+    const journalPage = path.join(ROOT, 'pages/journal/programs/[slug].tsx');
     const binding = path.join(ROOT, 'lib/programs/baselineMemberBinding.ts');
     const experience = path.join(ROOT, 'components/journal/programs/ProgramDeliveryExperience.tsx');
     const files = [
       ...dependencyFiles(page),
+      ...dependencyFiles(journalPage),
       ...dependencyFiles(binding),
       ...dependencyFiles(experience),
     ];
@@ -62,6 +64,9 @@ describe('member browser import boundary', () => {
       || file.endsWith('programBlueprintStorage.ts'),
     );
     expect(leaked).toEqual([]);
+    expect(files.some((file) => file.endsWith('pages/app/programs/[slug].tsx'))).toBe(true);
+    expect(files.some((file) => file.endsWith('canonicalMemberDelivery.ts'))).toBe(true);
     expect(files.some((file) => file.endsWith('baselineMemberBinding.ts'))).toBe(true);
+    expect(files.some((file) => file.endsWith('ProgramDeliveryExperience.tsx'))).toBe(true);
   });
 });

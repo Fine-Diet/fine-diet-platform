@@ -1,5 +1,10 @@
 import type { ProgramDeliveryModuleDefinition } from './deliveryModuleTypes';
+import {
+  assessBaselineMemberModules,
+  memberAccessibleDay,
+} from './baselineMemberDeliveryBoundary';
 import { classifyPublishedBaselineModules } from './baselineMemberModuleIdentity';
+import { filterMemberDeliveryModules } from './historicalReviewPolicy';
 import {
   PROGRAM_BLUEPRINT_METADATA_KEY,
   parseProgramBlueprintVersionFields,
@@ -46,7 +51,8 @@ export type MemberBlueprintUnavailableReason =
   | 'identity-mismatch'
   | 'stale-response'
   | 'wrong-version-modules'
-  | 'incomplete-content';
+  | 'incomplete-content'
+  | 'malformed-content';
 
 export interface MemberBlueprintResponseIdentity {
   routeSlug: string;
@@ -87,18 +93,6 @@ function isProtectedVersion(summary: ProgramRuntimeSummary): boolean {
 
 function claimsMemberBlueprint(summary: ProgramRuntimeSummary): boolean {
   return summary.version.metadata?.[PROGRAM_BLUEPRINT_METADATA_KEY] != null;
-}
-
-function authorizedDay(summary: ProgramRuntimeSummary): number {
-  if (summary.resolved_status === 'pre_start') return 0;
-  return Math.max(0, summary.current_day);
-}
-
-function moduleIsAuthorized(
-  module: ProgramDeliveryModuleDefinition,
-  day: number,
-): boolean {
-  return (module.dayStart ?? 0) <= day;
 }
 
 function responseIsStale(
@@ -162,13 +156,24 @@ export function resolveMemberBlueprintBinding(
     return { kind: 'unavailable', reason: 'version-unpinned' };
   }
 
+  const day = memberAccessibleDay({
+    resolvedStatus: summary.resolved_status,
+    currentDay: summary.current_day,
+  });
+  const assessment = assessBaselineMemberModules(input.modules, {
+    status: summary.resolved_status,
+    maximumAccessibleDay: day,
+  });
   if (
-    identity === 'foreign'
-    || (identity === 'unrelated' && input.modules.length > 0)
+    assessment === 'foreign'
+    || (assessment === 'unrelated' && input.modules.length > 0)
   ) {
     return { kind: 'unavailable', reason: 'wrong-version-modules' };
   }
-  if (identity !== 'exact') {
+  if (assessment === 'malformed') {
+    return { kind: 'unavailable', reason: 'malformed-content' };
+  }
+  if (assessment !== 'exact' && assessment !== 'authorized-subset') {
     return { kind: 'unavailable', reason: 'incomplete-content' };
   }
 
@@ -187,8 +192,7 @@ export function resolveMemberBlueprintBinding(
     return { kind: 'unavailable', reason: 'duration-mismatch' };
   }
 
-  const day = authorizedDay(summary);
-  const modules = input.modules.filter((module) => moduleIsAuthorized(module, day));
+  const modules = filterMemberDeliveryModules(input.modules, summary.resolved_status, day);
   const config: ProgramBlueprintRuntimeConfig = {
     programSlug: 'baseline',
     version: {

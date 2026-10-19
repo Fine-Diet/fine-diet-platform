@@ -13,6 +13,7 @@ import {
   toBaselineMemberDraftImportPayloads,
 } from '../baselineMemberDraftImport';
 import {
+  BASELINE_MEMBER_MODULE_BOUNDS,
   BASELINE_MEMBER_MODULE_KEYS,
   GENERATED_PROGRAM_VERSION_KEY,
 } from '../baselineMemberModuleIdentity';
@@ -320,6 +321,16 @@ describe('Baseline member blueprint binding', () => {
       response: matched,
     })).toEqual({ kind: 'unavailable', reason: 'incomplete-content' });
 
+    const malformed = trustedModules();
+    malformed[0] = { ...malformed[0], dayEnd: 21 };
+    expect(resolveMemberBlueprintBinding({
+      programSlug: 'baseline',
+      summary: summary(),
+      modules: malformed,
+      authorizedPersonId: PERSON_ID,
+      response: matched,
+    })).toEqual({ kind: 'unavailable', reason: 'malformed-content' });
+
     expect(resolveMemberBlueprintBinding({
       programSlug: 'baseline',
       summary: summary(),
@@ -331,6 +342,35 @@ describe('Baseline member blueprint binding', () => {
         versionId: MEMBER_VERSION_ID,
       },
     })).toEqual({ kind: 'unavailable', reason: 'incomplete-content' });
+  });
+
+  it('accepts the five authorized Day 0 modules without the other lesson bodies', () => {
+    const binding = resolveMemberBlueprintBinding({
+      programSlug: 'baseline',
+      summary: summary({
+        resolved_status: 'pre_start',
+        current_day: 0,
+        enrollment: { status: 'pre_start' },
+      }),
+      modules: trustedModules().filter((module) => module.dayStart === 0),
+      authorizedPersonId: PERSON_ID,
+      response: {
+        routeSlug: 'baseline',
+        personId: PERSON_ID,
+        versionId: MEMBER_VERSION_ID,
+      },
+    });
+
+    expect(binding.kind).toBe('published-blueprint');
+    if (binding.kind !== 'published-blueprint') return;
+    expect(binding.modules.map((module) => module.id)).toEqual([
+      'baseline-candidate-day-0-orientation',
+      'baseline-candidate-day-0-meal-map',
+      'baseline-candidate-day-0-create-meals',
+      'baseline-candidate-day-0-prepare-pantry',
+      'baseline-candidate-day-0-roadmap',
+    ]);
+    expect(binding.modules.some((module) => (module.dayStart ?? 0) > 0)).toBe(false);
   });
 
   it('keeps paused and completed enrollments readable on the published version', () => {
@@ -367,6 +407,19 @@ describe('Baseline member draft import', () => {
     expect(BASELINE_MEMBER_MODULE_KEYS).toEqual(
       BASELINE_DAY_0_TO_21_BLUEPRINT.modules.map((module) => module.id),
     );
+    expect(BASELINE_MEMBER_MODULE_BOUNDS.map((bound) => ({
+      id: bound.id,
+      dayStart: bound.dayStart,
+      dayEnd: bound.dayEnd,
+      moduleType: bound.moduleType,
+      statusVisibility: [...bound.statusVisibility],
+    }))).toEqual(BASELINE_DAY_0_TO_21_BLUEPRINT.modules.map((module) => ({
+      id: module.id,
+      dayStart: module.dayStart,
+      dayEnd: module.dayEnd,
+      moduleType: module.moduleType,
+      statusVisibility: module.statusVisibility,
+    })));
     const publication = assessBaselineMemberPublication();
     expect(publication.draftApiAccepts).toEqual([
       'source_version_id',

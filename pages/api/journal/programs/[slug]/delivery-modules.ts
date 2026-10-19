@@ -20,8 +20,9 @@ import {
   getProgramRuntimeSummaryForPerson,
   listEnrollmentsForPerson,
 } from '@/lib/programs/programRuntimeServerService';
+import { authorizePublishedBaselineDelivery } from '@/lib/programs/baselineMemberDeliveryBoundary';
 import {
-  filterMemberDeliveryModules,
+  memberMaximumAccessibleDay,
   rejectDeliveryVersion,
 } from '@/lib/programs/historicalReviewPolicy';
 import type { ProgramEnrollmentStatus } from '@/lib/programs/runtimeTypes';
@@ -98,11 +99,10 @@ export default async function handler(
       }
       versionId = summary.version.id;
       authorizedStatus = summary.resolved_status;
-      maximumAccessibleDay = summary.resolved_status === 'completed'
-        ? summary.current_day
-        : summary.resolved_status === 'pre_start'
-          ? 0
-          : summary.current_day;
+      maximumAccessibleDay = memberMaximumAccessibleDay(
+        summary.resolved_status,
+        summary.current_day,
+      );
     } else {
       const version = await getLatestPublishedProgramVersionForSlug(slug);
       if (!version || version.status !== 'published') {
@@ -121,20 +121,27 @@ export default async function handler(
       }
       versionId = version.id;
       // Entitled or assigned members may see the pre-start overview only.
-      maximumAccessibleDay = 0;
+      maximumAccessibleDay = memberMaximumAccessibleDay('pre_start', 0);
     }
 
     const result = await getDeliveryModulesForProgramWithFallback({
       programSlug: slug,
       programVersionId: versionId,
     });
+    const decision = authorizePublishedBaselineDelivery({
+      programSlug: slug,
+      modules: result.modules,
+      status: authorizedStatus,
+      maximumAccessibleDay,
+    });
+    if (decision.kind === 'unavailable') {
+      return res.status(409).json({
+        error: 'Published Baseline delivery is unavailable',
+      });
+    }
     return res.status(200).json({
       ...result,
-      modules: filterMemberDeliveryModules(
-        result.modules,
-        authorizedStatus,
-        maximumAccessibleDay,
-      ),
+      modules: decision.modules,
     });
   } catch (err) {
     const code = (err as Error & { code?: string }).code;
