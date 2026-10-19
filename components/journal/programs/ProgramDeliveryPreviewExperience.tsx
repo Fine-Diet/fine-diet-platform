@@ -1020,9 +1020,9 @@ export function ProgramDeliveryPreviewExperience({
     (showDayZero
       ? `Let’s get you set up for ${data.title}`
       : activeBlueprintPhase
-        ? `Let’s focus on ${activeBlueprintPhase.title}`
+        ? activeBlueprintPhase.title
         : activeWeekModule
-        ? `Let’s focus on ${activeWeekModule.title}`
+        ? activeWeekModule.title
         : `Day ${twoDigitDay(viewedDay)} in ${data.title}`);
   const derivedContextLine = activeBlueprintPhase
     ? `${twoDigitDay(selectedDay)} — ${activeBlueprintPhase.label ?? activeBlueprintPhase.title}`
@@ -1057,7 +1057,7 @@ export function ProgramDeliveryPreviewExperience({
           className={
             showDayZero
               ? 'overflow-hidden bg-[#07170f]'
-              : 'min-h-[90vh] overflow-hidden bg-[#07170f]'
+              : 'min-h-[560px] overflow-hidden bg-[#07170f] md:min-h-[460px]'
           }
           style={blueprintTokens ? { backgroundColor: blueprintTokens.heroSurface } : undefined}
         >
@@ -1067,7 +1067,7 @@ export function ProgramDeliveryPreviewExperience({
               alt=""
               fill
               priority
-              className="object-cover"
+              className="object-cover object-[56%_center] md:object-center"
               sizes="100vw"
             />
           )}
@@ -1077,7 +1077,7 @@ export function ProgramDeliveryPreviewExperience({
             className={`relative mx-auto flex w-full max-w-[950px] flex-col px-10 pt-16 sm:px-[4rem] ${
               showDayZero
                 ? 'pb-16'
-                : 'min-h-[90vh] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-20'
+                : 'min-h-[560px] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:min-h-[460px] md:pb-20'
             }`}
           >
             <Link href={APP_ROUTES.programs} className="shrink-0 rounded-sm text-xs text-white/70 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
@@ -1094,7 +1094,7 @@ export function ProgramDeliveryPreviewExperience({
                   {composedHero.eyebrow}
                 </p>
               )}
-              <h1 className="mt-2 text-[2.75rem] font-normal leading-[1] text-white md:text-[2.75rem]">
+              <h1 className="mt-2 text-[2.15rem] font-normal leading-[1.04] tracking-[-0.025em] text-white md:text-[2.75rem] md:leading-[1]">
                 {headline}
               </h1>
               {!showDayZero && activeWeekModule?.body && (
