@@ -5,7 +5,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { MemberBlueprintUnavailable } from '../MemberBlueprintUnavailable';
 import { ProgramDeliveryExperience } from '../ProgramDeliveryExperience';
-import { BASELINE_DAY_0_TO_21_BLUEPRINT } from '@/lib/programs/baselineDay0To21Candidate';
+import {
+  BASELINE_DAY_0_TO_21_BLUEPRINT,
+  BASELINE_DAY_0_TO_21_CANDIDATE,
+} from '@/lib/programs/baselineDay0To21Candidate';
 import { BASELINE_MEMBER_DRAFT_VERSION_LABEL } from '@/lib/programs/baselineMemberBinding';
 import { programBlueprintRuntimeConfig } from '@/lib/programs/programBlueprint';
 import type { ProgramDeliveryModuleDefinition } from '@/lib/programs/deliveryModuleTypes';
@@ -139,6 +142,37 @@ describe('member blueprint presentation', () => {
     expect(container.textContent).not.toContain('Day completion is not available');
     expect(container.textContent).not.toContain(FUTURE_LESSON);
     expect(container.innerHTML).toContain('rgb(7, 23, 15)');
+  });
+
+  it('renders the published Day 0 Roadmap and all four stages once', async () => {
+    const summary = memberSummary();
+    summary.resolved_status = 'pre_start';
+    summary.current_day = 0;
+    summary.enrollment.status = 'pre_start';
+    const dayZeroModules = BASELINE_DAY_0_TO_21_CANDIDATE.modules
+      .filter((module) => module.dayStart === 0) as ProgramDeliveryModuleDefinition[];
+
+    await act(async () => {
+      root.render(
+        <ProgramDeliveryExperience
+          data={library}
+          runtimeSummary={summary}
+          progressSummary={null}
+          deliveryModules={dayZeroModules}
+          blueprint={memberConfig}
+          initialStartGateOpen={false}
+          onRuntimeSummaryUpdate={() => undefined}
+        />,
+      );
+    });
+
+    expect(dayZeroModules).toHaveLength(5);
+    expect(container.textContent).toContain('Your 21-day Baseline');
+    expect(container.textContent).toContain('The day rail follows the calendar selected for your enrollment. Schedule shows the three-week sequence.');
+    for (const stage of ['Setup', 'Week One', 'Week Two', 'Week Three']) {
+      expect(container.textContent).toContain(stage);
+    }
+    expect(container.textContent?.match(/Your 21-day Baseline/g)).toHaveLength(1);
   });
 
   it('keeps Baseline v1 on the previous member layout and still uses real day completion', async () => {
