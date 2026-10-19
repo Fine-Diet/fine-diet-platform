@@ -17,6 +17,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { MemberBlueprintUnavailable } from '@/components/journal/programs/MemberBlueprintUnavailable';
@@ -59,6 +60,55 @@ import {
 const BASELINE_SLUG = 'baseline';
 const RECOMMENDATION_ANCHOR_ID = 'baseline-recommendation-reveal';
 const CHECKIN_ANCHOR_ID = 'program-checkin';
+
+interface DeliveryRequestIdentity {
+  routeSlug: string;
+  personId: string;
+  versionId: string;
+}
+
+type DeliveryRequestState =
+  | { kind: 'loading'; identity: DeliveryRequestIdentity }
+  | { kind: 'conflict' | 'invalid'; identity: DeliveryRequestIdentity }
+  | { kind: 'error'; identity: DeliveryRequestIdentity };
+
+function sameDeliveryRequestIdentity(
+  left: DeliveryRequestIdentity,
+  right: DeliveryRequestIdentity,
+): boolean {
+  return left.routeSlug === right.routeSlug
+    && left.personId === right.personId
+    && left.versionId === right.versionId;
+}
+
+function MemberDeliveryLoading() {
+  return (
+    <section
+      role="status"
+      aria-label="Loading Program content"
+      className="mx-auto max-w-xl px-6 py-16"
+    >
+      <div className="rounded-2xl bg-black/[0.04] p-5 animate-pulse">
+        <div className="mb-3 h-5 w-40 rounded bg-black/[0.08]" />
+        <div className="h-3 w-56 rounded bg-black/[0.08]" />
+      </div>
+      <p className="mt-4 text-sm text-[#17100c]/65">Loading your Program…</p>
+    </section>
+  );
+}
+
+function MemberDeliveryLoadError() {
+  return (
+    <section role="alert" className="mx-auto max-w-xl px-6 py-16">
+      <h1 className="text-2xl font-normal text-[#17100c]">
+        Program content could not be loaded
+      </h1>
+      <p className="mt-3 text-sm leading-6 text-[#17100c]/80">
+        Check your connection or access, then refresh to try again.
+      </p>
+    </section>
+  );
+}
 
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -766,6 +816,8 @@ export default function JournalProgramDetailBySlugPage() {
   const [runtimePersonId, setRuntimePersonId] = useState<string | null>(null);
   const [deliveryVersionId, setDeliveryVersionId] = useState<string | null>(null);
   const [deliveryRouteSlug, setDeliveryRouteSlug] = useState<string | null>(null);
+  const [deliveryRequestState, setDeliveryRequestState] =
+    useState<DeliveryRequestState | null>(null);
   const loadGeneration = useRef(0);
 
   useEffect(() => {
@@ -785,6 +837,7 @@ export default function JournalProgramDetailBySlugPage() {
     setRuntimePersonId(null);
     setDeliveryVersionId(null);
     setDeliveryRouteSlug(null);
+    setDeliveryRequestState(null);
     (async () => {
       try {
         const resp = await fetch(
@@ -940,10 +993,17 @@ export default function JournalProgramDetailBySlugPage() {
     if (runtimePersonId && summary.enrollment.person_id !== runtimePersonId) return;
     const generation = ++loadGeneration.current;
     const current = () => loadGeneration.current === generation;
+    const identity: DeliveryRequestIdentity = {
+      routeSlug: requestedSlug,
+      personId: summary.enrollment.person_id,
+      versionId: summary.version.id,
+    };
     setRuntimeSummary(summary);
     setDeliveryModules([]);
-    setDeliveryVersionId(summary.version.id);
-    setDeliveryRouteSlug(requestedSlug);
+    setDeliveryVersionId(null);
+    setDeliveryRouteSlug(null);
+    setHasPublishedRuntimeDelivery(false);
+    setDeliveryRequestState({ kind: 'loading', identity });
 
     try {
       const response = await fetch(
@@ -955,23 +1015,63 @@ export default function JournalProgramDetailBySlugPage() {
       if (!response.ok) {
         setDeliveryModules([]);
         setHasPublishedRuntimeDelivery(false);
+        if (response.status === 409) {
+          setDeliveryVersionId(summary.version.id);
+          setDeliveryRouteSlug(requestedSlug);
+          setDeliveryRequestState({ kind: 'conflict', identity });
+        } else {
+          setDeliveryRequestState({ kind: 'error', identity });
+        }
         return;
       }
-      const body = (await response.json()) as {
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        if (!current()) return;
+        setDeliveryModules([]);
+        setDeliveryVersionId(summary.version.id);
+        setDeliveryRouteSlug(requestedSlug);
+        setHasPublishedRuntimeDelivery(false);
+        setDeliveryRequestState({ kind: 'invalid', identity });
+        return;
+      }
+      if (
+        !body
+        || typeof body !== 'object'
+        || !('source' in body)
+        || typeof body.source !== 'string'
+        || !('modules' in body)
+        || !Array.isArray(body.modules)
+      ) {
+        if (!current()) return;
+        setDeliveryModules([]);
+        setDeliveryVersionId(summary.version.id);
+        setDeliveryRouteSlug(requestedSlug);
+        setHasPublishedRuntimeDelivery(false);
+        setDeliveryRequestState({ kind: 'invalid', identity });
+        return;
+      }
+      const deliveryBody = body as {
         source: string;
         modules: ProgramDeliveryModuleDefinition[];
       };
       if (!current()) return;
-      setDeliveryModules(body.modules);
+      setDeliveryModules(deliveryBody.modules);
       setDeliveryVersionId(summary.version.id);
+      setDeliveryRouteSlug(requestedSlug);
       setHasPublishedRuntimeDelivery(
-        hasPublishedRuntimeDeliverySource(body.source),
+        hasPublishedRuntimeDeliverySource(deliveryBody.source),
       );
+      setDeliveryRequestState(null);
     } catch {
       if (!current()) return;
       // Do not render stale modules from a previously authorized version.
       setDeliveryModules([]);
+      setDeliveryVersionId(null);
+      setDeliveryRouteSlug(null);
       setHasPublishedRuntimeDelivery(false);
+      setDeliveryRequestState({ kind: 'error', identity });
     }
   }
 
@@ -1003,6 +1103,16 @@ export default function JournalProgramDetailBySlugPage() {
   });
   const memberBlueprint = memberDelivery.binding;
   const memberDeliveryModules = memberDelivery.deliveryModules;
+  const activeDeliveryRequestState = deliveryRequestState
+    && runtimeSummary
+    && slugStr
+    && sameDeliveryRequestIdentity(deliveryRequestState.identity, {
+      routeSlug: slugStr,
+      personId: runtimePersonId ?? runtimeSummary.enrollment.person_id,
+      versionId: runtimeSummary.version.id,
+    })
+    ? deliveryRequestState
+    : null;
   const prepDeliveryModules = allDeliveryModules.filter(
     (module) => module.moduleType === 'prep' || module.moduleType === 'roadmap',
   );
@@ -1010,7 +1120,35 @@ export default function JournalProgramDetailBySlugPage() {
     (module) => module.moduleType !== 'prep' && module.moduleType !== 'roadmap',
   );
 
-  if (!loading && !error && !notFound && data && memberBlueprint.kind === 'unavailable') {
+  if (
+    !loading
+    && !error
+    && !notFound
+    && data
+    && activeDeliveryRequestState?.kind === 'loading'
+  ) {
+    return <MemberDeliveryLoading />;
+  }
+
+  if (
+    !loading
+    && !error
+    && !notFound
+    && data
+    && activeDeliveryRequestState?.kind === 'error'
+  ) {
+    return <MemberDeliveryLoadError />;
+  }
+
+  if (
+    !loading
+    && !error
+    && !notFound
+    && data
+    && (activeDeliveryRequestState?.kind === 'conflict'
+      || activeDeliveryRequestState?.kind === 'invalid'
+      || memberBlueprint.kind === 'unavailable')
+  ) {
     return <MemberBlueprintUnavailable />;
   }
 

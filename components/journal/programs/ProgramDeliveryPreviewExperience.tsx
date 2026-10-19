@@ -939,6 +939,9 @@ export function ProgramDeliveryPreviewExperience({
     (module) =>
       !prepOrientationModules.includes(module) && !prepDisabledModules.includes(module),
   );
+  const roadmapModules = rendererModules.filter(
+    (module) => module.moduleType === 'roadmap',
+  );
   const activeModules = rendererModules.filter(
     (module) => module.moduleType !== 'prep' && module.moduleType !== 'roadmap',
   );
@@ -1454,6 +1457,15 @@ export function ProgramDeliveryPreviewExperience({
                   runtimeSummary={runtimeSummary}
                   progressSummary={progressSummary}
                   modules={prepDisabledModules}
+                  presentation="default"
+                  viewedDay={viewedDay}
+                />
+              )}
+              {roadmapModules.length > 0 && (
+                <ProgramDeliveryModules
+                  runtimeSummary={runtimeSummary}
+                  progressSummary={progressSummary}
+                  modules={roadmapModules}
                   presentation="default"
                   viewedDay={viewedDay}
                 />
