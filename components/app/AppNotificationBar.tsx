@@ -44,12 +44,14 @@ export function AppNotificationBar({
     >
       <div
         className={cn(
-          'flex h-full w-full items-center justify-center gap-3 px-4',
+          'flex h-full w-full items-center justify-center gap-3 px-4 max-[350px]:flex-col max-[350px]:gap-1 max-[350px]:px-3',
           'lg:pl-[calc(250px+1rem)]',
           alignToContentColumn && 'pl-[calc(250px+1rem)]',
         )}
       >
-        <p className="text-base pt-[3px] text-white antialiased">{message}</p>
+        <p className="pt-[3px] text-base text-white antialiased max-[350px]:pt-0 max-[350px]:text-center max-[350px]:text-sm max-[350px]:leading-tight">
+          {message}
+        </p>
         {actionOnClick ? (
           <button type="button" onClick={actionOnClick} className={actionClass}>
             {actionLabel}

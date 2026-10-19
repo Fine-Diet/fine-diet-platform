@@ -137,7 +137,12 @@ describe('member blueprint presentation', () => {
     });
 
     expect(container.textContent).toContain(PHASE_LABEL);
-    expect(container.textContent).toContain('Let’s focus on Find a routine that works');
+    expect(container.textContent).toContain('Find a routine that works');
+    expect(container.textContent).not.toContain('Let’s focus on Find a routine that works');
+    expect(container.innerHTML).toContain('min-h-[560px]');
+    expect(container.innerHTML).toContain('md:min-h-[460px]');
+    expect(container.innerHTML).not.toContain('min-h-[90vh]');
+    expect(container.innerHTML).toContain('text-[2.15rem]');
     expect(container.textContent).toContain('Mark day 03 completed');
     expect(container.textContent).not.toContain('Day completion is not available');
     expect(container.textContent).not.toContain(FUTURE_LESSON);
