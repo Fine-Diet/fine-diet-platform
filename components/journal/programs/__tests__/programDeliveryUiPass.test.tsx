@@ -242,7 +242,6 @@ describe('Program delivery UI pass', () => {
   test('renders a locked two-digit member day as a fixed circle without a padlock', async () => {
     await renderExperience(root, {
       previewMode: false,
-      blueprint: null,
       runtimeSummary: runtime('active', 7),
       deliveryModules: BASELINE_DAY_0_TO_21_CANDIDATE.modules,
       initialSelectedDay: 7,
