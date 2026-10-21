@@ -108,7 +108,7 @@ function renderExperience(
   },
 ) {
   const data = props.data ?? library;
-  const blueprint = data.slug === 'synthetic-denim-example'
+  const defaultBlueprint = data.slug === 'synthetic-denim-example'
     ? SYNTHETIC_PROGRAM_BLUEPRINT
     : BASELINE_DAY_0_TO_21_BLUEPRINT;
   return act(async () => {
@@ -120,7 +120,7 @@ function renderExperience(
         initialStartGateOpen={false}
         onRuntimeSummaryUpdate={() => undefined}
         {...props}
-        blueprint={props.blueprint ?? blueprint}
+        blueprint={props.blueprint === undefined ? defaultBlueprint : props.blueprint}
       />,
     );
   });
@@ -214,6 +214,12 @@ describe('Program delivery UI pass', () => {
     expect(buttonByLabel(container, 'Day 3, selected, available to review')).toBeTruthy();
     expect(summary.current_day).toBe(7);
 
+    const twoDigitLockedDay = buttonByLabel(container, 'Day 12, locked');
+    expect(twoDigitLockedDay?.textContent).toBe('12');
+    expect(twoDigitLockedDay?.querySelector('svg')).toBeNull();
+    expect(twoDigitLockedDay?.className).toContain('h-11 w-11');
+    expect(twoDigitLockedDay?.className).toContain('md:h-8 md:w-8');
+
     const schedule = container.querySelector(
       '[aria-label="Day content and schedule"] [aria-selected="false"]',
     );
@@ -231,6 +237,30 @@ describe('Program delivery UI pass', () => {
     expect(container.querySelector('[aria-label="Program days"]')).toBeNull();
     expect(container.textContent).toContain('Audio unavailable');
     expect(container.textContent).toContain('Return to today');
+  });
+
+  test('renders a locked two-digit member day as a fixed circle without a padlock', async () => {
+    await renderExperience(root, {
+      previewMode: false,
+      blueprint: null,
+      runtimeSummary: runtime('active', 7),
+      deliveryModules: BASELINE_DAY_0_TO_21_CANDIDATE.modules,
+      initialSelectedDay: 7,
+    });
+
+    const day12 = Array.from(
+      container.querySelectorAll('[aria-label="Program days"] button'),
+    ).find((button) => button.textContent === '12') as HTMLButtonElement | undefined;
+    expect(day12?.textContent).toBe('12');
+    expect(day12?.querySelector('svg')).toBeNull();
+    expect(day12?.className).toContain('h-11 w-11');
+    expect(day12?.className).toContain('md:h-8 md:w-8');
+    expect(day12?.className).toContain('flex-none');
+
+    await act(async () => {
+      day12?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.textContent).toContain('Day 12 unlocks on its Program date.');
   });
 
   test('offers reached Setup review when paused and keeps future days locked', async () => {

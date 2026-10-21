@@ -17,7 +17,7 @@ export function programDayBeadClass(
   selected: boolean,
 ): string {
   const chrome =
-    'flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white md:h-8 md:min-w-8 md:px-2.5';
+    'box-border flex h-11 w-11 flex-none items-center justify-center rounded-full p-0 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white md:h-8 md:w-8';
 
   if (item.state === 'current') {
     return `${chrome} bg-[#55789b] text-black${

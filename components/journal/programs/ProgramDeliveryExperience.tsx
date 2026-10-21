@@ -942,9 +942,6 @@ function MemberProgramDeliveryExperience({
                           memberBlueprint?.presentation.tokens,
                         )}
                       >
-                        {item.state === 'locked' && (
-                          <Lock className="h-2.5 w-2.5" />
-                        )}
                         {item.label}
                       </button>
                     ))}

@@ -1147,9 +1147,6 @@ export function ProgramDeliveryPreviewExperience({
                             className={dayBeadClass(item, selected)}
                             style={programDayBeadStyle(item, blueprintTokens)}
                           >
-                            {item.state === 'locked' && (
-                              <Lock className="h-2.5 w-2.5" />
-                            )}
                             {item.label}
                           </button>
                           );
