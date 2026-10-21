@@ -4,22 +4,31 @@ import type { ProgramDayRailItem } from '../programDeliveryNavigation';
 function day(
   state: ProgramDayRailItem['state'],
   accessible: boolean,
+  number = 7,
 ): ProgramDayRailItem {
-  return { day: 7, label: '7', state, accessible };
+  return { day: number, label: String(number), state, accessible };
 }
 
 describe('program day circle visual states', () => {
-  it('uses the Partner Demo dimensions, spacing, number typography, and focus ring', () => {
+  it('uses equal fixed dimensions at mobile and desktop sizes and keeps a visible focus ring', () => {
     const classes = programDayBeadClass(day('review', true), false);
 
-    expect(classes).toContain('h-11 min-w-11');
-    expect(classes).toContain('md:h-8 md:min-w-8');
-    expect(classes).toContain('gap-1');
-    expect(classes).toContain('px-2');
-    expect(classes).toContain('md:px-2.5');
+    expect(classes).toContain('h-11 w-11');
+    expect(classes).toContain('md:h-8 md:w-8');
+    expect(classes).toContain('flex-none');
+    expect(classes).toContain('p-0');
     expect(classes).toContain('text-xs font-semibold');
     expect(classes).toContain('items-center justify-center');
     expect(classes).toContain('focus-visible:outline-2');
+  });
+
+  it('keeps two-digit labels in the same fixed circle dimensions', () => {
+    const classes = programDayBeadClass(day('locked', false, 21), false);
+
+    expect(classes).toContain('h-11 w-11');
+    expect(classes).toContain('md:h-8 md:w-8');
+    expect(classes).toContain('flex-none');
+    expect(classes).toContain('p-0');
   });
 
   it('emphasizes the selected current day without changing its current-day fill', () => {

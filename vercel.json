@@ -16,7 +16,8 @@
       "fix/baseline-member-rendering": false,
       "codex/baseline-roadmap-loading": false,
       "codex/baseline-launch-ui-convergence": false,
-      "codex/baseline-day-circle-alignment": false
+      "codex/baseline-day-circle-alignment": false,
+      "codex/final-baseline-day-circle-corrections": false
     }
   }
 }
