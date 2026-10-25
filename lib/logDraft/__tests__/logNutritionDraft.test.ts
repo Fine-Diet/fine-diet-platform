@@ -1,3 +1,4 @@
+import { describe, expect, it } from '@jest/globals';
 import type { FoodSearchResult } from '@/lib/food/types';
 import {
   addLogNutritionDraftEntry,
@@ -114,6 +115,18 @@ function mealDocument(foodId = 'inside-food'): MealDocument {
 }
 
 describe('LogNutritionDraftV1', () => {
+  it('carries known food fiber into the draft without treating total sugar as added sugar', () => {
+    const result = foodResult('lentils', 'Lentils');
+    result.food.fiberG = 4;
+    result.food.sugarG = 14;
+
+    const draft = singleItemDraftEntryFromFoodResult(result, { now: NOW });
+
+    expect(draft.macros.fiber_g).toBe(4);
+    expect(draft.macros).not.toHaveProperty('added_sugar_g');
+    expect(draft.macros).not.toHaveProperty('added_sugar_provenance');
+  });
+
   it('keeps add, edit, and remove local with one top-level food entry', () => {
     const initial = createLogNutritionDraft(CONTEXT, {
       sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -191,7 +204,7 @@ describe('LogNutritionDraftV1', () => {
       }),
     );
     expect(
-      buildJournalPayloadForDraftEntry(twice.draft.entries[0]).meal_group,
+      (buildJournalPayloadForDraftEntry(twice.draft.entries[0]) as Record<string, unknown>).meal_group,
     ).toBeDefined();
   });
 
@@ -213,8 +226,11 @@ describe('LogNutritionDraftV1', () => {
     expect(meal.unit).toBe('serving');
 
     const payload = buildJournalPayloadForDraftEntry(meal);
-    expect(payload.meal_group).toBeDefined();
-    expect((payload.meal_group as { components: unknown[] }).components).toHaveLength(1);
+    const mealGroup = (payload as Record<string, unknown>).meal_group as {
+      components: unknown[];
+    };
+    expect(mealGroup).toBeDefined();
+    expect(mealGroup.components).toHaveLength(1);
   });
 
   it('scales fractional Saved Meal servings without changing entry count', () => {
@@ -228,7 +244,7 @@ describe('LogNutritionDraftV1', () => {
     expect(edited.entries).toHaveLength(1);
     expect(getDraftEntryNutrition(edited.entries[0])?.calories).toBe(200);
     expect(
-      (buildJournalPayloadForDraftEntry(edited.entries[0]).meal_group as {
+      ((buildJournalPayloadForDraftEntry(edited.entries[0]) as Record<string, unknown>).meal_group as {
         consumed_servings: number;
       }).consumed_servings,
     ).toBe(0.5);

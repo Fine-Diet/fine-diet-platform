@@ -70,6 +70,26 @@ export function convertCommittedSingleItemQuantity(input: {
 }
 
 /**
+ * Keep the amount already on screen when the replacement food can express
+ * that same unit. A 50 g broccoli entry stays 50 g of lentils. An amount the
+ * new record cannot convert returns null so the caller keeps the draft default.
+ */
+export function preservedCommittedReplacementAmount(input: {
+  quantity: number;
+  unit: string;
+  servingSizeG?: number | null;
+  measures?: Measure[] | null;
+}): { quantity: number; unit: string } | null {
+  return convertCommittedSingleItemQuantity({
+    quantity: input.quantity,
+    fromUnit: input.unit,
+    toUnit: input.unit,
+    servingSizeG: input.servingSizeG,
+    measures: input.measures,
+  });
+}
+
+/**
  * Build the complete flat-intake payload used by the committed editor.
  *
  * This is intentionally a replacement payload, not a shallow patch. Selecting
@@ -97,22 +117,83 @@ export function buildCommittedSingleItemPayload(input: {
   );
   if (calories !== undefined) payload.calories = calories;
 
-  const sourceMacros = replacement?.macros ?? current.macros;
-  if (sourceMacros) {
-    const protein = finiteOrUndefined(sourceMacros.protein);
-    const carbs = finiteOrUndefined(sourceMacros.carbs);
-    const fat = finiteOrUndefined(sourceMacros.fat);
-    if (protein !== undefined || carbs !== undefined || fat !== undefined) {
-      payload.macros = {
-        ...(protein !== undefined ? { protein } : {}),
-        ...(carbs !== undefined ? { carbs } : {}),
-        ...(fat !== undefined ? { fat } : {}),
-      };
+  const sourceMacros = (replacement?.macros ?? current.macros) as
+    | {
+        protein?: number | null;
+        carbs?: number | null;
+        fat?: number | null;
+        fiber?: number | null;
+        fiber_g?: number | null;
+        added_sugar_g?: number | null;
+        added_sugar_provenance?:
+          | 'authored'
+          | 'unknown'
+          | 'untrusted_catalog_total_sugar';
+      }
+    | undefined;
+  if (sourceMacros || !replacement) {
+    const protein = finiteOrUndefined(sourceMacros?.protein);
+    const carbs = finiteOrUndefined(sourceMacros?.carbs);
+    const fat = finiteOrUndefined(sourceMacros?.fat);
+    const fiber = replacement
+      ? finiteOrUndefined(sourceMacros?.fiber_g)
+      : finiteOrUndefined(sourceMacros?.fiber_g) ??
+        finiteOrUndefined(sourceMacros?.fiber);
+    const macros: NonNullable<IntakePayload['macros']> = {
+      ...(protein !== undefined ? { protein } : {}),
+      ...(carbs !== undefined ? { carbs } : {}),
+      ...(fat !== undefined ? { fat } : {}),
+      ...(fiber !== undefined ? { fiber_g: fiber } : {}),
+    };
+
+    if (!replacement) {
+      const provenance =
+        sourceMacros?.added_sugar_provenance ??
+        current.added_sugar_provenance;
+      if (
+        provenance === 'authored' ||
+        provenance === 'unknown' ||
+        provenance === 'untrusted_catalog_total_sugar'
+      ) {
+        macros.added_sugar_provenance = provenance;
+        if (provenance === 'authored') {
+          const addedSugar = finiteOrUndefined(sourceMacros?.added_sugar_g);
+          if (addedSugar !== undefined) macros.added_sugar_g = addedSugar;
+        }
+        payload.added_sugar_provenance = provenance;
+      }
+    }
+
+    if (Object.keys(macros).length > 0) {
+      payload.macros = macros;
     }
   }
 
-  const foodObjectId = replacement?.foodObjectId ?? current.foodObjectId;
-  if (foodObjectId) payload.foodObjectId = foodObjectId;
+  // A selected replacement owns identity. Explicit null, used for Open Food
+  // Facts rows that are not catalog foods, clears the previous link. Omitting
+  // the replacement leaves the saved id unchanged.
+  const foodObjectId = replacement
+    ? replacement.foodObjectId
+    : current.foodObjectId;
+  if (typeof foodObjectId === 'string' && foodObjectId.length > 0) {
+    payload.foodObjectId = foodObjectId;
+  }
+
+  const foodSourceKey = replacement ? replacement.sourceKey : current.foodSourceKey;
+  if (typeof foodSourceKey === 'string' && foodSourceKey.length > 0) {
+    payload.foodSourceKey = foodSourceKey;
+  }
+
+  const nutritionBasis = replacement
+    ? replacement.nutritionBasis
+    : current.nutrition_basis;
+  if (
+    nutritionBasis === 'per_100g' ||
+    nutritionBasis === 'per_serving' ||
+    nutritionBasis === 'unknown'
+  ) {
+    payload.nutrition_basis = nutritionBasis;
+  }
 
   const servingSizeG = finiteOrUndefined(
     replacement ? replacement.servingSizeG : current.servingSizeG,

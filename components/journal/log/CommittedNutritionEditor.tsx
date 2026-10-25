@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { MealComposer } from '@/components/meals/composer/MealComposer';
 import {
@@ -13,6 +13,7 @@ import {
   buildCommittedSingleItemPayload,
   convertCommittedSingleItemQuantity,
   getCommittedSingleItemValidUnits,
+  preservedCommittedReplacementAmount,
 } from '@/lib/journal/committedNutritionEdit';
 import {
   formatTime,
@@ -98,6 +99,7 @@ function SingleItemEditor({
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const quantityInputRef = useRef<HTMLInputElement>(null);
 
   const servingSizeG = replacement?.servingSizeG ?? payload.servingSizeG ?? null;
   const measures = replacement?.measures ?? payload.measures ?? null;
@@ -210,12 +212,22 @@ function SingleItemEditor({
           ? singleItemDraftEntryFromRecent(result.recent)
           : null;
     if (!next) return;
+    setError(null);
+    const preserved = preservedCommittedReplacementAmount({
+      quantity: Number(quantity),
+      unit,
+      servingSizeG: next.servingSizeG,
+      measures: next.measures,
+    });
+    const nextQuantity = preserved ? String(preserved.quantity) : String(next.quantity);
+    const nextUnit = preserved ? preserved.unit : next.unit;
     setReplacement(next);
-    setQuantity(String(next.quantity));
-    setUnit(next.unit);
+    setQuantity(nextQuantity);
+    setUnit(nextUnit);
     setReplacing(false);
     setQuery('');
     setResults([]);
+    window.requestAnimationFrame(() => quantityInputRef.current?.focus());
   };
 
   const changeUnit = (nextUnit: string) => {
@@ -292,6 +304,7 @@ function SingleItemEditor({
         <label className="block">
           <span className="mb-1 block text-[11px] text-white/45">Quantity</span>
           <input
+            ref={quantityInputRef}
             type="number"
             min="0"
             step="any"
