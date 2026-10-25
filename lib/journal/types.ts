@@ -67,6 +67,10 @@ export interface IntakePayload {
   };
   added_sugar_provenance?: 'authored' | 'unknown' | 'untrusted_catalog_total_sugar';
   foodObjectId?: string;
+  /** Draft or provider identity. Distinguishes two foods that both lack a catalog id. */
+  foodSourceKey?: string;
+  /** Stated nutrient basis from the selected record. Absent when the record does not say. */
+  nutrition_basis?: 'per_100g' | 'per_serving' | 'unknown';
   /**
    * Server-authored household conversion outcome. An unresolved household
    * measure must remain `household_measure_unavailable` through the persisted
@@ -77,6 +81,7 @@ export interface IntakePayload {
     schema_version: string;
     lineage: 'write_time_capture' | 'retained_prior_snapshot';
     food_object_id: string | null;
+    food_source_key?: string | null;
     catalog_version: string | null;
     quantity: number | null;
     unit: string | null;

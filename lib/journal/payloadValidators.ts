@@ -33,6 +33,8 @@ export const intakePayloadSchema = z.object({
     .enum(['authored', 'unknown', 'untrusted_catalog_total_sugar'])
     .optional(),
   foodObjectId: z.string().optional(),
+  foodSourceKey: z.string().optional(),
+  nutrition_basis: z.enum(['per_100g', 'per_serving', 'unknown']).optional(),
   servingSizeG: z.number().optional(),
   measures: z
     .array(
@@ -114,6 +116,7 @@ export const intakePayloadSchema = z.object({
       schema_version: z.string(),
       lineage: z.enum(['write_time_capture', 'retained_prior_snapshot']),
       food_object_id: z.string().nullable(),
+      food_source_key: z.string().nullable().optional(),
       catalog_version: z.string().nullable(),
       quantity: z.number().nullable(),
       unit: z.string().nullable(),

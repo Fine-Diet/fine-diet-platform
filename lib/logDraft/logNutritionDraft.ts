@@ -49,8 +49,11 @@ export interface LogNutritionSingleItemDraftEntryV1
     protein: number | null;
     carbs: number | null;
     fat: number | null;
+    fiber_g?: number | null;
   };
   foodObjectId: string | null;
+  /** Copied only when the selected record states it. Never invented. */
+  nutritionBasis?: 'per_100g' | 'per_serving' | 'unknown' | null;
   servingSizeG: number | null;
   measures: Array<{ unit: string; grams: number; label?: string }> | null;
 }
@@ -200,10 +203,14 @@ export function singleItemDraftEntryFromFoodResult(
   result: FoodSearchResult,
   options?: { id?: string; now?: Date },
 ): LogNutritionSingleItemDraftEntryV1 {
-  return singleItemDraftEntryFromFood(result.food, {
+  const entry = singleItemDraftEntryFromFood(result.food, {
     ...options,
     offNormalization: result.offNormalization,
   });
+  const statedBasis =
+    result.offNormalization?.nutrition_basis ?? result.rankingSignals?.nutritionBasis;
+  if (statedBasis) entry.nutritionBasis = statedBasis;
+  return entry;
 }
 
 export function singleItemDraftEntryFromFood(
@@ -232,6 +239,7 @@ export function singleItemDraftEntryFromFood(
       protein: nullableNumber(food.proteinG),
       carbs: nullableNumber(food.carbsG),
       fat: nullableNumber(food.fatG),
+      fiber_g: nullableNumber(food.fiberG),
     },
     foodObjectId: isOff ? null : food.id,
     servingSizeG: nullableNumber(food.servingSizeG),

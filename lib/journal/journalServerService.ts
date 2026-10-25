@@ -35,6 +35,7 @@ import { computeQuantities, type Measure, type QuantityConversionStatus } from '
 import {
   attachConsumedNutritionEvidence,
   readRetainedEvidence,
+  sameUnkeyedFoodRecord,
   type ConsumedNutritionEvidence,
 } from '../nds/consumedEvidence';
 import type { LoggedMealGroup } from '../meals/types';
@@ -689,13 +690,32 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
     const conversion =
       (mergedPayload.quantity_conversion as 'exact' | 'household_measure_unavailable' | undefined) ??
       'exact';
-    const priorQuantity = finiteOrNull((existing.payload as Record<string, unknown>).quantity);
+    const priorPayload = existing.payload as Record<string, unknown>;
+    const priorQuantity = finiteOrNull(priorPayload.quantity);
     const nextQuantity = finiteOrNull(mergedPayload.quantity);
+    const priorGrams = finiteOrNull(existing.quantity_g);
+    const nextGrams = Object.prototype.hasOwnProperty.call(updates, 'quantity_g')
+      ? finiteOrNull(updates.quantity_g)
+      : priorGrams;
+    const previousFoodObjectId =
+      typeof priorPayload.foodObjectId === 'string'
+        ? priorPayload.foodObjectId
+        : typeof priorPayload.food_object_id === 'string'
+          ? priorPayload.food_object_id
+          : null;
+    const previousSourceKey =
+      typeof priorPayload.foodSourceKey === 'string' ? priorPayload.foodSourceKey : null;
     mergedPayload = attachConsumedNutritionEvidence(mergedPayload, {
-      quantityG: typeof updates.quantity_g === 'number' ? updates.quantity_g : existing.quantity_g ?? null,
+      quantityG: Object.prototype.hasOwnProperty.call(updates, 'quantity_g')
+        ? finiteOrNull(updates.quantity_g)
+        : finiteOrNull(existing.quantity_g),
       quantityConversion: conversion,
-      retainExisting: readRetainedEvidence(existing.payload as Record<string, unknown>),
-      quantityChanged: priorQuantity !== nextQuantity,
+      retainExisting: readRetainedEvidence(priorPayload),
+      quantityChanged: priorQuantity !== nextQuantity || priorGrams !== nextGrams,
+      previousFoodObjectId,
+      previousSourceKey,
+      previousName: typeof priorPayload.name === 'string' ? priorPayload.name : null,
+      sameUnkeyedRecord: sameUnkeyedFoodRecord(priorPayload, mergedPayload),
     });
     updates.payload = mergedPayload;
   }
