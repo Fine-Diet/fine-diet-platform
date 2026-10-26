@@ -1,4 +1,9 @@
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import {
+  getLogTrackingDestination,
+  getLogTrackingHref,
+  normalizeEnabledLogTrackingKeys,
+} from '@/lib/navigation/logTrackingDestinations';
 
 /**
  * Shared configuration for the signed-in app left drawer navigation.
@@ -113,14 +118,7 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
     matchPrefix: log,
     status: 'current',
     items: [
-      { id: 'log-overview', label: 'Log Overview', href: log, status: 'current' },
-      { id: 'log-new', label: 'New Log Entry', href: logNew, status: 'current' },
-      { id: 'log-nutrition', label: 'Nutrition', href: `${logNew}?type=intake&tab=food`, status: 'current' },
-      { id: 'log-hydration', label: 'Hydration', href: `${logNew}?tab=water`, status: 'current' },
-      { id: 'log-mood', label: 'Mood', href: `${logNew}?tab=mood`, status: 'current' },
-      { id: 'log-movement', label: 'Movement', href: `${logNew}?tab=movement`, status: 'current' },
-      { id: 'log-summary', label: 'Daily Summary', href: `${log}?section=summary`, status: 'partial' },
-      { id: 'log-tracking', label: 'Tracking Preferences', href: `${profile}?section=tracking`, status: 'partial' },
+      ...getLogDrawerItems([]),
     ],
   },
   {
@@ -185,6 +183,61 @@ export const APP_DRAWER_UTILITIES: DrawerHub[] = [
 ];
 
 const ALL_DRAWER_ENTRIES = [...APP_DRAWER_HUBS, ...APP_DRAWER_UTILITIES];
+
+/** Build Log rows from the same normalized tracking keys used by Daily Summary. */
+export function getLogDrawerItems(enabledKeys: readonly unknown[]) {
+  const trackers = normalizeEnabledLogTrackingKeys(enabledKeys).map((key) => {
+    const destination = getLogTrackingDestination(key)!;
+    const href = getLogTrackingHref(destination);
+    return {
+      id: `log-tracking-${key}`,
+      label: destination.label,
+      ...(href ? { href } : {}),
+      status: destination.captureSupported ? 'current' as const : 'coming-soon' as const,
+      ...(!destination.captureSupported ? { disabled: true } : {}),
+    };
+  });
+
+  return [
+    { id: 'log-overview', label: 'Log Overview', href: log, status: 'current' as const, match: 'exact' as const },
+    { id: 'log-new', label: 'New Log Entry', href: logNew, status: 'current' as const, match: 'exact' as const },
+    ...trackers,
+    { id: 'log-summary', label: 'Daily Summary', href: `${log}?section=summary`, status: 'partial' as const },
+    { id: 'log-tracking', label: 'Tracking Preferences', href: `${profile}?section=tracking#tracking-prefs`, status: 'partial' as const },
+  ];
+}
+
+/** Match tracker query routes exactly while allowing date/block context and query-order changes. */
+export function isDrawerChildActive(item: DrawerChildItem, asPath: string): boolean {
+  if (item.disabled || !item.href) return false;
+  const cleanPath = asPath.split('#')[0];
+  const pathOnly = cleanPath.split('?')[0];
+  const hrefPath = item.href.split('?')[0].split('#')[0];
+  if (pathOnly !== hrefPath) {
+    return item.match !== 'exact' && !item.href.includes('?') && pathOnly.startsWith(`${hrefPath}/`);
+  }
+
+  const actualParams = new URLSearchParams(cleanPath.split('?')[1] ?? '');
+  const expectedParams = new URLSearchParams(item.href.split('?')[1]?.split('#')[0] ?? '');
+  if (item.id.startsWith('log-tracking-')) {
+    const actualTabs = actualParams.getAll('tab');
+    const destination = getLogTrackingDestination(item.id.slice('log-tracking-'.length));
+    if (!destination?.tab || actualTabs.length !== 1 || actualTabs[0] !== destination.tab) return false;
+  }
+  if (expectedParams.size > 0) {
+    let matches = true;
+    expectedParams.forEach((value, key) => {
+      if (actualParams.get(key) !== value) matches = false;
+    });
+    return matches;
+  }
+  if (item.id === 'log-new' && actualParams.has('tab')) return false;
+  if (item.id === 'log-overview' && actualParams.get('section') === 'summary') return false;
+  if (item.match === 'exact') return pathOnly === hrefPath;
+  // Query-less destinations are active on their exact route. Log tracker
+  // destinations above remain query-aware and validate their single tab.
+  return !item.href.includes('?');
+}
 
 /** True when the pathname is under canonical Haul or List Food routes. */
 export function isFoodDrawerShoppingChildPath(pathname: string): boolean {

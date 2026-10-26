@@ -6,6 +6,13 @@ import type { SummaryRowModule, StatusLevel } from '@/lib/summaryRowTypes';
 import type { JournalEntry, WaterPayload, MoodPayload, BowelPayload, MovementPayload, CyclePayload, BloodPressurePayload, SleepPayload, SupplementPayload } from '@/lib/journal';
 import { calculateDailyTotals, toDateKey } from '@/lib/journal';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import {
+  getEffectiveEnabledLogTrackingKeys,
+  LOG_TRACKING_DESTINATIONS,
+  normalizeLogTrackingKey,
+  getLogTrackingDestination,
+  type LogTrackingKey,
+} from '@/lib/navigation/logTrackingDestinations';
 
 interface TileImageConfig {
   image: string;
@@ -21,65 +28,11 @@ interface DailySummaryProps {
 
 const INTENSITY_LABELS: Record<number, string> = { 1: 'light', 2: 'moderate', 3: 'vigorous' };
 
-type TrackingModuleKey =
-  | 'intake'
-  | 'water'
-  | 'sleep'
-  | 'supplement'
-  | 'mood'
-  | 'bowel'
-  | 'cycle'
-  | 'movement'
-  | 'blood_pressure'
-  | 'glucose'
-  | 'weight';
+type TrackingModuleKey = LogTrackingKey;
 
-const TRACKING_MODULE_ORDER: TrackingModuleKey[] = [
-  'intake',
-  'water',
-  'sleep',
-  'supplement',
-  'mood',
-  'bowel',
-  'cycle',
-  'movement',
-  'blood_pressure',
-  'glucose',
-  'weight',
-];
-
-const DEFAULT_TRACKING_MODULES: TrackingModuleKey[] = [
-  'intake',
-  'water',
-  'sleep',
-  'supplement',
-  'mood',
-  'bowel',
-  'cycle',
-  'movement',
-];
-
-const TRACKING_KEY_ALIASES: Record<string, TrackingModuleKey> = {
-  food: 'intake',
-  hydration: 'water',
-  supplements: 'supplement',
-  bp: 'blood_pressure',
-  bloodPressure: 'blood_pressure',
-};
-
-const TRACKING_LABELS: Record<TrackingModuleKey, string> = {
-  intake: 'Nutrition',
-  water: 'Hydration',
-  sleep: 'Sleep',
-  supplement: 'Supplements',
-  mood: 'Mood',
-  bowel: 'Bowel',
-  cycle: 'Cycle',
-  movement: 'Movement',
-  blood_pressure: 'Blood Pressure',
-  glucose: 'Glucose',
-  weight: 'Weight',
-};
+const TRACKING_LABELS = Object.fromEntries(
+  LOG_TRACKING_DESTINATIONS.map((item) => [item.key, item.label]),
+) as Record<TrackingModuleKey, string>;
 
 const TRACKING_ACCENTS: Record<TrackingModuleKey, string> = {
   intake: 'bg-denim-500/15 border-brand-300',
@@ -93,20 +46,11 @@ const TRACKING_ACCENTS: Record<TrackingModuleKey, string> = {
   blood_pressure: 'bg-rose-950/35 border-brand-300',
   glucose: 'bg-cyan-950/35 border-brand-300',
   weight: 'bg-brand-800/65 border-brand-300',
+  temperature: 'bg-[#25202a] border-brand-300',
 };
 
 function normalizeEnabledKeys(keys: string[]): TrackingModuleKey[] {
-  const enabled = new Set<TrackingModuleKey>();
-
-  for (const key of keys) {
-    const normalized = TRACKING_KEY_ALIASES[key] ?? key;
-    if (TRACKING_MODULE_ORDER.includes(normalized as TrackingModuleKey)) {
-      enabled.add(normalized as TrackingModuleKey);
-    }
-  }
-
-  const source = enabled.size > 0 ? enabled : new Set(DEFAULT_TRACKING_MODULES);
-  return TRACKING_MODULE_ORDER.filter((key) => source.has(key));
+  return getEffectiveEnabledLogTrackingKeys(keys);
 }
 
 function fmt12h(d: Date): string {
@@ -123,13 +67,11 @@ function statusChip(level: StatusLevel, label: string, reason?: string): { label
 
 function buildLogHref(date: Date, tab: string, block?: string): string {
   const dk = toDateKey(date);
-  return `${APP_ROUTES.logNew}?date=${dk}&block=${block ?? 'morning'}&tab=${tab}`;
-}
-
-function tabForTrackingKey(key: TrackingModuleKey): string {
-  if (key === 'intake') return 'food';
-  if (key === 'supplement') return 'supplements';
-  return key;
+  const destination = getLogTrackingDestination(tab);
+  const routeTab = destination?.captureSupported ? destination.tab : null;
+  return routeTab
+    ? `${APP_ROUTES.logNew}?date=${dk}&block=${block ?? 'morning'}&tab=${routeTab}`
+    : `${APP_ROUTES.profile}?section=tracking#tracking-prefs`;
 }
 
 function byType(entries: JournalEntry[], type: string): JournalEntry[] {
@@ -457,20 +399,17 @@ function buildBloodPressureTile(date: Date, entries: JournalEntry[]): SummaryRow
   };
 }
 
-function buildUnavailableTrackingTile(key: 'glucose' | 'weight', date: Date): SummaryRowModule {
+function buildUnavailableTrackingTile(key: 'glucose' | 'temperature' | 'weight'): SummaryRowModule {
   const label = TRACKING_LABELS[key];
-  const logHref = buildLogHref(date, tabForTrackingKey(key));
   return {
     id: key,
     variant: 'summary_row',
     title: label,
     empty: {
       isEmpty: true,
-      headline: `No ${label.toLowerCase()} logged`,
-      body: `${label} tracking is enabled in your preferences.`,
-      cta: { label: `Log ${label}`, href: logHref },
+      headline: `${label} capture is coming soon`,
+      body: `${label} can remain enabled in your preferences, but an entry form is not available yet.`,
     },
-    drilldown: { label: `Log ${label}`, href: logHref },
   };
 }
 
@@ -501,8 +440,9 @@ function buildTrackingTile(key: TrackingModuleKey, date: Date, entries: JournalE
     case 'blood_pressure':
       return buildBloodPressureTile(date, entries);
     case 'glucose':
+    case 'temperature':
     case 'weight':
-      return buildUnavailableTrackingTile(key, date);
+      return buildUnavailableTrackingTile(key);
   }
 }
 
@@ -516,7 +456,7 @@ interface ChipData {
   disabled?: boolean;
 }
 
-function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]): ChipData[] {
+export function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]): ChipData[] {
   const dk = toDateKey(date);
   const chips: ChipData[] = [];
   const enabled = new Set(normalizeEnabledKeys(enabledKeys));
@@ -554,8 +494,9 @@ function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]):
   chips.push({
     id: 'notes',
     label: 'Notes',
-    detail: noteCount > 0 ? `${noteCount} note${noteCount !== 1 ? 's' : ''}` : 'Add',
-    href: `${APP_ROUTES.logNew}?date=${dk}&block=morning&tab=note`,
+    detail: noteCount > 0 ? `${noteCount} note${noteCount !== 1 ? 's' : ''}` : 'Coming soon',
+    href: null,
+    disabled: true,
   });
 
   return chips;
@@ -564,7 +505,7 @@ function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]):
 /* ── Main Component ────────────────────────────────────────────── */
 
 function getTrackingKeyFromModule(moduleId: string): TrackingModuleKey {
-  return (TRACKING_KEY_ALIASES[moduleId] ?? moduleId) as TrackingModuleKey;
+  return normalizeLogTrackingKey(moduleId) ?? 'intake';
 }
 
 function TrackingModuleCard({ module }: { module: SummaryRowModule }) {
@@ -574,57 +515,34 @@ function TrackingModuleCard({ module }: { module: SummaryRowModule }) {
     : module.drilldown?.href ?? APP_ROUTES.logNew;
   const key = getTrackingKeyFromModule(module.id);
   const accent = TRACKING_ACCENTS[key] ?? TRACKING_ACCENTS.intake;
+  const captureUnavailable = key === 'glucose' || key === 'temperature' || key === 'weight';
+
+  const card = (
+    <article className={`min-h-[150px] rounded-2xl border ${accent} p-5 shadow-large backdrop-blur-md transition-colors ${captureUnavailable ? '' : 'group-hover:border-brand-300'}`}>
+      <div className="flex h-full flex-col justify-between gap-4">
+        {isEmpty && module.empty ? (
+          <div>
+            <p className="text-lg font-semibold text-brand-50 antialiased">{module.empty.headline ?? `No ${module.title.toLowerCase()} logged`}</p>
+            {module.empty.body && <p className="mt-1 text-sm font-light text-brand-50/65 antialiased">{module.empty.body}</p>}
+          </div>
+        ) : (
+          <div>
+            {module.primary && <p className="mt-1 text-5xl font-regular leading-none text-brand-50 antialiased">{module.primary.value}{module.primary.unit != null && <span className="ml-1 text-lg font-regular text-base">{module.primary.unit}</span>}</p>}
+            {module.metrics && module.metrics.length > 0 && <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">{module.metrics.slice(0, 2).map((metric) => <span key={metric.label} className="text-sm text-brand-50/75"><span className="font-semibold">{metric.value}{metric.unit != null ? metric.unit : ''}</span><span className="font-light"> {metric.label}</span></span>)}</div>}
+            {module.status && <div className="flex items-start"><span className="mt-1 text-sm font-semibold text-brand-50/75"><span className="font-light">Status: </span>{module.status.label}</span></div>}
+          </div>
+        )}
+        <div className={`mb-1 inline-flex w-full items-center justify-center rounded-full border border-brand-300 px-4 py-2 text-base font-semibold text-brand-50/85 ${captureUnavailable ? 'opacity-60' : 'transition-colors group-hover:bg-denim-500 group-hover:text-black'}`}>
+          {captureUnavailable ? 'Capture coming soon' : isEmpty ? module.empty?.cta?.label ?? `Log ${module.title}` : module.drilldown?.label ?? `View ${module.title}`}
+        </div>
+      </div>
+    </article>
+  );
 
   return (
     <div className="space-y-2">
       <h3 className="text-brand-50 font-semibold text-xl antialiased mb-6">{module.title}</h3>
-      <Link href={href} className="group block">
-        <article className={`min-h-[150px] rounded-2xl border ${accent} p-5 shadow-large backdrop-blur-md transition-colors group-hover:border-brand-300`}>
-          <div className="flex h-full flex-col justify-between gap-4">
-            
-
-            {isEmpty && module.empty ? (
-              <div>
-                <p className="text-lg font-semibold text-brand-50 antialiased">{module.empty.headline ?? `No ${module.title.toLowerCase()} logged`}</p>
-                {module.empty.body && (
-                  <p className="mt-1 text-sm font-light text-brand-50/65 antialiased">{module.empty.body}</p>
-                )}
-              </div>
-            ) : (
-              <div>
-                {module.primary && (
-                  <p className="text-5xl font-regular leading-none text-brand-50 antialiased mt-1">
-                    {module.primary.value}
-                    {module.primary.unit != null && <span className="text-lg ml-1 text-base font-regular">{module.primary.unit}</span>}
-                  </p>
-                )}
-                
-                {module.metrics && module.metrics.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                    {module.metrics.slice(0, 2).map((metric) => (
-                      <span key={metric.label} className="text-sm text-brand-50/75">
-                        <span className="font-semibold">{metric.value}{metric.unit != null ? metric.unit : ''}</span>
-                        <span className="font-light"> {metric.label}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {module.status && (
-              <div className="flex items-start">
-                <span className="text-sm font-semibold text-brand-50/75 mt-1">
-                  <span className="font-light">Status: </span> {module.status.label}
-                </span>
-              </div>
-            )}  
-              </div>
-            )}
-
-            <div className="inline-flex w-full items-center justify-center rounded-full border border-brand-300 mb-1 px-4 py-2 text-base font-semibold text-brand-50/85 transition-colors group-hover:bg-denim-500 group-hover:text-black">
-              {isEmpty ? module.empty?.cta?.label ?? `Log ${module.title}` : module.drilldown?.label ?? `View ${module.title}`}
-            </div>
-          </div>
-        </article>
-      </Link>
+      {captureUnavailable ? card : <Link href={href} className="group block">{card}</Link>}
     </div>
   );
 }

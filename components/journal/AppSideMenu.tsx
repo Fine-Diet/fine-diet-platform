@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { APP_SIDEBAR_WITH_NOTICE_OFFSET_CLASS } from '@/components/app/AppNotificationBar';
@@ -8,11 +8,15 @@ import {
   APP_DRAWER_HUBS,
   APP_DRAWER_UTILITIES,
   FOOD_DRAWER_SHOPPING_SUBGROUP_ID,
+  getLogDrawerItems,
   getActiveDrawerHubId,
+  isDrawerChildActive as matchDrawerChildActive,
   isFoodDrawerShoppingChildPath,
   type DrawerChildItem,
   type DrawerHub,
 } from '@/lib/navigation/appDrawerNavigation';
+import { onAuthStateChange } from '@/lib/authHelpers';
+import { getEffectiveEnabledLogTrackingKeys } from '@/lib/navigation/logTrackingDestinations';
 
 interface AppSideMenuProps {
   open: boolean;
@@ -60,6 +64,47 @@ export function AppSideMenu({
 }: AppSideMenuProps) {
   const router = useRouter();
   const activeHubId = getActiveDrawerHubId(router.pathname);
+  const [enabledTrackingKeys, setEnabledTrackingKeys] = useState<string[]>([]);
+  const trackingRequestId = useRef(0);
+
+  const refreshTrackingKeys = useCallback(async () => {
+    const requestId = ++trackingRequestId.current;
+    // Clear immediately so a previous account's links cannot survive a refetch.
+    setEnabledTrackingKeys([]);
+    try {
+      const response = await fetch('/api/journal/tracking-settings');
+      if (!response.ok) throw new Error(`Tracking settings request failed: ${response.status}`);
+      const data = await response.json();
+      if (requestId !== trackingRequestId.current) return;
+      if (!Array.isArray(data.enabled_tracking_keys)) throw new Error('Invalid tracking settings response');
+      setEnabledTrackingKeys(getEffectiveEnabledLogTrackingKeys(data.enabled_tracking_keys));
+    } catch {
+      if (requestId === trackingRequestId.current) setEnabledTrackingKeys([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshTrackingKeys();
+    router.events.on('routeChangeComplete', refreshTrackingKeys);
+    const handleFocus = () => void refreshTrackingKeys();
+    window.addEventListener('focus', handleFocus);
+    let unsubscribeAuth = () => {};
+    try {
+      unsubscribeAuth = onAuthStateChange(() => void refreshTrackingKeys());
+    } catch {
+      // The authenticated API remains the source of truth if auth events are unavailable.
+    }
+    return () => {
+      trackingRequestId.current += 1;
+      router.events.off('routeChangeComplete', refreshTrackingKeys);
+      window.removeEventListener('focus', handleFocus);
+      unsubscribeAuth();
+    };
+  }, [refreshTrackingKeys, router.events]);
+
+  const drawerHubs = APP_DRAWER_HUBS.map((hub) =>
+    hub.id === 'log' ? { ...hub, items: getLogDrawerItems(enabledTrackingKeys) } : hub,
+  );
 
   // Which expandable hubs are open. The active hub auto-expands; this resets on
   // route change so the current section is expanded on both mobile and desktop.
@@ -121,15 +166,7 @@ export function AppSideMenu({
   }
 
   function isChildActive(item: DrawerChildItem): boolean {
-    if (item.disabled || !item.href) return false;
-    const asPath = router.asPath.split('#')[0];
-    if (asPath === item.href) return true;
-    const pathOnly = asPath.split('?')[0];
-    const hrefPath = item.href.split('?')[0].split('#')[0];
-    if (pathOnly === hrefPath) return true;
-    if (item.match === 'exact') return false;
-    if (!item.href.includes('?') && pathOnly.startsWith(`${hrefPath}/`)) return true;
-    return false;
+    return matchDrawerChildActive(item, router.asPath);
   }
 
   function renderChildLink(
@@ -146,6 +183,7 @@ export function AppSideMenu({
           aria-disabled="true"
           className={`flex items-center py-4 pr-5 text-base text-brand-50/30 antialiased ${indentClass}`}
         >
+          {isComingSoon && <SoonBadge />}
           <span className="min-w-0 truncate">{item.label}</span>
         </div>
       );
@@ -312,7 +350,7 @@ export function AppSideMenu({
         } ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <nav className="flex flex-1 flex-col overflow-y-auto pb-safe pt-[15px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {APP_DRAWER_HUBS.map((hub) => (hub.type === 'link' ? renderLinkRow(hub) : renderHub(hub)))}
+          {drawerHubs.map((hub) => (hub.type === 'link' ? renderLinkRow(hub) : renderHub(hub)))}
 
           {/* Lower utility links, pinned to the bottom beneath a single divider */}
           <div className="mt-auto border-t border-white/10">

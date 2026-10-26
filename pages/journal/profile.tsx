@@ -1126,15 +1126,21 @@ function SectionMealSchedule({
 function Section3Tracking({
   keys,
   onSave,
+  autoOpen = false,
 }: {
   keys: string[];
   onSave: (keys: string[]) => Promise<boolean>;
+  autoOpen?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [local, setLocal] = useState<string[]>(keys);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (autoOpen) setExpanded(true);
+  }, [autoOpen]);
 
   useEffect(() => setLocal(keys), [keys]);
 
@@ -1688,6 +1694,7 @@ export default function JournalProfilePage() {
   const [mealRhythmHashOpen, setMealRhythmHashOpen] = useState(false);
   // Scroll + auto-open #nutrition-targets after profile hydrates (Nutrition Targets v1)
   const [nutritionTargetsHashOpen, setNutritionTargetsHashOpen] = useState(false);
+  const [trackingHashOpen, setTrackingHashOpen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -1705,7 +1712,12 @@ export default function JournalProfilePage() {
       const el = document.getElementById('nutrition-targets');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [loading]);
+    const trackingOpen = hash === '#tracking-prefs' || router.query.section === 'tracking';
+    setTrackingHashOpen(trackingOpen);
+    if (trackingOpen) {
+      document.getElementById('tracking-prefs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [loading, router.isReady, router.query.section]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1823,7 +1835,7 @@ export default function JournalProfilePage() {
           </div>
 
           {/* 3 — Tracking */}
-          <Section3Tracking keys={trackingKeys} onSave={saveTrackingKeys} />
+          <Section3Tracking keys={trackingKeys} onSave={saveTrackingKeys} autoOpen={!loading && trackingHashOpen} />
 
           {/* 4 — Health Context */}
           <Section4Health data={profile} onSave={saveProfile} />
