@@ -9,6 +9,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import { getLogTrackingDestination, getLogTrackingHref } from '@/lib/navigation/logTrackingDestinations';
 
 interface QuickEntryItem {
   label: string;
@@ -24,10 +25,10 @@ interface QuickEntryItem {
 }
 
 const quickEntryItems: QuickEntryItem[] = [
-  { label: 'Log Meal', href: `${APP_ROUTES.logNew}?tab=food`, accent: 'bg-[#f1eaa8] text-black/60' },
-  { label: 'Hydration', href: `${APP_ROUTES.logNew}?tab=water`, accent: 'bg-[#9ccbdd] text-black/60' },
-  { label: 'Mood', href: `${APP_ROUTES.logNew}?tab=mood`, accent: 'bg-[#cee5a8] text-black/60' },
-  { label: 'Movement', href: `${APP_ROUTES.logNew}?tab=movement`, accent: 'bg-[#bfc2e1] text-black/60' },
+  { label: 'Log Meal', href: getLogTrackingHref(getLogTrackingDestination('intake')!)!, accent: 'bg-[#f1eaa8] text-black/60' },
+  { label: 'Hydration', href: getLogTrackingHref(getLogTrackingDestination('water')!)!, accent: 'bg-[#9ccbdd] text-black/60' },
+  { label: 'Mood', href: getLogTrackingHref(getLogTrackingDestination('mood')!)!, accent: 'bg-[#cee5a8] text-black/60' },
+  { label: 'Movement', href: getLogTrackingHref(getLogTrackingDestination('movement')!)!, accent: 'bg-[#bfc2e1] text-black/60' },
   { label: 'More', href: APP_ROUTES.logNew, accent: 'bg-[#666663] text-white/70' },
 ];
 

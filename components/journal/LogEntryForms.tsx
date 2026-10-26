@@ -55,7 +55,8 @@ const labelClass = 'block text-brand-50/80 text-sm font-medium mb-1.5';
 const btnClass = 'w-full py-3 rounded-full bg-brand-200 text-brand-900 font-semibold hover:bg-brand-100 transition-colors disabled:opacity-50';
 
 interface BaseFormProps {
-  onSubmit: (payload: Record<string, unknown>) => Promise<void>;
+  /** Return false when save failed so stateful capture forms keep their draft. */
+  onSubmit: (payload: Record<string, unknown>) => Promise<void | boolean>;
   isSubmitting: boolean;
   initialValues?: Record<string, unknown>;
   submitLabel?: string;
@@ -80,8 +81,8 @@ export function WaterForm({ onSubmit, isSubmitting, initialValues, submitLabel }
     e.preventDefault();
     const n = parseFloat(amount);
     if (isNaN(n) || n <= 0) return;
-    await onSubmit({ amount: n, unit });
-    if (!initialValues) setAmount('8');
+    const saved = await onSubmit({ amount: n, unit });
+    if (saved !== false && !initialValues) setAmount('8');
   };
 
   const handlePreset = async (oz: number) => {
@@ -170,8 +171,8 @@ export function SleepForm({ onSubmit, isSubmitting, initialValues, submitLabel }
     const q = parseInt(quality, 10);
     if (!isNaN(q) && q >= 1 && q <= 5) payload.quality = q as 1 | 2 | 3 | 4 | 5;
     if (note.trim()) payload.note = note.trim();
-    await onSubmit(payload);
-    if (!initialValues) { setHours('8'); setMinutes('0'); setQuality(''); setNote(''); }
+    const saved = await onSubmit(payload);
+    if (saved !== false && !initialValues) { setHours('8'); setMinutes('0'); setQuality(''); setNote(''); }
   };
 
   const qualityNum = quality ? parseInt(quality, 10) : null;
@@ -261,8 +262,8 @@ export function SupplementForm({ onSubmit, isSubmitting, initialValues, submitLa
     }
     const q = parseInt(qty, 10);
     if (!isNaN(q) && q > 0) payload.qty = q;
-    await onSubmit(payload);
-    if (!initialValues) { setName(''); setDose(''); setQty('1'); }
+    const saved = await onSubmit(payload);
+    if (saved !== false && !initialValues) { setName(''); setDose(''); setQty('1'); }
   };
 
   return (
@@ -346,8 +347,8 @@ export function MoodForm({ onSubmit, isSubmitting, initialValues, submitLabel }:
     e.preventDefault();
     const s = parseInt(score, 10);
     if (isNaN(s) || s < 1 || s > 5) return;
-    await onSubmit({ score: s, note: note.trim() || undefined });
-    if (!initialValues) { setScore('3'); setNote(''); }
+    const saved = await onSubmit({ score: s, note: note.trim() || undefined });
+    if (saved !== false && !initialValues) { setScore('3'); setNote(''); }
   };
 
   const scoreNum = parseInt(score, 10) || 3;
@@ -412,8 +413,8 @@ export function BowelForm({ onSubmit, isSubmitting, initialValues, submitLabel }
     const d = parseInt(discomfort, 10);
     if (!isNaN(d) && d >= 0 && d <= 3) payload.discomfort = d;
     if (note.trim()) payload.note = note.trim();
-    await onSubmit(payload);
-    if (!initialValues) { setBristol(4); setUrgency(''); setDiscomfort(''); setNote(''); }
+    const saved = await onSubmit(payload);
+    if (saved !== false && !initialValues) { setBristol(4); setUrgency(''); setDiscomfort(''); setNote(''); }
   };
 
   return (
@@ -492,8 +493,8 @@ export function CycleForm({ onSubmit, isSubmitting, initialValues, submitLabel }
     const tags = symptoms.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
     if (tags.length) payload.symptoms = tags;
     if (Object.keys(payload).length === 0) return;
-    await onSubmit(payload);
-    if (!initialValues) { setPhase(''); setCycleDay(''); setSymptoms(''); }
+    const saved = await onSubmit(payload);
+    if (saved !== false && !initialValues) { setPhase(''); setCycleDay(''); setSymptoms(''); }
   };
 
   return (
@@ -548,12 +549,12 @@ export function MovementForm({ onSubmit, isSubmitting, initialValues, submitLabe
     e.preventDefault();
     const m = parseInt(minutes, 10);
     if (!type.trim() || isNaN(m) || m <= 0) return;
-    await onSubmit({
+    const saved = await onSubmit({
       type: type.trim(),
       minutes: m,
       intensity: parseInt(intensity, 10) as 1 | 2 | 3,
     });
-    if (!initialValues) { setType(''); setMinutes('30'); }
+    if (saved !== false && !initialValues) { setType(''); setMinutes('30'); }
   };
 
   return (
@@ -613,8 +614,8 @@ export function BloodPressureForm({ onSubmit, isSubmitting, initialValues, submi
     const p = parseInt(pulse, 10);
     if (!isNaN(p) && p >= 30 && p <= 250) payload.pulse = p;
     if (note.trim()) payload.note = note.trim();
-    await onSubmit(payload);
-    if (!initialValues) { setSystolic(''); setDiastolic(''); setPulse(''); setNote(''); }
+    const saved = await onSubmit(payload);
+    if (saved !== false && !initialValues) { setSystolic(''); setDiastolic(''); setPulse(''); setNote(''); }
   };
 
   return (

@@ -8,6 +8,7 @@ import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { JournalHeroSection } from '@/components/journal/JournalHeroSection';
 import { JournalBlockSection } from '@/components/journal/JournalBlockSection';
 import { DailySummary } from '@/components/journal/DailySummary';
+import { LogSummaryAnchor } from '@/components/journal/LogSummaryAnchor';
 import {
   toDateKey,
   parseLocalDate,
@@ -34,6 +35,7 @@ import {
 import type { JournalPageContent } from '@/lib/contentTypes';
 import { getJournalPageContent } from '@/lib/contentApi';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import { DEFAULT_LOG_TRACKING_KEYS } from '@/lib/navigation/logTrackingDestinations';
 import {
   UNCONFIRMED_FALLBACK_CALORIE_GOAL,
   UNCONFIRMED_FALLBACK_MACRO_GOALS,
@@ -107,8 +109,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   const nutritionTargetsOverlay = useNutritionTargetsOverlay();
 
   // Tracking settings for DailySummary tile visibility
-  const DEFAULT_TRACKING_KEYS = ['intake', 'water', 'sleep', 'supplement', 'mood', 'bowel', 'cycle', 'movement'];
-  const [enabledTrackingKeys, setEnabledTrackingKeys] = useState<string[]>(DEFAULT_TRACKING_KEYS);
+  const [enabledTrackingKeys, setEnabledTrackingKeys] = useState<string[]>([...DEFAULT_LOG_TRACKING_KEYS]);
   const [mealSchedule, setMealSchedule] = useState<MealSchedule>(() => defaultMealSchedule());
   
   // NDS data - always fetch (don't gate on flag); flag only controls display
@@ -449,12 +450,14 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       {/* Remaining inputs section — preference-driven tracking modules + More Today chips */}
       {!isLoading && (
         <StackedPageSection layer={2} className="bg-neutral-900 py-10 pb-[100px]" contentClassName="max-w-[1000px]">
-          <DailySummary
-            date={selectedDate}
-            entries={entries}
-            enabledKeys={enabledTrackingKeys}
-            tileImages={journalContent?.summaryTiles}
-          />
+          <LogSummaryAnchor>
+            <DailySummary
+              date={selectedDate}
+              entries={entries}
+              enabledKeys={enabledTrackingKeys}
+              tileImages={journalContent?.summaryTiles}
+            />
+          </LogSummaryAnchor>
         </StackedPageSection>
       )}
 
