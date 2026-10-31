@@ -804,7 +804,7 @@ export default function PantryManager() {
               align="center"
               anchorBackgroundClass="bg-[#17130f]"
             />
-            <h1 className="text-[2.5rem] font-normal tracking-tight text-brand-50 sm:text-[2.75rem] leading-[1.05]">
+            <h1 className="mx-auto mt-1 px-8 text-[2.5rem] font-normal leading-[1] text-brand-50 sm:text-[2.75rem]">
               Your inventory truth as a feed
             </h1>
           </header>
