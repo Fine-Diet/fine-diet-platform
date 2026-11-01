@@ -42,20 +42,30 @@ async function recordEventIdempotent(event: Stripe.Event): Promise<boolean> {
     stripe_event_id: event.id,
     type: event.type,
     created_at: new Date(event.created * 1000).toISOString(),
-    processed_at: new Date().toISOString(),
+    processed_at: null,
   });
 
-  if (error) {
-    // 23505 = unique_violation -> already processed
-    if (error.code === '23505') {
-      console.log(`[stripe-webhook] Duplicate event ${event.id}, skipping`);
-      return false;
-    }
-    console.error('[stripe-webhook] Error recording event:', error);
-    // Still process even if logging fails (better to double-grant than miss)
+  if (!error) return true;
+  if (error.code !== '23505') {
+    console.error('[stripe-webhook] Failed to reserve event:', error);
+    throw error;
   }
 
-  return true;
+  const { data: recorded, error: readError } = await supabaseAdmin
+    .from('stripe_events')
+    .select('processed_at')
+    .eq('stripe_event_id', event.id)
+    .single();
+
+  if (readError || !recorded) {
+    throw readError ?? new Error('Stripe event reservation not readable');
+  }
+  if (recorded.processed_at) return false;
+
+  // An unprocessed event may be in flight in another delivery. A production
+  // implementation must serialize concurrent delivery and replay against a
+  // lease or database lock; do not acknowledge it as successfully processed.
+  throw new Error('Stripe event already reserved but not completed');
 }
 
 /**
@@ -573,8 +583,18 @@ export default async function handler(
     }
   } catch (err) {
     console.error(`[stripe-webhook] Error processing ${event.type}:`, err);
-    // Return 200 anyway to prevent Stripe from retrying indefinitely.
-    // The event is already recorded for idempotency; we can reprocess manually.
+    // Let Stripe retry; an incomplete event must never be acknowledged as delivered.
+    return res.status(500).json({ error: 'Stripe event processing failed' });
+  }
+
+  const { error: completionError } = await supabaseAdmin
+    .from('stripe_events')
+    .update({ processed_at: new Date().toISOString() })
+    .eq('stripe_event_id', event.id)
+    .is('processed_at', null);
+  if (completionError) {
+    console.error('[stripe-webhook] Could not mark event processed:', completionError);
+    return res.status(500).json({ error: 'Stripe event completion failed' });
   }
 
   return res.status(200).json({ received: true });
