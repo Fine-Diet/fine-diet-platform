@@ -12,6 +12,8 @@ on:
       - 'scripts/sql/stripe*Prelive.sql'
       - 'scripts/sql/tests/stripePrelive*'
       - 'scripts/payments/testStripe*.cjs'
+      - 'scripts/payments/qaSchemaExportGuard.cjs'
+      - 'scripts/payments/testQaSchemaExportGuard.cjs'
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
@@ -32,6 +34,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Guard schema export against credential leaks, wrong accounts, and row-data dumps
+        run: node --test scripts/payments/testQaSchemaExportGuard.cjs
       - name: Run Stripe unit, webhook, billing portal, and checkout contract tests
         run: ./node_modules/.bin/jest --runInBand lib/stripe/__tests__ pages/api/webhooks/__tests__ pages/api/billing/__tests__ pages/api/checkout/__tests__
 
