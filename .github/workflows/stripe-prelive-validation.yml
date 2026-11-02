@@ -6,10 +6,14 @@ on:
     paths:
       - '.github/workflows/stripe-prelive-validation.yml'
       - 'lib/stripe/**'
-      - 'pages/api/webhooks/stripe.ts'
-      - 'pages/api/billing/portal.ts'
+      - 'pages/api/webhooks/**'
+      - 'pages/api/billing/**'
+      - 'pages/api/checkout/**'
       - 'scripts/sql/stripe*Prelive.sql'
       - 'scripts/sql/tests/stripePrelive*'
+      - 'scripts/payments/testStripeLeaseConcurrency.cjs'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
 
 permissions:
@@ -28,8 +32,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Run Stripe focused unit and checkout contract tests
-        run: npx jest --runInBand lib/stripe/__tests__/stripeAccountContext.test.ts lib/stripe/__tests__/stripeWebhookEventStore.test.ts pages/api/checkout/__tests__/create.test.ts pages/api/checkout/__tests__/reconcile.test.ts
+      - name: Run Stripe unit, webhook route, and checkout contract tests
+        run: ./node_modules/.bin/jest --runInBand lib/stripe/__tests__ pages/api/webhooks/__tests__ pages/api/checkout/__tests__
 
   isolated-postgres:
     runs-on: ubuntu-latest
@@ -59,7 +63,7 @@ jobs:
           persist-credentials: false
       - name: Initialize disposable fixtures
         run: psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveFixture.sql
-      - name: Install proposed isolated migrations
+      - name: Install proposed isolated migrations twice
         run: |
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
