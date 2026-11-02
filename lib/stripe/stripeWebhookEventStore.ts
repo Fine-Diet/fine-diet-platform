@@ -21,7 +21,6 @@ export type StripeEventClaim =
   | { status: 'processed' }
   | { status: 'claimed'; token: string };
 
-// Bound longer than a normal handler execution, but not indefinitely.
 const LEASE_MILLISECONDS = 10 * 60 * 1000;
 
 export async function claimStripeEvent(event: StripeEventIdentity): Promise<StripeEventClaim> {
@@ -43,7 +42,7 @@ export async function claimStripeEvent(event: StripeEventIdentity): Promise<Stri
 
   const { data: existing, error: readError } = await supabaseAdmin
     .from('stripe_events')
-    .select('processed_at')
+    .select('processed_at, processing_lease_expires_at')
     .eq('stripe_event_id', event.id)
     .maybeSingle();
   if (readError || !existing) {
@@ -51,17 +50,31 @@ export async function claimStripeEvent(event: StripeEventIdentity): Promise<Stri
   }
   if (existing.processed_at) return { status: 'processed' };
 
-  // Atomic compare-and-claim: one competing delivery can reclaim an expired
-  // lease; all other concurrent deliveries receive a retryable failure.
-  const { data: claimed, error: claimError } = await supabaseAdmin
-    .from('stripe_events')
+  const observedExpiry: unknown = existing.processing_lease_expires_at;
+  if (observedExpiry !== null) {
+    if (typeof observedExpiry !== 'string' || !Number.isFinite(Date.parse(observedExpiry))) {
+      throw new Error('Stripe event receipt has an invalid processing lease');
+    }
+    if (Date.parse(observedExpiry) > now.getTime()) {
+      throw new Error('Stripe event is already being processed; request retry');
+    }
+  }
+
+  // Do not use mutation .or(...). In the verified PostgREST HTTP path its
+  // logical filter was repeated on RETURNING rows: selecting only the event ID
+  // raised 42703, and returning the new expiry would test the NEW lease instead
+  // of the old eligibility. Choose a scalar predicate from the read above, but
+  // enforce it again in the UPDATE so a competing claimant cannot be replaced.
+  const update = supabaseAdmin.from('stripe_events')
     .update({ processing_token: token, processing_lease_expires_at: expiresAt })
     .eq('stripe_event_id', event.id)
-    .is('processed_at', null)
-    .or(`processing_lease_expires_at.is.null,processing_lease_expires_at.lte.${now.toISOString()}`)
-    .select('stripe_event_id');
+    .is('processed_at', null);
+  const eligible = observedExpiry === null
+    ? update.is('processing_lease_expires_at', null)
+    : update.lte('processing_lease_expires_at', now.toISOString());
+  const { data: claimed, error: claimError } = await eligible.select('stripe_event_id');
   if (claimError) throw claimError;
-  if (!claimed || claimed.length !== 1) {
+  if (!claimed || claimed.length !== 1 || claimed[0].stripe_event_id !== event.id) {
     throw new Error('Stripe event is already being processed; request retry');
   }
   return { status: 'claimed', token };

@@ -40,12 +40,10 @@ function from(table) {
     select(value) { selected = value; return chain; },
     eq(key, value) { filters.push({ key, value, kind: 'eq' }); return chain; },
     is(key, value) { assert.equal(value, null); filters.push({ key, kind: 'null' }); return chain; },
-    or(expression) {
-      const prefix = 'processing_lease_expires_at.is.null,processing_lease_expires_at.lte.';
-      assert(expression.startsWith(prefix), 'Unexpected lease predicate');
-      const value = expression.slice(prefix.length);
+    lte(key, value) {
+      assert.equal(key, 'processing_lease_expires_at');
       assert(Number.isFinite(Date.parse(value)), 'Invalid lease timestamp');
-      filters.push({ key: 'processing_lease_expires_at', kind: 'expired', value });
+      filters.push({ key, kind: 'lte', value });
       return chain;
     },
     maybeSingle() { return execute(true); },
@@ -67,7 +65,7 @@ function from(table) {
         sql += ' WHERE ' + filters.map(filter => {
           const key = identifier(filter.key);
           if (filter.kind === 'null') return `${key} IS NULL`;
-          if (filter.kind === 'expired') return `(${key} IS NULL OR ${key} <= ${param(filter.value)}::timestamptz)`;
+          if (filter.kind === 'lte') return `${key} <= ${param(filter.value)}::timestamptz`;
           return `${key} = ${param(filter.value)}`;
         }).join(' AND ');
       }
@@ -76,7 +74,9 @@ function from(table) {
     try {
       const result = await pool.query(sql, values);
       if (single && result.rows.length > 1) return { data: null, error: { code: 'PGRST116', message: 'multiple rows' } };
-      return { data: single ? (result.rows[0] || null) : result.rows, error: null };
+      // PostgREST transports timestamps as JSON strings, not node-postgres Dates.
+      const rows = JSON.parse(JSON.stringify(result.rows));
+      return { data: single ? (rows[0] || null) : rows, error: null };
     } catch (error) {
       return { data: null, error: { code: error.code, message: error.message } };
     }
