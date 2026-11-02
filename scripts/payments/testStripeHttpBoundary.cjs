@@ -288,6 +288,31 @@ async function main() {
   const raced=await readState(racing);assertActive(raced);assert.equal(raced.instance.revision,'1');assert.equal(raced.checkout,1);
   pass('eight concurrent signed HTTP deliveries commit one purchase revision');
 
+  // Test both reclaim predicates over actual HTTP. Keep the winner pending
+  // until every competitor finishes, then verify stale-token fencing.
+  const store=loadSource('lib/stripe/stripeWebhookEventStore.ts');
+  for(const kind of ['released','expired']) {
+    const identity={id:`evt_claim_${randomUUID().replace(/-/g,'')}`,type:'checkout.session.completed',created:Math.floor(Date.now()/1000)};
+    const expiry=kind==='expired'?new Date(Date.now()-10000).toISOString():null;
+    await pool.query('INSERT INTO public.stripe_events(stripe_event_id,type,processing_token,processing_lease_expires_at) VALUES($1,$2,$3,$4)',[identity.id,identity.type,'old_fixture_token',expiry]);
+    const attempts=await Promise.allSettled(Array.from({length:8},()=>store.claimStripeEvent(identity)));
+    const winners=attempts.filter(result=>result.status==='fulfilled');
+    assert.equal(winners.length,1);assert.equal(winners[0].value.status,'claimed');
+    for(const result of attempts.filter(result=>result.status==='rejected')) assert.match(String(result.reason),/already being processed/);
+    const winningToken=winners[0].value.token;
+    await assert.rejects(store.completeStripeEvent(identity.id,'old_fixture_token'),/exclusive claim/);
+    await store.releaseStripeEvent(identity.id,'old_fixture_token');
+    assert.equal((await receipt(identity)).processing_token,winningToken);
+    await store.completeStripeEvent(identity.id,winningToken);
+    assert.equal((await store.claimStripeEvent(identity)).status,'processed');
+    pass(`eight concurrent ${kind}-lease HTTP reclaims choose one owner and reject the stale token`);
+  }
+  const expiredPurchase=await seed(),expiredEvent=eventFor(expiredPurchase);
+  await pool.query("INSERT INTO public.stripe_events(stripe_event_id,type,processing_token,processing_lease_expires_at) VALUES($1,$2,$3,now()-interval '1 second')",[expiredEvent.id,expiredEvent.type,'crashed_fixture_token']);
+  assert.equal((await deliver(expiredEvent)).status,200);assertActive(await readState(expiredPurchase));
+  assert((await receipt(expiredEvent)).processed_at);
+  pass('signed event reclaims an expired lease and completes fulfillment over HTTP');
+
   assert(providerTraffic.every(route=>route.startsWith('/v1/')));
   console.log(`RESULT: ${passed} application/PostgREST HTTP scenarios passed`);
   console.log('BOUNDARY: Stripe service is loopback-simulated; no hosted Auth, Checkout UI or external webhook delivery tested.');
