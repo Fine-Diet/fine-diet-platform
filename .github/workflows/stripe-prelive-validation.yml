@@ -32,12 +32,12 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Run Stripe unit, webhook route, and checkout contract tests
-        run: ./node_modules/.bin/jest --runInBand lib/stripe/__tests__ pages/api/webhooks/__tests__ pages/api/checkout/__tests__
+      - name: Run Stripe unit, webhook, billing portal, and checkout contract tests
+        run: ./node_modules/.bin/jest --runInBand lib/stripe/__tests__ pages/api/webhooks/__tests__ pages/api/billing/__tests__ pages/api/checkout/__tests__
 
   isolated-postgres:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:17
@@ -57,10 +57,16 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: isolated_fixture_only
       PGDATABASE: postgres
+      FD_STRIPE_LOCAL_DB_TEST: '1'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Initialize disposable fixtures
         run: psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveFixture.sql
       - name: Install proposed isolated migrations twice
@@ -71,3 +77,5 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
       - name: Assert isolation, RLS, identity uniqueness, lease schema
         run: psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveVerify.sql
+      - name: Exercise actual event store against concurrent PostgreSQL connections
+        run: node scripts/payments/testStripeLeaseConcurrency.cjs
