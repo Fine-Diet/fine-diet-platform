@@ -11,7 +11,7 @@ on:
       - 'pages/api/checkout/**'
       - 'scripts/sql/stripe*Prelive.sql'
       - 'scripts/sql/tests/stripePrelive*'
-      - 'scripts/payments/testStripeLeaseConcurrency.cjs'
+      - 'scripts/payments/testStripe*.cjs'
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
@@ -68,14 +68,20 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Initialize disposable fixtures
-        run: psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveFixture.sql
+        run: |
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveFixture.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveAtomicFixture.sql
       - name: Install proposed isolated migrations twice
         run: |
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeAtomicFulfillmentPrelive.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeAtomicFulfillmentPrelive.sql
       - name: Assert isolation, RLS, identity uniqueness, lease schema
         run: psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveVerify.sql
       - name: Exercise actual event store against concurrent PostgreSQL connections
         run: node scripts/payments/testStripeLeaseConcurrency.cjs
+      - name: Exercise atomic business fulfillment, rollback, lease expiry and access controls
+        run: node scripts/payments/testStripeAtomicFulfillment.cjs
