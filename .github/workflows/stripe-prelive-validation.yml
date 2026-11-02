@@ -1,0 +1,69 @@
+name: Stripe pre-live source and isolated SQL validation
+on:
+  push:
+    branches:
+      - codex/stripe-webhook-reliability-prelive-20261101
+    paths:
+      - '.github/workflows/stripe-prelive-validation.yml'
+      - 'lib/stripe/**'
+      - 'pages/api/webhooks/stripe.ts'
+      - 'pages/api/billing/portal.ts'
+      - 'scripts/sql/stripe*Prelive.sql'
+      - 'scripts/sql/tests/stripePrelive*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-jest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run Stripe focused unit and checkout contract tests
+        run: npx jest --runInBand lib/stripe/__tests__/stripeAccountContext.test.ts lib/stripe/__tests__/stripeWebhookEventStore.test.ts pages/api/checkout/__tests__/create.test.ts pages/api/checkout/__tests__/reconcile.test.ts
+
+  isolated-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: isolated_fixture_only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: isolated_fixture_only
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Initialize disposable fixtures
+        run: psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveFixture.sql
+      - name: Install proposed isolated migrations
+        run: |
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
+      - name: Assert isolation, RLS, identity uniqueness, lease schema
+        run: psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveVerify.sql
