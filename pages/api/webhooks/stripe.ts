@@ -44,19 +44,19 @@ async function grantEntitlementsForOffer(
   offerKey: string,
   sourceRef: string
 ): Promise<void> {
-  const { data: mappings } = await supabaseAdmin
+  const { data: mappings, error: mappingError } = await supabaseAdmin
     .from('offer_entitlements')
     .select('entitlement_key, duration_days, is_active')
     .eq('offer_key', offerKey)
     .eq('is_active', true);
+  if (mappingError) throw mappingError;
   const entitlementMappings = resolveEffectiveOfferEntitlementMappings(
     offerKey,
     mappings,
   );
 
   if (entitlementMappings.length === 0) {
-    console.warn(`[stripe-webhook] No active entitlement mappings for offer ${offerKey}`);
-    return;
+    throw new Error(`No active entitlement mappings for purchased offer ${offerKey}`);
   }
 
   const now = new Date();
@@ -79,7 +79,7 @@ async function grantEntitlementsForOffer(
     }
 
     // Idempotent: check if an active entitlement with this source_ref already exists
-    const { data: existingEnt } = await supabaseAdmin
+    const { data: existingEnt, error: existingError } = await supabaseAdmin
       .from('person_entitlements')
       .select('id')
       .eq('person_id', personId)
@@ -89,6 +89,7 @@ async function grantEntitlementsForOffer(
       .eq('is_active', true)
       .maybeSingle();
 
+    if (existingError) throw existingError;
     if (existingEnt) {
       console.log(
         `[stripe-webhook] Entitlement ${mapping.entitlement_key} already active for person ${personId}, skipping`
@@ -100,12 +101,7 @@ async function grantEntitlementsForOffer(
       .from('person_entitlements')
       .insert(row);
 
-    if (error && error.code !== '23505') {
-      console.error(
-        `[stripe-webhook] Failed to grant ${mapping.entitlement_key}:`,
-        error
-      );
-    }
+    if (error) throw error;
   }
 }
 
@@ -116,7 +112,7 @@ async function revokeEntitlementsBySourceRef(
   personId: string,
   sourceRef: string
 ): Promise<void> {
-  const { data: activeEnts } = await supabaseAdmin
+  const { data: activeEnts, error: activeEntsError } = await supabaseAdmin
     .from('person_entitlements')
     .select('id, ends_at')
     .eq('person_id', personId)
@@ -124,6 +120,7 @@ async function revokeEntitlementsBySourceRef(
     .eq('source_ref', sourceRef)
     .eq('is_active', true);
 
+  if (activeEntsError) throw activeEntsError;
   if (!activeEnts || activeEnts.length === 0) return;
 
   const now = new Date().toISOString();
@@ -131,16 +128,18 @@ async function revokeEntitlementsBySourceRef(
   for (const ent of activeEnts) {
     if (!ent.ends_at) {
       // Perpetual entitlement: deactivate immediately
-      await supabaseAdmin
+      const { error } = await supabaseAdmin
         .from('person_entitlements')
         .update({ is_active: false, updated_at: now })
         .eq('id', ent.id);
+      if (error) throw error;
     } else {
       // Time-limited: expire now
-      await supabaseAdmin
+      const { error } = await supabaseAdmin
         .from('person_entitlements')
         .update({ ends_at: now, updated_at: now })
         .eq('id', ent.id);
+      if (error) throw error;
     }
   }
 
@@ -163,11 +162,11 @@ async function handleCheckoutCompleted(
   const billingModel = metadata.billing_model || 'one_time';
 
   if (!personId || !offerKey) {
-    console.warn('[stripe-webhook] checkout.session.completed missing metadata', {
+    console.error('[stripe-webhook] checkout.session.completed missing metadata', {
       personId,
       offerKey,
     });
-    return;
+    throw new Error('Checkout session is missing required attribution metadata');
   }
 
   const subscriptionId =
