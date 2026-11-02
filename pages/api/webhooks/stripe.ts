@@ -19,6 +19,7 @@ import { stripe } from '@/lib/stripe/stripeServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { handleStripeCheckoutCompleted as ensureProgramAssignmentFromStripe } from '@/lib/plans/programAssignmentAutomationServerService';
 import { resolveEffectiveOfferEntitlementMappings } from '@/lib/access/offerEntitlementMappings';
+import { claimStripeEvent, completeStripeEvent, releaseStripeEvent } from '@/lib/stripe/stripeWebhookEventStore';
 
 // Disable Next.js body parser so we get the raw buffer for signature verification
 export const config = {
@@ -32,41 +33,6 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-/**
- * Record event for idempotency. Returns true if this is a NEW event
- * that should be processed. Returns false if already processed (duplicate).
- */
-async function recordEventIdempotent(event: Stripe.Event): Promise<boolean> {
-  const { error } = await supabaseAdmin.from('stripe_events').insert({
-    stripe_event_id: event.id,
-    type: event.type,
-    created_at: new Date(event.created * 1000).toISOString(),
-    processed_at: null,
-  });
-
-  if (!error) return true;
-  if (error.code !== '23505') {
-    console.error('[stripe-webhook] Failed to reserve event:', error);
-    throw error;
-  }
-
-  const { data: recorded, error: readError } = await supabaseAdmin
-    .from('stripe_events')
-    .select('processed_at')
-    .eq('stripe_event_id', event.id)
-    .single();
-
-  if (readError || !recorded) {
-    throw readError ?? new Error('Stripe event reservation not readable');
-  }
-  if (recorded.processed_at) return false;
-
-  // An unprocessed event may be in flight in another delivery. A production
-  // implementation must serialize concurrent delivery and replay against a
-  // lease or database lock; do not acknowledge it as successfully processed.
-  throw new Error('Stripe event already reserved but not completed');
-}
 
 /**
  * Grant entitlements for an offer to a person.
@@ -551,10 +517,18 @@ export default async function handler(
     return res.status(400).json({ error: 'Webhook signature verification failed' });
   }
 
-  // Idempotency check
-  const isNew = await recordEventIdempotent(event);
-  if (!isNew) {
-    return res.status(200).json({ received: true, duplicate: true });
+  // Claim receipt outside the event handler; even failed claims return a
+  // retryable response instead of being acknowledged.
+  let token: string;
+  try {
+    const claim = await claimStripeEvent(event);
+    if (claim.status === 'processed') {
+      return res.status(200).json({ received: true, duplicate: true });
+    }
+    token = claim.token;
+  } catch (err) {
+    console.error('[stripe-webhook] Could not claim event:', err);
+    return res.status(503).json({ error: 'Stripe event temporarily unavailable' });
   }
 
   // Route event
@@ -581,20 +555,15 @@ export default async function handler(
       default:
         console.log(`[stripe-webhook] Unhandled event type: ${event.type}`);
     }
+    await completeStripeEvent(event.id, token);
   } catch (err) {
     console.error(`[stripe-webhook] Error processing ${event.type}:`, err);
-    // Let Stripe retry; an incomplete event must never be acknowledged as delivered.
+    try {
+      await releaseStripeEvent(event.id, token);
+    } catch (releaseError) {
+      console.error('[stripe-webhook] Event lease release failed:', releaseError);
+    }
     return res.status(500).json({ error: 'Stripe event processing failed' });
-  }
-
-  const { error: completionError } = await supabaseAdmin
-    .from('stripe_events')
-    .update({ processed_at: new Date().toISOString() })
-    .eq('stripe_event_id', event.id)
-    .is('processed_at', null);
-  if (completionError) {
-    console.error('[stripe-webhook] Could not mark event processed:', completionError);
-    return res.status(500).json({ error: 'Stripe event completion failed' });
   }
 
   return res.status(200).json({ received: true });
