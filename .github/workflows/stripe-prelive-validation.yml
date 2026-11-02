@@ -37,7 +37,7 @@ jobs:
 
   isolated-postgres:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     services:
       postgres:
         image: postgres:17
@@ -71,6 +71,7 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveFixture.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveAtomicFixture.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveHttpFixture.sql
       - name: Install proposed isolated migrations twice
         run: |
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
@@ -87,3 +88,5 @@ jobs:
         run: node scripts/payments/testStripeAtomicFulfillment.cjs
       - name: Verify actual worker death rolls back business fulfillment
         run: node scripts/payments/testStripeAtomicCrash.cjs
+      - name: Exercise application, SDK signatures and PostgREST over disposable HTTP
+        run: node scripts/payments/testStripeHttpBoundary.cjs
