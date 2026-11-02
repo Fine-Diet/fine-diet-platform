@@ -14,6 +14,7 @@ import { resolveEffectiveOfferEntitlementMappings } from '@/lib/access/offerEnti
 import { claimStripeEvent, completeStripeEvent, releaseStripeEvent } from '@/lib/stripe/stripeWebhookEventStore';
 import { atomicFulfillmentEnabled, commitStripeFulfillment, type FulfillmentInstance, type FulfillmentReceipt } from '@/lib/stripe/stripeAtomicFulfillment';
 import { checkoutPaymentReady, readFineDietAttribution, stripeReferenceId, subscriptionAccessState, type PurchaseAccessState } from '@/lib/stripe/stripeLifecyclePolicy';
+import { resolveRenewalAccessState } from '@/lib/stripe/stripeRenewalCoverage';
 
 export const config = { api: { bodyParser: false } };
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -125,6 +126,13 @@ async function retrieveSubscription(id: string, instance: PurchaseInstance): Pro
   assertObjectMode(subscription); assertCustomer(instance, subscription.customer); assertAttribution(instance, subscription.metadata);
   return subscription;
 }
+async function currentAccessState(subscription: Stripe.Subscription, instance: PurchaseInstance, attempt: Attempt): Promise<PurchaseAccessState> {
+  // Every invoice read happens after the purchase revision was captured. A
+  // concurrent commit invalidates it; failed evidence reads never imply revoke.
+  return attempt.atomic
+    ? resolveRenewalAccessState(subscription, instance.status)
+    : subscriptionAccessState(subscription, instance.status);
+}
 function checkoutRecord(session: Stripe.Checkout.Session): Record<string, string | null> {
   const metadata = session.metadata ?? {};
   return {
@@ -171,7 +179,7 @@ async function reconcileCheckout(snapshot: Stripe.Checkout.Session, eventType: s
   let state: PurchaseAccessState = instance.status === 'ended' ? 'ended' : 'active';
   if (session.mode === 'subscription') {
     if (!subscriptionId) throw new Error('Subscription checkout is missing a subscription');
-    state = subscriptionAccessState(await retrieveSubscription(subscriptionId, instance), instance.status);
+    state = await currentAccessState(await retrieveSubscription(subscriptionId, instance), instance, attempt);
   } else if (session.mode !== 'payment') throw new Error('Unsupported checkout mode for purchased access');
   const committed = await applyPurchaseState(instance, state, sourceRef, attempt, identifiers, state === 'active' ? checkoutRecord(session) : null);
   if (committed || state !== 'active') return committed;
@@ -196,7 +204,7 @@ async function reconcileSubscription(subscriptionId: string, attempt: Attempt, s
     throw new Error('Attributed subscription has no linked purchase instance yet');
   }
   assertCustomer(instance, subscription.customer); assertAttribution(instance, subscription.metadata); assertAttribution(instance, snapshotMetadata);
-  return applyPurchaseState(instance, subscriptionAccessState(subscription, instance.status), subscriptionId, attempt);
+  return applyPurchaseState(instance, await currentAccessState(subscription, instance, attempt), subscriptionId, attempt);
 }
 function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const legacy = invoice as Stripe.Invoice & { subscription?: unknown };
