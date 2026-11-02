@@ -85,3 +85,5 @@ jobs:
         run: node scripts/payments/testStripeLeaseConcurrency.cjs
       - name: Exercise atomic business fulfillment, rollback, lease expiry and access controls
         run: node scripts/payments/testStripeAtomicFulfillment.cjs
+      - name: Verify actual worker death rolls back business fulfillment
+        run: node scripts/payments/testStripeAtomicCrash.cjs
