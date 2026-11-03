@@ -55,6 +55,7 @@ import {
   computeProgramAvailabilityForPerson,
   type ProgramAvailabilityEntry,
 } from './programAvailabilityServerService';
+import { programCurriculumVisible } from './programPaidAccess';
 
 // ============================================================================
 // Public shapes
@@ -413,6 +414,10 @@ export async function getLibraryDetailForPerson(
   const assignmentViews = [...assignments]
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     .map((a) => toAssignmentView(a, now));
+  const showCurriculum = programCurriculumVisible({
+    hasEntitlement,
+    runtimeState,
+  });
 
   return {
     slug: catalogue.slug,
@@ -431,8 +436,8 @@ export async function getLibraryDetailForPerson(
     runtime_state: runtimeState,
     impact_headline: headlineFromBullets(impactBullets),
     assignments: assignmentViews,
-    modules: catalogue.modules,
-    managed_content: managedTree,
+    modules: showCurriculum ? catalogue.modules : [],
+    managed_content: showCurriculum ? managedTree : null,
     impact_bullets: impactBullets,
     progress: progressSummary.items_total > 0
       ? {

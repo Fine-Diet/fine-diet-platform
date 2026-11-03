@@ -57,3 +57,21 @@ Rollback of those objects, leaving legacy payment tables in place:
 8. `DROP TABLE public.stripe_customer_accounts;` only if it contains no mappings that must be kept. If the rejected backfill were ever applied, delete those rows before dropping the table.
 
 Do not drop `stripe_customers`, `stripe_events`, `stripe_offer_instances`, entitlements, or program tables as part of this rollback.
+
+## Access and webhook recovery — 2026-11-02
+
+The stored `program_enrollments` row stayed `active` after cancellation. With the program entitlement and assignment inactive, member routes returned `Journal access required` because the journal grant was inactive too.
+
+Restoring only the journal grant showed the enrollment itself was being treated as paid access: `GET /api/journal/programs/runtime-summary` returned `resolved_status: active` for `qa-payments`, and `POST /api/journal/programs/checkins/respond` accepted that day until it found no template. No check-in row was written. The journal grant was then set inactive again.
+
+Member routes now require a current program entitlement or an in-window active assignment before an open enrollment can continue. Re-checked with journal restored and the program grant still inactive:
+
+- Runtime summary keeps the stored enrollment `active` and resolves it as `cancelled`, with no next check-in.
+- Delivery modules, day completion, and check-in each return 403 `Program access is not active`.
+- Check-in rows remain 0.
+
+The renewal `invoice.payment_succeeded` receipt was left unprocessed after the listener timed out. Its lease was set one minute in the past and the same event was resent to the local route. The route returned 200, the receipt is processed, grant rows stayed at 2 with none active, and the purchase stayed `ended`. Fulfillment revision moved from 7 to 8 because the ended state was committed again. That is not a second grant.
+
+Hosted preview credentials are not set. The signed-in Vercel user is an Owner of team `team_xrqp6Fqr3hd6L9dsLbzYYibn`, and project reads succeed, but `GET` and `POST /v10/projects/prj_vYpQqPixU3IFA2ko9uR0HmVJI84I/env` both return 403. The local Vercel CLI has no credentials. Shared Preview and Production were not changed. No dashboard webhook was added on `acct_1UXS1WPXTq5u2TLw`. The legacy endpoint `we_1T1w8FARcbgSDadAObxHqzfY` is unchanged.
+
+The next release gate is a branch-scoped Preview environment for `codex/stripe-webhook-reliability-prelive-20261101`, then one webhook on the QA sandbox aimed at that preview, then one hosted checkout that includes this cancellation access check. Production apply and live mode stay closed.

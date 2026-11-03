@@ -79,6 +79,12 @@ async function readProgramDayCompletion(enrollmentId: string, programVersionId: 
 async function assertUnlocked(personId: string, enrollmentId: string, day: number) {
   const summary = await getProgramRuntimeSummaryForPerson(personId, enrollmentId);
   if (!summary) throw codedError('Enrollment not found for person.', 'PROGRAM_ENROLLMENT_NOT_FOUND');
+  const storedOpen = summary.enrollment.status === 'pre_start'
+    || summary.enrollment.status === 'active'
+    || summary.enrollment.status === 'paused';
+  if (storedOpen && summary.resolved_status === 'cancelled') {
+    throw codedError('Program access is not active.', 'PROGRAM_ACCESS_DENIED');
+  }
   if (!canAccessProgramDay({ day, currentDay: summary.current_day, status: summary.resolved_status, durationDays: summary.version.duration_days })) {
     const message = summary.resolved_status === 'pre_start' && day !== 0
       ? 'Only Day 0 is available before the Program starts.'
