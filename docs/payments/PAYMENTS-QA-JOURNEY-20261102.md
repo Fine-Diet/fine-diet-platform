@@ -1,5 +1,39 @@
 # Payments QA journey — 2026-11-02
 
+## Current completion readback — 2026-11-03
+
+**Verdict: payment database readiness PASS; hosted Payments QA remains BLOCKED and unpassed. Production release is not ready for independent approval.** This section supersedes earlier statements below about an empty QA database or an absent program-content schema. Those statements describe the earlier readback and remain useful history.
+
+### Focused readiness and QA-only schema correction
+
+- Verified the payments branch head is `b3d9bdb3711709a2cf98fca3a08d18bc8cfe2691`, matching PR #224 and the requested starting SHA. The PR remains open and draft.
+- Added `scripts/payments/qaPaymentReadiness.sql`, a read-only gate for 23 relations and the checkout, signed-webhook, fulfillment, entitlement, program-access, RLS, role-grant, trigger, synthetic-member, test-mode customer mapping, and active subscription catalog dependencies. It does not run production schema-parity counts.
+- The first run identified four missing dependencies: `program_modules`, `program_content_items`, `program_content_progress`, and `program_delivery_modules`. Added those four tables to QA with RLS and narrowly scoped published-content / owner policies, using the existing production definitions as the review source. The additive DDL is in `scripts/payments/qaProgramContentDependencies.sql`; it created no rows and changed no existing QA data.
+- Re-running the focused gate against `ikvkqpbwlpevqlshdkdz` returned `PASS_PAYMENT_SCHEMA_GATE`: 23/23 required relations and columns present, payment role/RLS checks pass, fulfillment RPC and revision trigger present, active subscription offer and test-mode customer mapping present, and the existing synthetic Auth user is linked to a person. Public table count is 24.
+- On the current code head, targeted regression coverage passed: `jest --runInBand lib/programs/__tests__/programPaidAccess.test.ts lib/programs/__tests__/programRuntimeServerService.test.ts` — 2 suites, 52 tests.
+- The original `scripts/payments/qaSchemaReadiness.sql` was left unchanged and still returns `NO_GO` for production-schema parity: 24 QA tables, 0 views, 35 functions, 16 policies, and no `programs_private` schema, versus its unchanged production minimum of 117 tables, 2 views, 92 functions, 245 policies, and `programs_private`. This is expected for the intentionally scoped QA schema and is not a failure of the focused Payments gate.
+- Existing QA identity and sandbox data were preserved. The current readback shows one Auth user and existing offer, price, customer mapping, purchase, entitlement, event, assignment, and enrollment rows. No new Auth user or payment event was created in this continuation.
+
+### Hosted isolation and production routing
+
+- Vercel reports all eight Payments variables on Preview and scoped to branch `codex/stripe-webhook-reliability-prelive-20261101`: `STRIPE_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `STRIPE_ACCOUNT_ID`, `STRIPE_ATOMIC_FULFILLMENT`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY`.
+- The branch-scoped Supabase URL resolves to `https://ikvkqpbwlpevqlshdkdz.supabase.co`. The branch-scoped Checkout return origin is the branch Preview alias. The configured Stripe account ID is sandbox `acct_1UXS1WPXTq5u2TLw`, distinct from legacy sandbox `acct_1T1s86ARcbgSDadA`.
+- Runtime review found payment server clients use `NEXT_PUBLIC_SUPABASE_URL`; Stripe return URLs prefer `NEXT_PUBLIC_SITE_URL` and only fall back to `SITE_URL`. The shared `SUPABASE_URL`/`SITE_URL` variables are not used to select a database or origin in payment server routes. Shared keys also exist for other environments; the exact branch-scoped overrides are present on the current branch Preview deployments.
+- Vercel served the current branch Preview successfully (HTTP 200) at deployment `dpl_C9WiB2NRC4JjEFTwF43FU3XTaXU8`, built from this branch head. `myfinediet.com` remains verified on the same Vercel project; the latest Production deployment is Ready from `main` at `58e0fd656657bb1b118d5cafcf779cefde18a149`. No production routing or settings were changed.
+
+### Hosted QA blocker and exact next action
+
+- The Stripe connection available in this session can see the live account and the legacy sandbox, but it cannot see the QA sandbox `acct_1UXS1WPXTq5u2TLw`. Until that sandbox is authorized in Stripe Work, its endpoint cannot be inspected or isolated. The legacy endpoint remains untouched and must not be reused for QA.
+- The QA sandbox must have its own endpoint at `https://fine-diet-platform-git-codex-stripe-webhook-re-92e97d-fine-diet.vercel.app/api/webhooks/stripe`, with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.paused`, `customer.subscription.resumed`, `invoice.paid`, `invoice.payment_succeeded`, `invoice.payment_failed`, and `invoice.payment_action_required`. Its signing secret must match the existing branch-scoped `STRIPE_WEBHOOK_SECRET`.
+- The Preview landing page responded, but no hosted Checkout session, external signed webhook, renewal, cancellation, or post-cancel content request was run. A synthetic member login is also needed to exercise Checkout and authenticated program content; the existing QA identity was not reset.
+- Stripe Work account-access link for the founder: use the authorization URL supplied in the Codex chat, add `acct_1UXS1WPXTq5u2TLw`, and tell the engineer when access is complete. Then provide a synthetic QA login or authorize creating one through the Preview sign-up flow.
+
+### Production release review
+
+- The three candidate production SQL changes remain additive and preserve existing `stripe_customers`, `stripe_events`, purchase rows, entitlements, and assignments. Their isolated Postgres/HTTP regression evidence at the current implementation lineage is recorded below; no candidate SQL was applied to production.
+- The documented rollback removes only candidate functions/triggers/suspension table/columns/customer mapping table, in dependency order, and explicitly retains legacy payment and access tables. The legacy sandbox backfill is excluded because it would mislabel existing customers.
+- QA readiness does not establish production schema parity, production account/price mapping, paid-through expiry without a subsequent event, dispute/refund handling, production release controls, or launch monitoring. These remain independent launch gates.
+
 Status: a real Stripe sandbox checkout, signed webhook fulfillment, renewal invoice, and cancellation ran through the application routes. This is not a production launch and not a production schema clone. No production SQL was applied, no production customer was copied, and the production webhook destination was not changed.
 
 ## What a member can do
