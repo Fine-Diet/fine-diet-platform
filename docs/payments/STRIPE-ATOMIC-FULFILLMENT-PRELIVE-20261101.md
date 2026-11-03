@@ -88,7 +88,7 @@ exact run IDs, source hashes and observed results; this document is not a pass r
 
 ## Dependency order (review only, not an execution instruction)
 
-1. `stripeCustomerAccountsPrelive.sql` with separately reverified backfill scope.
+1. `stripeCustomerAccountsPrelive.sql` only. Keep `stripeCustomerAccountsLegacySandboxBackfill.sql` out of the production apply.
 2. `stripeWebhookProcessingLeasePrelive.sql`.
 3. `stripeAtomicFulfillmentPrelive.sql`.
 4. Matching source, environment invariants and isolated flag-on tests.

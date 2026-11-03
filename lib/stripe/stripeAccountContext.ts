@@ -13,7 +13,8 @@ export interface StripeAccountContext {
 export function getStripeAccountContext(): StripeAccountContext {
   const accountId = (process.env.STRIPE_ACCOUNT_ID || '').trim();
   const secretKey = process.env.STRIPE_SECRET_KEY || '';
-  const mode = /^(?:sk|rk)_(test|live)_/.exec(secretKey)?.[1];
+  // rkcs_ is the secret key issued for a claimable Stripe sandbox.
+  const mode = /^(?:sk|rk|rkcs)_(test|live)_/.exec(secretKey)?.[1];
 
   if (!/^acct_[A-Za-z0-9]+$/.test(accountId)) {
     throw new Error('STRIPE_ACCOUNT_ID must identify the intended Stripe account');

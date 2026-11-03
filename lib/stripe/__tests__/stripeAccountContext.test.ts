@@ -16,6 +16,10 @@ describe('Stripe account-scoped configuration', () => {
     expect(getStripeAccountContext()).toEqual({ accountId: 'acct_123ABC', livemode: false });
     process.env.STRIPE_SECRET_KEY = 'sk_live_placeholder';
     expect(getStripeAccountContext()).toEqual({ accountId: 'acct_123ABC', livemode: true });
+    process.env.STRIPE_SECRET_KEY = 'rk_test_placeholder';
+    expect(getStripeAccountContext()).toEqual({ accountId: 'acct_123ABC', livemode: false });
+    process.env.STRIPE_SECRET_KEY = 'rkcs_test_placeholder';
+    expect(getStripeAccountContext()).toEqual({ accountId: 'acct_123ABC', livemode: false });
   });
 
   it('fails closed when the account is missing or invalid', () => {

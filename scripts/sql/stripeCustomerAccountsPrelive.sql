@@ -14,10 +14,6 @@ CREATE TABLE IF NOT EXISTS public.stripe_customer_accounts (
 ALTER TABLE public.stripe_customer_accounts ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.stripe_customer_accounts FROM PUBLIC, anon, authenticated;
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.stripe_customer_accounts TO service_role;
--- Verified on 2026-11-01: all four legacy IDs belong to this sandbox, not live.
--- Recheck the ownership audit before applying this backfill in production.
-INSERT INTO public.stripe_customer_accounts
-  (person_id,stripe_account_id,livemode,stripe_customer_id,email)
-SELECT person_id,'acct_1T1s86ARcbgSDadA',false,stripe_customer_id,email
-FROM public.stripe_customers
-ON CONFLICT (person_id,stripe_account_id,livemode) DO NOTHING;
+-- Do not backfill existing stripe_customers here. That statement lives in
+-- stripeCustomerAccountsLegacySandboxBackfill.sql and must stay out of the
+-- production apply. The application creates account-scoped rows at checkout.

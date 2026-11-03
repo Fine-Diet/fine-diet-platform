@@ -79,9 +79,12 @@ jobs:
       - name: Install proposed isolated migrations twice
         run: |
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
+          # Disposable fixture only. This backfill is not part of the production apply.
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsLegacySandboxBackfill.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeAtomicFulfillmentPrelive.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsLegacySandboxBackfill.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
           psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeAtomicFulfillmentPrelive.sql
       - name: Assert isolation, RLS, identity uniqueness, lease schema
