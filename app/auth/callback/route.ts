@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { DEFAULT_POST_AUTH_TARGET } from '@/lib/auth/authContext';
+import { isSafeRedirectTarget } from '@/lib/redirectHelpers';
 
 /**
  * GET /auth/callback
@@ -11,14 +13,14 @@ import { cookies } from 'next/headers';
  * 1. Supabase redirects here with ?code=... (PKCE code exchange)
  * 2. We exchange the code for a session and write it to cookies
  * 3. We call /api/account/link-person to link the auth user to the people system
- * 4. We redirect to ?next= or the homepage
+ * 4. We redirect to ?next= or the canonical app entry
  *
  * This route must be registered as an allowed redirect URL in the Supabase
  * project dashboard under Authentication → URL Configuration.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const next = searchParams.get('next') ?? '/';
+  const next = searchParams.get('next') ?? DEFAULT_POST_AUTH_TARGET;
 
   // Check for an upstream provider/Supabase error first.
   // When the OAuth exchange fails on the provider side, Supabase redirects here
@@ -99,8 +101,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Validate and sanitise the redirect target
-  const safeNext =
-    next.startsWith('/') && !next.startsWith('//') ? next : '/';
+  const safeNext = isSafeRedirectTarget(next) ? next : DEFAULT_POST_AUTH_TARGET;
 
   return NextResponse.redirect(`${origin}${safeNext}`);
 }

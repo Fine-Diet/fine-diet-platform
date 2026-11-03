@@ -9,7 +9,7 @@
 
 import { createClient } from './supabaseBrowser';
 import type { User, Session } from '@supabase/supabase-js';
-import { NEUTRAL_POST_AUTH_TARGET } from './auth/authContext';
+import { DEFAULT_POST_AUTH_TARGET } from './auth/authContext';
 import { getSafeRedirectTarget } from './redirectHelpers';
 
 /**
@@ -41,7 +41,7 @@ export async function getCurrentUser(): Promise<User | null> {
  *
  * When email confirmation is enabled, the confirmation link returns the user
  * to /auth/callback?next=<redirect>, preserving their intended destination
- * (or the neutral /account/start landing when no context exists).
+ * (or the canonical /app entry when no context exists).
  */
 export async function signUp(email: string, password: string, redirectTo?: string) {
   const normalizedEmail = email.trim().toLowerCase();
@@ -50,7 +50,7 @@ export async function signUp(email: string, password: string, redirectTo?: strin
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
     (typeof window !== 'undefined' ? window.location.origin : '');
-  const next = getSafeRedirectTarget(redirectTo, NEUTRAL_POST_AUTH_TARGET);
+  const next = getSafeRedirectTarget(redirectTo, DEFAULT_POST_AUTH_TARGET);
   const emailRedirectTo = siteUrl
     ? `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`
     : undefined;
