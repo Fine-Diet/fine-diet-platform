@@ -19,6 +19,7 @@
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { listAssignments } from '@/lib/plans/programAssignmentServerService';
+import { personHasCurrentProgramAccess } from './programPaidAccessServer';
 import type {
   PublishedProgram,
   PublishedContentItem,
@@ -78,30 +79,13 @@ async function hasProgramAccess(
 ): Promise<boolean> {
   const slug = programSlug.trim().toLowerCase();
   if (!slug) return false;
-
-  // Entitlement check: person_entitlements.is_active with matching key.
-  const nowIso = new Date().toISOString();
-  const entitlementKey = `program:${slug}`;
-  const { data: entRows, error: entErr } = await supabaseAdmin
-    .from('person_entitlements')
-    .select('id')
-    .eq('person_id', personId)
-    .eq('entitlement_key', entitlementKey)
-    .eq('is_active', true)
-    .lte('starts_at', nowIso)
-    .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
-    .limit(1);
-  if (entErr) {
-    console.warn('[progress] hasProgramAccess entitlements warn:', entErr.message);
-  } else if ((entRows ?? []).length > 0) {
-    return true;
-  }
-
-  // Assignment check: any program_assignments row is enough (assigned_only
-  // access state in Packet 11 still counts as "user has this program").
+  if (await personHasCurrentProgramAccess(personId, slug)) return true;
+  // A completed assignment can still record historical progress. An inactive
+  // assignment left by a canceled payment cannot.
   const { rows } = await listAssignments({
     personId,
     programSlug: slug,
+    status: 'completed',
     limit: 1,
   });
   return rows.length > 0;

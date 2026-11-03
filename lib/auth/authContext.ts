@@ -48,11 +48,11 @@ export interface AuthCopy {
 }
 
 /**
- * Neutral landing surface used when no safe redirect/context exists.
- * No-context signups land here — never auto-routed into onboarding,
- * checkout, the Baseline Program, or the app dashboard.
+ * Canonical app entry used when no safe redirect/context exists.
+ * Middleware still enforces active access and required onboarding before
+ * allowing the member into protected app content.
  */
-export const NEUTRAL_POST_AUTH_TARGET = '/account/start';
+export const DEFAULT_POST_AUTH_TARGET = '/app';
 
 const VALID_INTENTS: ReadonlySet<string> = new Set<AuthIntent>(['login', 'signup']);
 const VALID_SOURCES: ReadonlySet<string> = new Set<AuthSource>([
@@ -217,11 +217,11 @@ export function buildAuthUrl(ctx: Partial<AuthContext>): string {
 
 /**
  * Resolve where to send the user after successful auth.
- * Returns the safe redirect when present, otherwise the neutral
- * /account/start landing — never an app/checkout/onboarding deep-link.
+ * Returns the safe redirect when present, otherwise the canonical app entry.
+ * The app middleware applies entitlement and onboarding gates after arrival.
  */
 export function resolvePostAuthTarget(ctx: Pick<AuthContext, 'redirectTo'>): string {
-  return getSafeRedirectTarget(ctx.redirectTo, NEUTRAL_POST_AUTH_TARGET);
+  return getSafeRedirectTarget(ctx.redirectTo, DEFAULT_POST_AUTH_TARGET);
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

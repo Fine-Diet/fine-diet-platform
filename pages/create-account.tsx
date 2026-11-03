@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 
 import { AuthPanel } from '@/components/account/AuthPanel';
 import { useResolvedAuthContext } from '@/lib/auth/useResolvedAuthContext';
-import { NEUTRAL_POST_AUTH_TARGET } from '@/lib/auth/authContext';
+import { DEFAULT_POST_AUTH_TARGET } from '@/lib/auth/authContext';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { getOfferConfigByOfferKey } from '@/lib/access/offerConfig';
@@ -20,7 +20,7 @@ import {
  * Reads auth context from the URL (ctx, redirect, email, offer, assessment,
  * submission, session), recovers any persisted `fd_auth_context` fallback when
  * the URL is bare, and renders the shared AuthPanel defaulted to the Create
- * Account tab. No-context signups land on /account/start afterward.
+ * Account tab. No-context signups enter at /app afterward.
  *
  * Checkout context (`ctx=checkout` + a resolvable `offer=<offerKey>`) upgrades
  * the page into Step 1 of the app subscription/trial checkout: it frames account
@@ -31,7 +31,7 @@ import {
  * exposed (the marketing DTO strips them).
  *
  * Already-authenticated visitors are redirected away (see getServerSideProps):
- * to a safe `?redirect=` target when present, otherwise /account/start.
+ * to a safe `?redirect=` target when present, otherwise /app.
  */
 type CreateAccountProps = InferGetServerSidePropsType<typeof getServerSideProps>;
 
@@ -232,7 +232,7 @@ export default function CreateAccountPage({ checkoutOffer }: CreateAccountProps)
  * SSR guard + checkout offer resolution.
  *
  * - Logged-in users should never see the signup form: honor a safe `?redirect=`
- *   (or `returnTo` alias), otherwise the neutral /account/start landing.
+ *   (or `returnTo` alias), otherwise the canonical /app entry.
  * - Anonymous visitors fall through and render the AuthPanel. When the page is
  *   reached with `ctx=checkout` and a resolvable `offer=<offerKey>`, we attach a
  *   marketing-safe offer DTO (no Stripe IDs) so the page can render the
@@ -248,7 +248,7 @@ export const getServerSideProps = (async (context) => {
       (Array.isArray(returnTo) ? returnTo[0] : returnTo);
     const destination = getSafeRedirectTarget(
       typeof rawRedirect === 'string' ? rawRedirect : undefined,
-      NEUTRAL_POST_AUTH_TARGET
+      DEFAULT_POST_AUTH_TARGET
     );
 
     return {

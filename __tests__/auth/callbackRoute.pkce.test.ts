@@ -38,7 +38,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('/auth/callback (PKCE) is unchanged', () => {
+describe('/auth/callback (PKCE)', () => {
   it('exchanges ?code= for a session, links the person, and redirects to a safe next', async () => {
     const res = await GET(req('/auth/callback?code=abc&next=/app/plans'));
     expect(mockExchange).toHaveBeenCalledWith('abc');
@@ -53,9 +53,15 @@ describe('/auth/callback (PKCE) is unchanged', () => {
     'still rejects unsafe next=%s',
     async (next) => {
       const res = await GET(req(`/auth/callback?code=abc&next=${encodeURIComponent(next)}`));
-      expect(res.headers.get('location')).toBe(`${ORIGIN}/`);
+      expect(res.headers.get('location')).toBe(`${ORIGIN}/app`);
     },
   );
+
+  it('sends OAuth and email-confirm callbacks to /app when no destination is supplied', async () => {
+    const res = await GET(req('/auth/callback?code=abc'));
+    expect(mockExchange).toHaveBeenCalledWith('abc');
+    expect(res.headers.get('location')).toBe(`${ORIGIN}/app`);
+  });
 
   it('still requires a PKCE code: a fragment-style invite arrival (no ?code=) is NOT accepted here', async () => {
     const res = await GET(req('/auth/callback?next=%2Fhaul-invitations%2Fx'));
