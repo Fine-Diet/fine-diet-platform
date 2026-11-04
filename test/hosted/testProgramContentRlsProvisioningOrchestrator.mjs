@@ -268,11 +268,57 @@ test('failed deletion is surfaced as unresolved with exact recovery identity', a
   assert.equal(api.branches.length, 1);
 });
 
-test('read-only preflight needs only branch inventory and no project-settings endpoint', async () => {
+test('read-only preflight checks branch inventory and Action Runs before creation', async () => {
   const api = fakeApi();
   await run(api, { runHosted: async () => 0 });
   assert.equal(api.calls.some((call) => call.route === `/projects/${PARENT}`), false);
   assert.equal(api.calls[0].method, 'GET');
+  const createIndex = api.calls.findIndex((call) => call.method === 'POST');
+  const preflightActionIndex = api.calls.findIndex((call) => call.method === 'GET' && call.route === `/projects/${PARENT}/actions`);
+  assert.ok(preflightActionIndex > 0 && preflightActionIndex < createIndex);
+  assert.equal(new URL(`https://api.supabase.com${api.calls[preflightActionIndex].route}?limit=100`).searchParams.get('limit'), '100');
+});
+
+test('Action Runs preflight HTTP failure stops before branch creation', async () => {
+  const api = fakeApi();
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith('/actions')) {
+      assert.equal(parsed.searchParams.get('limit'), '100');
+      return response(400, { message: 'unsupported smaller limit' });
+    }
+    return api.fetchImpl(url, options);
+  };
+  await assert.rejects(run(api, { fetchImpl, runHosted: async () => assert.fail('must not run') }), /Action Runs preflight failed \(HTTP 400\)/);
+  assert.equal(api.calls.filter((call) => call.method === 'POST').length, 0);
+  assert.equal(api.calls.some((call) => call.method === 'DELETE'), false);
+});
+
+test('malformed Action Runs preflight structure stops before branch creation', async () => {
+  const api = fakeApi();
+  const fetchImpl = async (url, options = {}) => new URL(url).pathname.endsWith('/actions')
+    ? response(200, { action_runs: [] })
+    : api.fetchImpl(url, options);
+  await assert.rejects(run(api, { fetchImpl, runHosted: async () => assert.fail('must not run') }), /Unexpected Action Runs response structure/);
+  assert.equal(api.calls.filter((call) => call.method === 'POST').length, 0);
+  assert.equal(api.calls.some((call) => call.method === 'DELETE'), false);
+});
+
+test('unresolved private recovery intent blocks provisioning even when remote inventory is empty', async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'pr225-recovery-guard-'));
+  const recoveryDir = path.join(tempRoot, 'fine-diet-pr225-recovery');
+  const lockPath = path.join(tempRoot, 'orchestrator.lock');
+  const api = fakeApi();
+  try {
+    await mkdir(recoveryDir, { mode: 0o700 });
+    await writeFile(path.join(recoveryDir, 'fine-diet-pr225-rls-20261104t201530z.json'), JSON.stringify({ status: 'provisioning' }), { mode: 0o600 });
+    await assert.rejects(run(api, { lockPath, recoveryDir, runHosted: async () => assert.fail('must not run') }), /Unresolved PR #225 provisioning or cleanup intent/);
+    assert.equal(api.calls.length, 0);
+    assert.equal(api.calls.filter((call) => call.method === 'POST').length, 0);
+    assert.equal(await access(path.join(recoveryDir, 'fine-diet-pr225-rls-20261104t201530z.json')).then(() => true, () => false), true);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('one-branch authorization refuses provisioning while another PR #225 branch exists', async () => {

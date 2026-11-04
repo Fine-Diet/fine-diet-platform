@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { chmod, lstat, mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,6 +18,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const RUNNER = path.join(ROOT, 'test/hosted/runProgramContentRlsHosted.mjs');
 const RUN_NAME_PREFIX = 'fine-diet-pr225-rls-';
 const DEFAULT_LOCK_PATH = path.join(os.tmpdir(), 'fine-diet-pr225-hosted-orchestrator.lock');
+const DEFAULT_RECOVERY_DIR = path.join(os.tmpdir(), 'fine-diet-pr225-recovery');
 let interruptedSignal = null;
 let activeChild = null;
 const interruptWaiters = new Set();
@@ -236,6 +237,19 @@ async function runHostedBranchOrchestration({
     return branchesFrom(payload);
   };
 
+  const actionRuns = async () => {
+    const { response, payload } = await api('GET', `/projects/${PARENT_REF}/actions?limit=100`);
+    if (!response.ok) throw new Error(`Action Runs preflight failed (HTTP ${response.status})`);
+    if (!Array.isArray(payload) || payload.some((run) =>
+      !run || typeof run !== 'object' || Array.isArray(run) ||
+      typeof run.id !== 'string' || typeof run.branch_id !== 'string' ||
+      run.check_run_id == null || !Array.isArray(run.run_steps) ||
+      run.run_steps.some((step) => !step || typeof step !== 'object' || Array.isArray(step) ||
+        typeof step.name !== 'string' || typeof step.status !== 'string')
+    )) throw new Error('Unexpected Action Runs response structure');
+    return payload;
+  };
+
   // Read-only preflight. No Project Settings endpoint or Settings permission is used.
   const before = await inventory();
   if (before.some((branch) => typeof branch?.name === 'string' && branch.name.startsWith(RUN_NAME_PREFIX))) {
@@ -250,6 +264,7 @@ async function runHostedBranchOrchestration({
   }
   if (!name) throw new Error('Could not find an unused timestamped branch name');
   assertRunName(name);
+  await actionRuns();
   await onBranchIntent({ name, projectRef: null, parentRef: PARENT_REF });
   assertNotInterrupted();
 
@@ -379,7 +394,31 @@ async function runHostedBranchOrchestration({
 export async function createHostedBranchOrchestrator(options) {
   const lockPath = options?.lockPath || DEFAULT_LOCK_PATH;
   const releaseLock = await acquireExclusiveLock(lockPath);
-  try { return await runHostedBranchOrchestration(options); }
+  try {
+    const recoveryDir = options?.recoveryDir || DEFAULT_RECOVERY_DIR;
+    let recoveryEntries = [];
+    try {
+      let recoveryStats;
+      try { recoveryStats = await lstat(recoveryDir); }
+      catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+        await mkdir(recoveryDir, { mode: 0o700 });
+        recoveryStats = await lstat(recoveryDir);
+      }
+      const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+      if (!recoveryStats.isDirectory() || recoveryStats.isSymbolicLink() ||
+        (recoveryStats.mode & 0o077) !== 0 || (uid !== null && recoveryStats.uid !== uid)) {
+        throw new Error('PR #225 recovery directory permissions or ownership are unsafe; refusing provisioning');
+      }
+      recoveryEntries = await readdir(recoveryDir);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    if (recoveryEntries.length > 0) {
+      throw new Error('Unresolved PR #225 provisioning or cleanup intent exists in the private recovery directory; complete manual recovery before provisioning');
+    }
+    return await runHostedBranchOrchestration(options);
+  }
   finally { await releaseLock(); }
 }
 
@@ -567,9 +606,7 @@ function runHostedRunner({ name, projectRef, credentials }) {
 async function main() {
   const token = process.env.SUPABASE_ACCESS_TOKEN;
   if (!token?.trim()) throw new Error('SUPABASE_ACCESS_TOKEN must already be exported in this Terminal');
-  const stateDir = path.join(os.tmpdir(), 'fine-diet-pr225-recovery');
-  await mkdir(stateDir, { recursive: true, mode: 0o700 });
-  await chmod(stateDir, 0o700);
+  const stateDir = DEFAULT_RECOVERY_DIR;
   let statePath = null;
   let credentials = null;
   try {
