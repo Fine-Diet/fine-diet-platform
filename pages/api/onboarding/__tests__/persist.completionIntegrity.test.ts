@@ -18,6 +18,7 @@ const COMPLETE_REQUIRED_ANSWERS: OnboardingAnswers = {
 };
 
 const updateCalls: Array<{ payload: Record<string, unknown> }> = [];
+const updateFilters: Array<{ column: string; value: unknown }> = [];
 let currentMetadata: Record<string, unknown> = {
   meal_schedule: { slots: { breakfast: { enabled: true } }, updated_at: '2020-01-01T00:00:00.000Z' },
   onboarding: { answers: { sex: 'female' } },
@@ -31,9 +32,16 @@ jest.mock('@/lib/supabaseServerClient', () => {
     single: async () => ({ data: { metadata: currentMetadata }, error: null }),
     update: (payload: Record<string, unknown>) => {
       updateCalls.push({ payload });
-      return {
-        eq: async () => ({ error: null }),
+      const updateQuery: any = {
+        is: (column: string, value: unknown) => {
+          updateFilters.push({ column, value });
+          return updateQuery;
+        },
+        eq: () => updateQuery,
+        then: (resolve: (value: { error: null }) => unknown) =>
+          Promise.resolve({ error: null }).then(resolve),
       };
+      return updateQuery;
     },
   };
   return {
@@ -82,6 +90,7 @@ function makeRes(): NextApiResponse & { statusCode: number; body: unknown } {
 describe('POST /api/onboarding/persist completion integrity', () => {
   beforeEach(() => {
     updateCalls.length = 0;
+    updateFilters.length = 0;
     currentMetadata = {
       meal_schedule: { slots: { breakfast: { enabled: true } }, updated_at: '2020-01-01T00:00:00.000Z' },
       onboarding: { answers: { sex: 'female' } },
@@ -155,5 +164,20 @@ describe('POST /api/onboarding/persist completion integrity', () => {
     expect(meta.onboarding_completed_at).toBeUndefined();
     expect(meta.onboarding_last_step).toBe(1);
     expect(meta.onboarding).toBeTruthy();
+    expect(updateFilters).toEqual([
+      { column: 'metadata->>onboarding_completed_at', value: null },
+      { column: 'metadata->>onboarding_skipped_at', value: null },
+    ]);
+  });
+
+  it('ignores a progress request when onboarding is already finalized', async () => {
+    currentMetadata = { onboarding_skipped_at: '2026-11-04T12:00:00.000Z' };
+    const { default: handler } = await import('@/pages/api/onboarding/persist');
+    const res = makeRes();
+
+    await handler(makeReq({ mode: 'progress', answers: INITIAL_ANSWERS, lastStep: 1 }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(updateCalls).toHaveLength(0);
   });
 });

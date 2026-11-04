@@ -15,6 +15,10 @@ import {
   type OnboardingAnswers,
 } from '@/lib/onboarding/defaultOnboardingFlow';
 import {
+  OnboardingPersistenceCoordinator,
+  persistOnboarding,
+} from '@/lib/onboarding/onboardingPersistence';
+import {
   resolveCompletedUserDestination,
   resolveOnboardingFinishDestination,
   resolveSkippedUserDestination,
@@ -32,19 +36,6 @@ function coerceAnswers(raw: unknown): OnboardingAnswers {
   return { ...INITIAL_ANSWERS, ...(raw as Partial<OnboardingAnswers>) };
 }
 
-async function persistOnboarding(body: Record<string, unknown>): Promise<void> {
-  const res = await fetch('/api/onboarding/persist', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? 'Could not save your onboarding.');
-  }
-}
-
 export default function OnboardingPage() {
   const router = useRouter();
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'leaving'>('loading');
@@ -52,7 +43,13 @@ export default function OnboardingPage() {
   const [initialAnswers, setInitialAnswers] = useState<OnboardingAnswers>(INITIAL_ANSWERS);
   const [initialStep, setInitialStep] = useState(0);
   const startedRef = useRef(false);
-  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistenceRef = useRef<OnboardingPersistenceCoordinator | null>(null);
+  if (!persistenceRef.current) {
+    persistenceRef.current = new OnboardingPersistenceCoordinator(persistOnboarding);
+  }
+  const persistence = persistenceRef.current;
+
+  useEffect(() => () => persistence.cancelPendingProgress(), [persistence]);
 
   useEffect(() => {
     const returnTo = readReturnTo(router.query);
@@ -109,23 +106,16 @@ export default function OnboardingPage() {
   const markStarted = useCallback(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    void persistOnboarding({ mode: 'started' }).catch(() => {});
-  }, []);
+    persistence.markStarted();
+  }, [persistence]);
 
   const persistProgress = useCallback((answers: OnboardingAnswers, step: number) => {
-    if (progressTimer.current) clearTimeout(progressTimer.current);
-    progressTimer.current = setTimeout(() => {
-      void persistOnboarding({
-        mode: 'progress',
-        answers,
-        lastStep: step,
-      }).catch(() => {});
-    }, 400);
-  }, []);
+    persistence.scheduleProgress(answers, step);
+  }, [persistence]);
 
   const handleFinish = useCallback(
     async (answers: OnboardingAnswers, { skipRemaining }: { skipRemaining: boolean }) => {
-      await persistOnboarding({
+      await persistence.finalize({
         mode: skipRemaining ? 'skip' : 'complete',
         answers,
       });
@@ -134,7 +124,7 @@ export default function OnboardingPage() {
         resolveOnboardingFinishDestination(readReturnTo(router.query)),
       );
     },
-    [router],
+    [persistence, router],
   );
 
   if (loadState === 'loading' || loadState === 'leaving') {

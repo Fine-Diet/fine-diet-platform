@@ -51,8 +51,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const currentMeta = (current.metadata ?? {}) as Record<string, unknown>;
+    const alreadyFinalized = Boolean(
+      currentMeta.onboarding_completed_at || currentMeta.onboarding_skipped_at,
+    );
 
     if (mode === 'started') {
+      if (alreadyFinalized) {
+        return res.status(200).json({ ok: true, mode });
+      }
       if (!currentMeta.onboarding_started_at) {
         const updatedMeta = {
           ...currentMeta,
@@ -61,11 +67,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const { error } = await supabaseAdmin
           .from('people')
           .update({ metadata: updatedMeta, updated_at: new Date().toISOString() })
-          .eq('id', personId);
+          .eq('id', personId)
+          .is('metadata->>onboarding_completed_at', null)
+          .is('metadata->>onboarding_skipped_at', null);
         if (error) {
           return res.status(500).json({ error: 'Failed to mark onboarding started' });
         }
       }
+      return res.status(200).json({ ok: true, mode });
+    }
+
+    if (mode === 'progress' && alreadyFinalized) {
       return res.status(200).json({ ok: true, mode });
     }
 
@@ -124,10 +136,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (value === null) delete updatedMeta[key];
     }
 
-    const { error: updateErr } = await supabaseAdmin
+    let updateQuery = supabaseAdmin
       .from('people')
       .update({ ...columnUpdates, metadata: updatedMeta, updated_at: new Date().toISOString() })
       .eq('id', personId);
+
+    if (mode === 'progress') {
+      // Make a late, in-flight progress request re-check final state when its
+      // UPDATE acquires the row lock. This also covers client request aborts
+      // where the server may still finish processing the request.
+      updateQuery = updateQuery
+        .is('metadata->>onboarding_completed_at', null)
+        .is('metadata->>onboarding_skipped_at', null);
+    }
+
+    const { error: updateErr } = await updateQuery;
 
     if (updateErr) {
       console.error('[API /onboarding/persist] Update error:', updateErr);
