@@ -13,6 +13,16 @@ import {
   writeProgramDayObservation,
 } from '../programDayInteractionServerService';
 
+let mockCurrentProgramAccess!: jest.Mock;
+
+jest.mock('../programAccessServerService', () => {
+  mockCurrentProgramAccess = jest.fn().mockResolvedValue(true);
+  return {
+    hasCurrentProgramAccess: (...args: unknown[]) => mockCurrentProgramAccess(...args),
+    PROGRAM_ACCESS_DENIED: 'PROGRAM_ACCESS_DENIED',
+  };
+});
+
 const VERSION_ID = 'f5c52fd9-b8a0-48bc-a7bb-2100d21b0021';
 const OTHER_VERSION_ID = '11111111-1111-4111-8111-111111111111';
 const PROGRAM_ID = 'c6c3bc25-5778-4a43-92f5-13b6136d2b6b';
@@ -65,7 +75,7 @@ function makeQuery(table: string) {
 }
 
 const activeSummary = {
-  enrollment: { id: ENROLLMENT_ID, person_id: PERSON_ID },
+  enrollment: { id: ENROLLMENT_ID, person_id: PERSON_ID, program_slug: 'baseline' },
   version: { id: VERSION_ID, program_id: PROGRAM_ID, duration_days: 21 },
   resolved_status: 'active',
   current_day: 7,
@@ -78,7 +88,45 @@ beforeEach(() => {
   ignoredDuplicateCompletionUpsert = false;
   jest.clearAllMocks();
   (getProgramRuntimeSummaryForPerson as jest.Mock).mockResolvedValue(activeSummary);
+  mockCurrentProgramAccess.mockResolvedValue(true);
   (supabaseAdmin.from as jest.Mock).mockImplementation((table: string) => makeQuery(table));
+});
+
+describe('current program access boundary', () => {
+  test.each(['revoked entitlement', 'expired entitlement', 'future assignment', 'wrong-person assignment'])(
+    'blocks observation and completion reads/writes after %s access is absent',
+    async () => {
+      mockCurrentProgramAccess.mockResolvedValue(false);
+      const input = { personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7 };
+
+      await expect(getProgramDayObservation({ ...input, contentKey: 'baseline-day-7-reflection' }))
+        .rejects.toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+      await expect(writeProgramDayObservation({ ...input, contentKey: 'baseline-day-7-reflection', text: 'secret', commit: true }))
+        .rejects.toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+      await expect(getProgramDayCompletion(input))
+        .rejects.toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+      await expect(completeProgramDay(input))
+        .rejects.toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+
+      expect(mockCurrentProgramAccess).toHaveBeenCalledWith(PERSON_ID, 'baseline');
+      expect(states.some((state) => state.table === 'program_day_observations' || state.table === 'program_day_completions')).toBe(false);
+    },
+  );
+
+  it('returns not-found for an enrollment owned by a different person', async () => {
+    (getProgramRuntimeSummaryForPerson as jest.Mock).mockResolvedValue(null);
+    await expect(getProgramDayCompletion({ personId: 'wrong-person', enrollmentId: ENROLLMENT_ID, day: 7 }))
+      .rejects.toMatchObject({ code: 'PROGRAM_ENROLLMENT_NOT_FOUND' });
+    expect(mockCurrentProgramAccess).not.toHaveBeenCalled();
+  });
+
+  it('preserves valid entitlement or assignment access for day interactions', async () => {
+    mockCurrentProgramAccess.mockResolvedValue(true);
+    singleRows.program_delivery_modules = { id: 'module-row', module_key: 'baseline-day-7-reflection', day_start: 7, day_end: 7, metadata: {} };
+    await getProgramDayObservation({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 7, contentKey: 'baseline-day-7-reflection' });
+    expect(mockCurrentProgramAccess).toHaveBeenCalledWith(PERSON_ID, 'baseline');
+    expect(states.some((state) => state.table === 'program_day_observations')).toBe(true);
+  });
 });
 
 describe('versioned day observations', () => {
@@ -352,6 +400,7 @@ describe('enrollment lifecycle write authorization', () => {
     expect(states.some((state) => state.write)).toBe(false);
 
     (getProgramRuntimeSummaryForPerson as jest.Mock).mockResolvedValue(activeSummary);
+  mockCurrentProgramAccess.mockResolvedValue(true);
     await expect(writeProgramDayObservation({ personId: PERSON_ID, enrollmentId: ENROLLMENT_ID, day: 8, contentKey: 'reflection', text: 'x', commit: true }))
       .rejects.toMatchObject({ code: PROGRAM_DAY_NOT_UNLOCKED });
     expect(states.some((state) => state.write)).toBe(false);

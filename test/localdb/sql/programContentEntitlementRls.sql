@@ -134,6 +134,8 @@ SELECT test.assert_count('authenticated INSERT removed', has_table_privilege('au
 SELECT test.assert_count('service_role SELECT retained', has_table_privilege('service_role', 'public.program_modules', 'SELECT')::int, 1);
 SELECT test.assert_count('service_role INSERT retained', has_table_privilege('service_role', 'public.program_modules', 'INSERT')::int, 1);
 SELECT test.assert_count('helper not callable by anon', has_function_privilege('anon', 'programs_private.current_user_has_program_access(uuid)', 'EXECUTE')::int, 0);
+SELECT test.assert_count('anon content-item SELECT grant removed', has_table_privilege('anon', 'public.program_content_items', 'SELECT')::int, 0);
+SELECT test.assert_count('service_role content-item SELECT retained', has_table_privilege('service_role', 'public.program_content_items', 'SELECT')::int, 1);
 
 SET request.jwt.claim.sub = '40000000-0000-4000-8000-000000000402';
 SET ROLE authenticated;

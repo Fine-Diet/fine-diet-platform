@@ -126,7 +126,9 @@ export default async function handler(
   } catch (err) {
     const code = (err as Error & { code?: string }).code;
     const status =
-      code === 'PROGRAM_ENROLLMENT_NOT_FOUND'
+      code === 'PROGRAM_ACCESS_DENIED'
+        ? 403
+        : code === 'PROGRAM_ENROLLMENT_NOT_FOUND'
         ? 404
         : code === 'PROGRAM_CHECKIN_TEMPLATE_DENIED'
           ? 403

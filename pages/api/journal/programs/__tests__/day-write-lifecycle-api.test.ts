@@ -65,6 +65,29 @@ describe('day interaction lifecycle API responses', () => {
     }
   });
 
+  it('maps current-program-access denial to 403 for observations and completion', async () => {
+    const denied = Object.assign(new Error('Current program access is required.'), { code: 'PROGRAM_ACCESS_DENIED' });
+    mockGetObservation.mockRejectedValue(denied);
+    mockCompleteDay.mockRejectedValue(denied);
+
+    const observation = makeResponse();
+    await observationsHandler({
+      method: 'GET',
+      query: { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2', day: '7', content_key: 'baseline-day-7-reflection' },
+    } as any, observation.res as any);
+    expect(observation.out.statusCode).toBe(403);
+    expect(observation.out.body).toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+
+    const completion = makeResponse();
+    await completeDayHandler({
+      method: 'POST',
+      query: { id: 'a7c40dd7-f660-4eb9-a04f-d0a7593fe1a2' },
+      body: { day: 7 },
+    } as any, completion.res as any);
+    expect(completion.out.statusCode).toBe(403);
+    expect(completion.out.body).toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+  });
+
   it('returns a stable conflict response for day-completion requests', async () => {
     const { res, out } = makeResponse();
     await completeDayHandler({

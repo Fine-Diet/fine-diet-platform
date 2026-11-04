@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { getProgramRuntimeSummaryForPerson } from './programRuntimeServerService';
+import { hasCurrentProgramAccess, PROGRAM_ACCESS_DENIED } from './programAccessServerService';
 
 export const PROGRAM_DAY_NOT_UNLOCKED = 'PROGRAM_DAY_NOT_UNLOCKED';
 export const PROGRAM_DAY_REQUIREMENTS_UNMET = 'PROGRAM_DAY_REQUIREMENTS_UNMET';
@@ -79,6 +80,9 @@ async function readProgramDayCompletion(enrollmentId: string, programVersionId: 
 async function assertUnlocked(personId: string, enrollmentId: string, day: number) {
   const summary = await getProgramRuntimeSummaryForPerson(personId, enrollmentId);
   if (!summary) throw codedError('Enrollment not found for person.', 'PROGRAM_ENROLLMENT_NOT_FOUND');
+  if (!(await hasCurrentProgramAccess(personId, summary.enrollment.program_slug))) {
+    throw codedError('Current program access is required for day data and actions.', PROGRAM_ACCESS_DENIED);
+  }
   if (!canAccessProgramDay({ day, currentDay: summary.current_day, status: summary.resolved_status, durationDays: summary.version.duration_days })) {
     const message = summary.resolved_status === 'pre_start' && day !== 0
       ? 'Only Day 0 is available before the Program starts.'

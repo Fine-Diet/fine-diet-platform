@@ -19,7 +19,12 @@ import {
   readConfiguredDefaultEnrollmentVersion,
   type ServerEnrollmentAuthorization,
 } from './enrollmentAuthorization';
-import { listAssignments } from '@/lib/plans/programAssignmentServerService';
+import { listActiveAssignmentsForPerson } from '@/lib/plans/programAssignmentServerService';
+import {
+  hasCurrentProgramAccess,
+  PROGRAM_ACCESS_DENIED,
+  resolveCurrentProgramAccess,
+} from './programAccessServerService';
 import {
   BASELINE_RECOMMENDATION_PROGRAM_DAY,
   BASELINE_RECOMMENDATION_TYPE,
@@ -596,10 +601,16 @@ async function verifyEnrollmentSource(input: {
   slug: string;
   sourceType: ProgramEnrollmentSource;
   assignmentId?: string | null;
+  authorization?: ServerEnrollmentAuthorization;
 }): Promise<{ assignmentId: string | null; entitlementKey: string | null }> {
   const entitlementKey = `program:${input.slug}`;
 
   if (input.sourceType === 'admin_grant') {
+    if (!isVerifiedAdminGrant(input.authorization)) {
+      const err = new Error('Administrative program grants require verified server authorization.');
+      (err as Error & { code?: string }).code = 'PROGRAM_ASSIGNMENT_DENIED';
+      throw err;
+    }
     return { assignmentId: input.assignmentId ?? null, entitlementKey: null };
   }
 
@@ -613,65 +624,36 @@ async function verifyEnrollmentSource(input: {
     return { assignmentId: null, entitlementKey };
   }
 
-  if (input.assignmentId) {
-    const { data, error } = await supabaseAdmin
-      .from('program_assignments')
-      .select('id')
-      .eq('id', input.assignmentId)
-      .eq('person_id', input.personId)
-      .eq('program_slug', input.slug)
-      .maybeSingle();
-    if (error) throw new Error(`assignment lookup failed: ${error.message}`);
-    if (!data) {
-      const err = new Error('Program assignment not found for enrollment.');
-      (err as Error & { code?: string }).code = 'PROGRAM_ASSIGNMENT_DENIED';
-      throw err;
-    }
-    return { assignmentId: input.assignmentId, entitlementKey: null };
-  }
-
-  const { rows } = await listAssignments({
-    personId: input.personId,
-    programSlug: input.slug,
-    limit: 1,
-  });
-  if (rows.length === 0) {
-    const err = new Error('Program assignment not found for enrollment.');
+  const assignments = await listActiveAssignmentsForPerson(input.personId, input.slug);
+  const assignment = input.assignmentId
+    ? assignments.find((candidate) => candidate.id === input.assignmentId)
+    : assignments[0];
+  if (!assignment) {
+    const err = new Error('No current program assignment is available for enrollment.');
     (err as Error & { code?: string }).code = 'PROGRAM_ASSIGNMENT_DENIED';
     throw err;
   }
-
-  return { assignmentId: rows[0].id, entitlementKey: null };
+  return { assignmentId: assignment.id, entitlementKey: null };
 }
 
 async function resolveEnrollmentSourceFromAccess(input: {
   personId: string;
   slug: string;
+  authorization?: ServerEnrollmentAuthorization;
 }): Promise<{
   sourceType: ProgramEnrollmentSource;
   assignmentId: string | null;
   entitlementKey: string | null;
 }> {
-  const entitlementKey = `program:${input.slug}`;
-  if (await hasEntitlement(input.personId, entitlementKey)) {
-    return { sourceType: 'entitlement', assignmentId: null, entitlementKey };
+  if (isVerifiedAdminGrant(input.authorization)) {
+    return { sourceType: 'admin_grant', assignmentId: null, entitlementKey: null };
   }
 
-  const { rows } = await listAssignments({
-    personId: input.personId,
-    programSlug: input.slug,
-    limit: 1,
-  });
-  if (rows.length > 0) {
-    return {
-      sourceType: 'assignment',
-      assignmentId: rows[0].id,
-      entitlementKey: null,
-    };
-  }
+  const access = await resolveCurrentProgramAccess(input.personId, input.slug);
+  if (access) return access;
 
   const err = new Error('Person does not have access to this program.');
-  (err as Error & { code?: string }).code = 'PROGRAM_ACCESS_DENIED';
+  (err as Error & { code?: string }).code = PROGRAM_ACCESS_DENIED;
   throw err;
 }
 
@@ -843,6 +825,7 @@ export async function createProgramEnrollment(
     slug,
     sourceType: input.sourceType,
     assignmentId: input.assignmentId,
+    authorization: input.authorization,
   });
 
   const currentDay = calculateCurrentProgramDay({
@@ -902,6 +885,7 @@ export async function createProgramEnrollmentFromAccess(
   const source = await resolveEnrollmentSourceFromAccess({
     personId: input.personId,
     slug,
+    authorization: input.authorization,
   });
 
   return createProgramEnrollment({
@@ -1119,7 +1103,11 @@ export async function getProgramRuntimeSummary(
   // Paused and completed review is informational. The check-in prompt stays
   // off this response; submitted responses remain on latest_checkin_response.
   const historicalReview = resolvedStatus === 'paused' || resolvedStatus === 'completed';
-  const nextTemplate = historicalReview
+  const currentProgramAccess = await hasCurrentProgramAccess(
+    enrollment.person_id,
+    enrollment.program_slug,
+  );
+  const nextTemplate = historicalReview || !currentProgramAccess
     ? null
     : await getCheckinTemplateForDay(version.id, currentDay);
 
@@ -1201,6 +1189,12 @@ export async function respondToProgramCheckin(
   if (!enrollment) {
     const err = new Error('Enrollment not found for person.');
     (err as Error & { code?: string }).code = 'PROGRAM_ENROLLMENT_NOT_FOUND';
+    throw err;
+  }
+
+  if (!(await hasCurrentProgramAccess(input.personId, enrollment.program_slug))) {
+    const err = new Error('Current program access is required to submit check-ins.');
+    (err as Error & { code?: string }).code = PROGRAM_ACCESS_DENIED;
     throw err;
   }
 

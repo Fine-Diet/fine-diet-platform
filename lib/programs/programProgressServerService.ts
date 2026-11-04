@@ -16,7 +16,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { listActiveAssignmentsForPerson } from '@/lib/plans/programAssignmentServerService';
+import { hasCurrentProgramAccess } from './programAccessServerService';
 import type {
   PublishedProgram,
   PublishedContentItem,
@@ -74,33 +74,7 @@ async function hasProgramAccess(
   personId: string,
   programSlug: string,
 ): Promise<boolean> {
-  const slug = programSlug.trim().toLowerCase();
-  if (!slug) return false;
-
-  // Entitlement check: person_entitlements.is_active with matching key.
-  const nowIso = new Date().toISOString();
-  const entitlementKey = `program:${slug}`;
-  const { data: entRows, error: entErr } = await supabaseAdmin
-    .from('person_entitlements')
-    .select('id')
-    .eq('person_id', personId)
-    .eq('entitlement_key', entitlementKey)
-    .eq('is_active', true)
-    .lte('starts_at', nowIso)
-    .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
-    .limit(1);
-  if (entErr) {
-    console.warn('[progress] hasProgramAccess entitlements warn:', entErr.message);
-  } else if ((entRows ?? []).length > 0) {
-    return true;
-  }
-
-  // Match the RLS helper and content delivery: only active assignments
-  // inside their effective window grant current access. Historical,
-  // paused, cancelled, completed, and future assignments remain visible
-  // in the library but cannot authorize paid content reads or writes.
-  const assignments = await listActiveAssignmentsForPerson(personId, slug);
-  return assignments.some((assignment) => assignment.program_slug === slug);
+  return hasCurrentProgramAccess(personId, programSlug);
 }
 
 /**

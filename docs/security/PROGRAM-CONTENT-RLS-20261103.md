@@ -67,3 +67,21 @@ The policy checks use correlated `EXISTS` predicates on people/auth_user_id, ent
 4. The branch deployment is currently disabled. To permit any later Preview deployment, remove the branch-specific `deploymentEnabled: false` entry only in a separately reviewed change after the no-deploy gate is lifted.
 
 This is local application compatibility evidence only. Hosted signed-in member access, hosted RLS behavior, and production-scale query performance remain unverified.
+
+## Independent source-review follow-up — 2026-11-03
+
+The independent PR #225 source review found that ordinary enrollment could use historical assignment rows, and that program-day/check-in actions did not independently require current program access. Runtime summaries could also include the next authored check-in template after an entitlement ended. These paths used privileged server queries and were not covered by direct-table RLS alone.
+
+The follow-up correction adds `lib/programs/programAccessServerService.ts` as a shared current-access resolver: it accepts a currently valid `program:<slug>` entitlement or an active assignment inside its effective window. Ordinary enrollment source resolution and validation now use that resolver; explicit `verified_admin_grant` authorization remains limited to the existing verified admin grant route. Day observations, day completion, and check-in submissions now require current program-specific access. Access denial maps to HTTP 403. Runtime summaries preserve the person's own enrollment and historical response/recommendation metadata, but omit `next_checkin_template` when current program access is absent. No lifecycle or authentication routes were changed.
+
+Focused regressions cover revoked, expired, and future entitlements; cancelled, expired, future, and wrong-person assignments; valid entitlement and assignment enrollment; verified admin grants; check-in/day action denial after revocation; valid current access; and retaining historical summary metadata while suppressing protected authored prompt content. The PostgreSQL fixture gained two explicit `program_content_items` grant checks so the named 27 role/grant assertions are present in the executable fixture.
+
+### Follow-up verification
+
+- `test/localdb/run-program-content-entitlement-rls.sh`: PASS, PostgreSQL 17.11, 27/27 role/grant assertions; disposable local database only.
+- `node_modules/.bin/jest --runInBand lib/programs pages/api/journal/programs`: PASS, 48 suites / 521 tests, including the existing Programs coverage and new access-gate/API/runtime-summary cases.
+- `git diff --check`: PASS.
+- `npx tsc --noEmit`: repository-wide check remains failing with existing test-global/module declaration diagnostics across unrelated files (19,936 diagnostic lines); no diagnostics matched the modified production service or API files.
+- Hosted Supabase/PostgREST behavior, real signed-in hosted sessions, and production-scale query performance remain unverified. No Production SQL, deployment, Stripe, or PR #224 changes were made.
+
+The migration remains source-only and transactional. If a compatibility issue appears after application, keep direct content grants closed and correct forward with an equivalent entitlement-aware policy. The draft PR stays open for independent security review; this evidence does not approve rollout or Production application.

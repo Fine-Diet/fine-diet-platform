@@ -45,7 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json(completion);
   } catch (err) {
     const code = (err as Error & { code?: string }).code;
-    const status = code === 'PROGRAM_ENROLLMENT_NOT_FOUND' ? 404
+    const status = code === 'PROGRAM_ACCESS_DENIED' ? 403
+      : code === 'PROGRAM_ENROLLMENT_NOT_FOUND' ? 404
       : code === 'PROGRAM_DAY_NOT_UNLOCKED' || code === 'PROGRAM_DAY_REQUIREMENTS_UNMET' || code === PROGRAM_DAY_READ_ONLY ? 409
         : 500;
     console.error('[journal/programs/enrollments/:id/complete-day] error:', err);

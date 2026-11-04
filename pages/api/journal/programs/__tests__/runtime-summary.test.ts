@@ -1,10 +1,15 @@
 const mockRequireJournalAuth = jest.fn();
 const mockResolvePerson = jest.fn();
 const mockFrom = jest.fn();
+const mockCurrentProgramAccess = jest.fn();
 
 jest.mock('@/lib/access/requireJournalAccess', () => ({
   requireJournalAuth: (...args: unknown[]) => mockRequireJournalAuth(...args),
   resolveJournalTargetPerson: (...args: unknown[]) => mockResolvePerson(...args),
+}));
+
+jest.mock('@/lib/programs/programAccessServerService', () => ({
+  hasCurrentProgramAccess: (...args: unknown[]) => mockCurrentProgramAccess(...args),
 }));
 
 jest.mock('@/lib/supabaseServerClient', () => ({
@@ -159,6 +164,7 @@ describe('runtime summary API historical prompts', () => {
       user: { id: 'user-1', role: 'member' },
     });
     mockResolvePerson.mockResolvedValue(personId);
+    mockCurrentProgramAccess.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -178,6 +184,21 @@ describe('runtime summary API historical prompts', () => {
       checkin_day: 7,
       response_payload_json: { energy: 4 },
     });
+  });
+
+  test('withholds the authored next prompt after program access is revoked but retains history', async () => {
+    mockCurrentProgramAccess.mockResolvedValue(false);
+    installReads(enrollment({ status: 'active', metadata: {} }), { template: true });
+    const summary = await getSummaryJson();
+
+    expect(summary.next_checkin_template).toBeNull();
+    expect(summary.latest_checkin_response).toMatchObject({
+      checkin_day: 7,
+      response_payload_json: { energy: 4 },
+    });
+    expect(summary.enrollment).toMatchObject({ id: 'enrollment-1', status: 'active' });
+    expect(mockFrom.mock.calls.map((call) => call[0])).not.toContain('program_checkin_templates');
+    expect(mockCurrentProgramAccess).toHaveBeenCalledWith(personId, 'baseline');
   });
 
   test('omits paused and completed prompts while returning the submitted response', async () => {
