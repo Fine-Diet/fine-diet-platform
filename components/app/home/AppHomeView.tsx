@@ -8,7 +8,7 @@
  * Welcome CTA and Rhythm highlight share resolveNextMeal().
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
 import {
@@ -59,6 +59,21 @@ function todayLocalKey(): string {
   return toDateKey(new Date());
 }
 
+export async function loadJournalEntriesForHome(
+  loadEntries: () => Promise<JournalEntry[]>,
+  dateKey: string,
+): Promise<{ entries: JournalEntry[]; error: boolean }> {
+  try {
+    const entries = await loadEntries();
+    return {
+      entries: entries.filter((entry) => entryBelongsToJournalDate(entry, dateKey)),
+      error: false,
+    };
+  } catch {
+    return { entries: [], error: true };
+  }
+}
+
 export function AppHomeView({
   hideFooter = false,
   preferFixtures = false,
@@ -82,7 +97,9 @@ export function AppHomeView({
   const [todayEntries, setTodayEntries] = useState<JournalEntry[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(true);
   const [entriesLoading, setEntriesLoading] = useState(true);
+  const [journalError, setJournalError] = useState(false);
   const [homeError, setHomeError] = useState(false);
+  const journalRequestId = useRef(0);
   const [programsModel, setProgramsModel] = useState(() =>
     buildProgramsViewModelFromRuntime({
       hasAccess: false,
@@ -97,22 +114,30 @@ export function AppHomeView({
   });
   const pantry = usePantryReadiness();
 
+  const loadJournal = useCallback(async () => {
+    const requestId = ++journalRequestId.current;
+    setEntriesLoading(true);
+    setJournalError(false);
+    setTodayEntries([]);
+    const result = await loadJournalEntriesForHome(
+      () => journalService.listEntriesByDayOrThrow(new Date()),
+      todayLocalKey(),
+    );
+    if (requestId !== journalRequestId.current) return;
+    setTodayEntries(result.entries);
+    setJournalError(result.error);
+    setEntriesLoading(false);
+  }, []);
+
   const loadLive = useCallback(async () => {
     setScheduleLoading(true);
-    setEntriesLoading(true);
     setHomeError(false);
     try {
-      const [entries, profileResp, runtimeResp, libraryResp] = await Promise.all([
-        journalService.listEntriesByDayOrThrow(new Date()),
+      const [profileResp, runtimeResp, libraryResp] = await Promise.all([
         fetch('/api/journal/profile'),
         fetch('/api/journal/programs/runtime-summary'),
         fetch('/api/journal/programs/library'),
       ]);
-
-      const todayDk = todayLocalKey();
-      setTodayEntries(
-        entries.filter((entry) => entryBelongsToJournalDate(entry, todayDk)),
-      );
 
       if (profileResp.ok) {
         const body = await profileResp.json();
@@ -164,14 +189,18 @@ export function AppHomeView({
       );
     } finally {
       setScheduleLoading(false);
-      setEntriesLoading(false);
     }
   }, []);
 
+  const loadHome = useCallback(() => {
+    void loadJournal();
+    void loadLive();
+  }, [loadJournal, loadLive]);
+
   useEffect(() => {
     if (useFixtures) return;
-    void loadLive();
-  }, [useFixtures, loadLive]);
+    loadHome();
+  }, [useFixtures, loadHome]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -243,9 +272,16 @@ export function AppHomeView({
           actionOnClick={() =>
             mealRhythmOverlay.openMealRhythm({
               trigger: 'home',
-              onSaved: () => void loadLive(),
+              onSaved: loadHome,
             })
           }
+        />
+      ) : null}
+      {journalError && !useFixtures ? (
+        <AppNotificationBar
+          message="Your Journal entries couldn't load. Your other sections are still available."
+          actionLabel="Retry"
+          actionOnClick={() => void loadJournal()}
         />
       ) : null}
       <div className="relative flex h-[calc(95dvh-var(--app-chrome-offset,2.25rem))] flex-col overflow-hidden bg-gradient-to-b from-[#17130f] via-brand-900 to-[#4a4032]">
@@ -260,7 +296,7 @@ export function AppHomeView({
         <div className="mx-auto w-full max-w-[950px]">
           <TodaysRhythmModule
             rhythm={model.rhythm}
-            onSetupSaved={() => void loadLive()}
+            onSetupSaved={loadHome}
           />
         </div>
       </div>
