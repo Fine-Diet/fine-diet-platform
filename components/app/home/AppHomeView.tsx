@@ -35,7 +35,12 @@ import {
 } from '@/lib/app/home/fixtures';
 import { resolveNextMeal } from '@/lib/app/home/nextMealResolver';
 import type { AppHomeViewModel } from '@/lib/app/home/types';
-import { journalService, toDateKey, type JournalEntry } from '@/lib/journal';
+import {
+  entryBelongsToJournalDate,
+  journalService,
+  toDateKey,
+  type JournalEntry,
+} from '@/lib/journal';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
 import { useNDS } from '@/lib/nds/useNDS';
 import { normalizeMealSchedule } from '@/lib/plans/scheduleResolver';
@@ -98,7 +103,7 @@ export function AppHomeView({
     setHomeError(false);
     try {
       const [entries, profileResp, runtimeResp, libraryResp] = await Promise.all([
-        journalService.listEntriesByDay(new Date()),
+        journalService.listEntriesByDayOrThrow(new Date()),
         fetch('/api/journal/profile'),
         fetch('/api/journal/programs/runtime-summary'),
         fetch('/api/journal/programs/library'),
@@ -106,7 +111,7 @@ export function AppHomeView({
 
       const todayDk = todayLocalKey();
       setTodayEntries(
-        entries.filter((entry) => toDateKey(entry.timestamp) === todayDk),
+        entries.filter((entry) => entryBelongsToJournalDate(entry, todayDk)),
       );
 
       if (profileResp.ok) {

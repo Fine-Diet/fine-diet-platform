@@ -17,6 +17,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import type { GetServerSidePropsContext } from 'next';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { serialize } from 'cookie';
 
 export type UserRole = 'user' | 'editor' | 'admin' | 'staff' | 'coach';
 
@@ -30,6 +31,36 @@ export interface AuthenticatedUser {
  * Create a server-side Supabase client for API routes
  * Uses @supabase/ssr for proper cookie handling
  */
+export function createApiRouteCookieMethods(req: NextApiRequest, res: NextApiResponse) {
+  return {
+    getAll() {
+      return Object.entries(req.cookies ?? {}).flatMap(([name, value]) =>
+        typeof value === 'string' ? [{ name, value }] : [],
+      );
+    },
+    setAll(cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }>) {
+      const currentHeader = res.getHeader('Set-Cookie');
+      const existingHeaders = Array.isArray(currentHeader)
+        ? currentHeader.map(String)
+        : typeof currentHeader === 'string'
+          ? [currentHeader]
+          : [];
+      const headersByCookieName = new Map<string, string>();
+
+      for (const header of existingHeaders) {
+        const cookieName = header.split(';', 1)[0]?.split('=', 1)[0];
+        if (cookieName) headersByCookieName.set(cookieName, header);
+      }
+
+      for (const { name, value, options } of cookiesToSet) {
+        headersByCookieName.set(name, serialize(name, value, options));
+      }
+
+      res.setHeader('Set-Cookie', Array.from(headersByCookieName.values()));
+    },
+  };
+}
+
 function createServerClientForApi(req: NextApiRequest, res: NextApiResponse) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -39,29 +70,7 @@ function createServerClientForApi(req: NextApiRequest, res: NextApiResponse) {
   }
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      get(name: string) {
-        return req.cookies[name] ?? undefined;
-      },
-      set(name: string, value: string, options: CookieOptions) {
-        try {
-          // Next.js Pages Router API routes use res.setHeader for cookies
-          const cookieString = `${name}=${value}; Path=/; ${options.httpOnly ? 'HttpOnly;' : ''} ${options.secure ? 'Secure;' : ''} ${options.sameSite ? `SameSite=${options.sameSite};` : ''} ${options.maxAge ? `Max-Age=${options.maxAge};` : ''}`;
-          res.setHeader('Set-Cookie', cookieString);
-        } catch (error) {
-          // Ignore errors - cookie setting may fail in some contexts
-        }
-      },
-      remove(name: string, options: CookieOptions) {
-        try {
-          // Next.js Pages Router API routes use res.setHeader for cookies
-          const cookieString = `${name}=; Path=/; Max-Age=0; ${options.httpOnly ? 'HttpOnly;' : ''} ${options.secure ? 'Secure;' : ''}`;
-          res.setHeader('Set-Cookie', cookieString);
-        } catch (error) {
-          // Ignore errors - cookie removal may fail in some contexts
-        }
-      },
-    },
+    cookies: createApiRouteCookieMethods(req, res),
   });
 }
 
