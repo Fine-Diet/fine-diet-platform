@@ -257,17 +257,43 @@ async function runHostedBranchOrchestration({
   const actionRuns = async () => {
     const runs = [];
     const limit = 100;
-    for (let offset = 0; ; offset += limit) {
+    const maxPages = 1000;
+    const seenRunIds = new Set();
+    const seenPageSignatures = new Set();
+    let offset = 0;
+    let pageCount = 0;
+    for (;;) {
+      if (!Number.isSafeInteger(offset) || offset < 0) {
+        throw new Error('Action Runs pagination produced an invalid offset');
+      }
       const { response, payload } = await api('GET', `/projects/${PARENT_REF}/actions?limit=${limit}&offset=${offset}`);
-      if (!response.ok) throw new Error(`Action Runs preflight failed (HTTP ${response.status})`);
+      pageCount += 1;
+      if (!response.ok) throw new Error(`Action Runs request failed (HTTP ${response.status})`);
       if (!Array.isArray(payload) || payload.some((run) =>
         !run || typeof run !== 'object' || Array.isArray(run) ||
-        typeof run.id !== 'string' || typeof run.branch_id !== 'string' || !Array.isArray(run.run_steps) ||
+        typeof run.id !== 'string' || run.id.length === 0 ||
+        typeof run.branch_id !== 'string' || run.branch_id.length === 0 || !Array.isArray(run.run_steps) ||
         run.run_steps.some((step) => !step || typeof step !== 'object' || Array.isArray(step) ||
           typeof step.name !== 'string' || typeof step.status !== 'string')
       )) throw new Error('Unexpected Action Runs response structure');
+
+      const signature = JSON.stringify(payload.map((run) => run.id));
+      if (payload.length > 0 && seenPageSignatures.has(signature)) {
+        throw new Error('Action Runs pagination repeated a page');
+      }
+      if (payload.some((run) => seenRunIds.has(run.id))) {
+        throw new Error('Action Runs pagination returned duplicate run identities');
+      }
+      for (const run of payload) seenRunIds.add(run.id);
+      if (payload.length > 0) seenPageSignatures.add(signature);
       runs.push(...payload);
       if (payload.length < limit) return runs;
+      if (pageCount >= maxPages) throw new Error('Action Runs pagination exceeded the safety limit');
+      const nextOffset = offset + limit;
+      if (!Number.isSafeInteger(nextOffset) || nextOffset <= offset) {
+        throw new Error('Action Runs pagination produced an invalid offset');
+      }
+      offset = nextOffset;
     }
   };
 
@@ -363,9 +389,8 @@ async function runHostedBranchOrchestration({
       if (verified.status === 'MIGRATIONS_FAILED' || verified.status === 'FUNCTIONS_FAILED') {
         throw new Error(`Temporary branch workflow failed (${verified.status})`);
       }
-      const { response: actionsResponse, payload: actionRuns } = await api('GET', `/projects/${PARENT_REF}/actions?limit=100`);
-      if (!actionsResponse.ok) throw new Error(`Migration workflow status request failed (HTTP ${actionsResponse.status})`);
-      migrationEvidence = classifyMigrationReplay(verified, actionRuns);
+      const allActionRuns = await actionRuns();
+      migrationEvidence = classifyMigrationReplay(verified, allActionRuns);
       if (verified.is_default === false && verified.persistent === false && verified.with_data === false &&
           verified.preview_project_status === 'ACTIVE_HEALTHY' && migrationEvidence.state === 'passed') break;
       if (verified.persistent === true || verified.with_data === true || verified.is_default === true) {

@@ -37,6 +37,7 @@ function fakeApi({
     if (method === 'GET' && route === `/projects/${PARENT}/branches`) return response(200, branches.slice());
     if (method === 'GET' && route === `/projects/${PARENT}/actions`) {
       assert.equal(query.get('limit'), '100');
+      assert.ok(Number.isSafeInteger(Number(query.get('offset'))));
       return response(200, branches.map((branch) => ({
         id: 'action-run-1',
         branch_id: branch.id,
@@ -209,6 +210,94 @@ test('missing latest_check_run_id uses the uniquely newest action run for the ex
   assert.match(newestRunning.reason, /RUNNING/);
 });
 
+test('readiness scan finds the child migration run after 100 unrelated action runs', async () => {
+  const api = fakeApi({ branchStatus: 'ACTIVE_HEALTHY', latestCheckRunId: null });
+  const unrelatedRuns = Array.from({ length: 100 }, (_, index) => ({
+    id: `unrelated-run-${index}`,
+    branch_id: `other-branch-${index}`,
+    created_at: `2026-11-04T20:15:${String(index % 60).padStart(2, '0')}Z`,
+    run_steps: [{ name: 'migrate', status: 'EXITED' }],
+  }));
+  const readinessOffsets = [];
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith('/actions') && api.branches.length > 0) {
+      const offset = Number(parsed.searchParams.get('offset'));
+      readinessOffsets.push(offset);
+      if (offset === 0) return response(200, unrelatedRuns);
+      if (offset === 100) return response(200, [{
+        id: 'child-migration-run',
+        branch_id: api.branches[0].id,
+        created_at: '2026-11-04T20:16:00Z',
+        run_steps: [{ name: 'migrate', status: 'EXITED' }],
+      }]);
+      return response(200, []);
+    }
+    return api.fetchImpl(url, options);
+  };
+
+  const result = await run(api, { fetchImpl, runHosted: async () => 'migration-pass' });
+  assert.equal(result, 'migration-pass');
+  assert.deepEqual(readinessOffsets, [0, 100]);
+});
+
+test('repeated full action pages fail closed before branch creation', async () => {
+  const api = fakeApi();
+  const repeatedPage = Array.from({ length: 100 }, (_, index) => ({
+    id: `action-run-${index}`,
+    branch_id: `branch-${index}`,
+    run_steps: [],
+  }));
+  const fetchImpl = async (url, options = {}) => {
+    if (new URL(url).pathname.endsWith('/actions')) return response(200, repeatedPage);
+    return api.fetchImpl(url, options);
+  };
+  await assert.rejects(run(api, { fetchImpl, runHosted: async () => assert.fail('must not run') }), /pagination repeated a page/);
+  assert.equal(api.calls.filter((call) => call.method === 'POST').length, 0);
+});
+
+test('action pagination stops at its finite safety limit when every page is unique and full', async () => {
+  const api = fakeApi();
+  let pages = 0;
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith('/actions')) {
+      const offset = Number(parsed.searchParams.get('offset'));
+      pages += 1;
+      return response(200, Array.from({ length: 100 }, (_, index) => ({
+        id: `run-${offset + index}`,
+        branch_id: `branch-${offset + index}`,
+        run_steps: [],
+      })));
+    }
+    return api.fetchImpl(url, options);
+  };
+  await assert.rejects(run(api, { fetchImpl, runHosted: async () => assert.fail('must not run') }), /pagination exceeded the safety limit/);
+  assert.equal(pages, 1000);
+  assert.equal(api.calls.filter((call) => call.method === 'POST').length, 0);
+});
+
+test('empty action-run identity fails closed during pagination validation', async () => {
+  const api = fakeApi();
+  const fetchImpl = async (url, options = {}) => new URL(url).pathname.endsWith('/actions')
+    ? response(200, [{ id: '', branch_id: 'branch-record-1', run_steps: [] }])
+    : api.fetchImpl(url, options);
+  await assert.rejects(run(api, { fetchImpl, runHosted: async () => assert.fail('must not run') }), /Unexpected Action Runs response structure/);
+  assert.equal(api.calls.filter((call) => call.method === 'POST').length, 0);
+});
+
+test('terminal latest action run without a complete migrate step is rejected', () => {
+  assert.throws(() => classifyMigrationReplay({
+    id: 'branch-record-1',
+    status: 'ACTIVE_HEALTHY',
+  }, [{
+    id: 'child-action-run',
+    branch_id: 'branch-record-1',
+    created_at: '2026-11-04T20:15:31Z',
+    run_steps: [{ name: 'clone', status: 'EXITED' }],
+  }]), /does not contain a migrate step/);
+});
+
 test('tied newest action runs are ambiguous and fail closed', async () => {
   assert.throws(() => classifyMigrationReplay({
     id: 'branch-record-1',
@@ -320,7 +409,7 @@ test('Action Runs preflight HTTP failure stops before branch creation', async ()
     }
     return api.fetchImpl(url, options);
   };
-  await assert.rejects(run(api, { fetchImpl, runHosted: async () => assert.fail('must not run') }), /Action Runs preflight failed \(HTTP 400\)/);
+  await assert.rejects(run(api, { fetchImpl, runHosted: async () => assert.fail('must not run') }), /Action Runs request failed \(HTTP 400\)/);
   assert.equal(api.calls.filter((call) => call.method === 'POST').length, 0);
   assert.equal(api.calls.some((call) => call.method === 'DELETE'), false);
 });
