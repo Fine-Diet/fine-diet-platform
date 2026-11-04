@@ -76,4 +76,20 @@ describe('onboarding persistence reliability', () => {
 
     expect(write.mock.calls.map(([payload]) => payload.mode)).toEqual(['skip']);
   });
+
+  it('attaches the server-issued resume token to resumed progress writes', async () => {
+    jest.useFakeTimers();
+    const write = jest.fn(async () => {});
+    const coordinator = new OnboardingPersistenceCoordinator(write, 400);
+    coordinator.setResumeToken('server-issued-resume-token');
+    coordinator.scheduleProgress({ retained: true }, 1);
+
+    await jest.advanceTimersByTimeAsync(400);
+    await Promise.resolve();
+
+    expect(write).toHaveBeenCalledWith(expect.objectContaining({
+      mode: 'progress',
+      resumeToken: 'server-issued-resume-token',
+    }));
+  });
 });

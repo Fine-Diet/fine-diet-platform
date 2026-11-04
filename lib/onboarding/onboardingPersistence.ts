@@ -4,9 +4,10 @@ export type OnboardingFinalizationPayload = {
 };
 
 export type OnboardingPersistPayload = OnboardingFinalizationPayload | {
-  mode: 'started' | 'progress';
+  mode: 'started' | 'progress' | 'resume';
   answers?: unknown;
   lastStep?: number;
+  resumeToken?: string;
 };
 
 export const ONBOARDING_PERSIST_TIMEOUT_MS = 15_000;
@@ -19,7 +20,7 @@ type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
 export async function persistOnboarding(
   body: OnboardingPersistPayload,
   fetcher: Fetcher = fetch,
-): Promise<void> {
+): Promise<Record<string, unknown> | undefined> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ONBOARDING_PERSIST_TIMEOUT_MS);
 
@@ -44,6 +45,7 @@ export async function persistOnboarding(
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       throw new Error(payload?.error ?? 'Could not save your onboarding.');
     }
+    return (await response.json().catch(() => undefined)) as Record<string, unknown> | undefined;
   } finally {
     clearTimeout(timeout);
   }
@@ -54,6 +56,7 @@ export class OnboardingPersistenceCoordinator {
   private progressTimer: ReturnType<typeof setTimeout> | null = null;
   private writeQueue: Promise<void> = Promise.resolve();
   private finalizing = false;
+  private resumeToken: string | null = null;
 
   constructor(
     private readonly write: (payload: OnboardingPersistPayload) => Promise<void>,
@@ -64,12 +67,21 @@ export class OnboardingPersistenceCoordinator {
     void this.enqueue({ mode: 'started' });
   }
 
+  setResumeToken(token: string): void {
+    this.resumeToken = token;
+  }
+
   scheduleProgress(answers: unknown, lastStep: number): void {
     if (this.finalizing) return;
     this.cancelPendingProgress();
     this.progressTimer = setTimeout(() => {
       this.progressTimer = null;
-      void this.enqueue({ mode: 'progress', answers, lastStep });
+      void this.enqueue({
+        mode: 'progress',
+        answers,
+        lastStep,
+        ...(this.resumeToken ? { resumeToken: this.resumeToken } : {}),
+      });
     }, this.debounceMs);
   }
 

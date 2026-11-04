@@ -38,14 +38,17 @@ function coerceAnswers(raw: unknown): OnboardingAnswers {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'leaving'>('loading');
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'leaving' | 'error'>('loading');
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [flowConfig, setFlowConfig] = useState<OnboardingFlowConfig | null>(null);
   const [initialAnswers, setInitialAnswers] = useState<OnboardingAnswers>(INITIAL_ANSWERS);
   const [initialStep, setInitialStep] = useState(0);
   const startedRef = useRef(false);
   const persistenceRef = useRef<OnboardingPersistenceCoordinator | null>(null);
   if (!persistenceRef.current) {
-    persistenceRef.current = new OnboardingPersistenceCoordinator(persistOnboarding);
+    persistenceRef.current = new OnboardingPersistenceCoordinator(async (payload) => {
+      await persistOnboarding(payload);
+    });
   }
   const persistence = persistenceRef.current;
 
@@ -74,6 +77,20 @@ export default function OnboardingPage() {
             setLoadState('leaving');
             void router.replace(resolveSkippedUserDestination(returnTo));
             return;
+          }
+
+          if (profile.onboarding_skipped_at && router.query.resume) {
+            try {
+              const resume = await persistOnboarding({ mode: 'resume' });
+              if (typeof resume?.resumeToken !== 'string') {
+                throw new Error('Could not resume your setup.');
+              }
+              persistence.setResumeToken(resume.resumeToken);
+            } catch {
+              setLoadError('We could not resume your setup. Please try again.');
+              setLoadState('error');
+              return;
+            }
           }
 
           const blob = profile.onboarding;
@@ -126,6 +143,23 @@ export default function OnboardingPage() {
     },
     [persistence, router],
   );
+
+  if (loadState === 'error') {
+    return (
+      <div className="min-h-screen bg-[#CECAB9] flex flex-col items-center justify-center gap-4 px-5">
+        <p role="alert" className="text-[#4F4234] text-base">
+          {loadError ?? 'We could not resume your setup. Please try again.'}
+        </p>
+        <button
+          type="button"
+          onClick={() => router.reload()}
+          className="rounded-full bg-[#4F4234] px-5 py-3 text-sm font-semibold text-white"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   if (loadState === 'loading' || loadState === 'leaving') {
     return (
