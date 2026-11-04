@@ -19,6 +19,7 @@ import {
   resolveOnboardingFinishDestination,
   resolveSkippedUserDestination,
 } from '@/lib/onboarding/onboardingGate';
+import { replaceOnboardingRoute } from '@/lib/onboarding/onboardingNavigation';
 import type { OnboardingFlowConfig } from '@/lib/onboarding/onboardingFlowTypes';
 
 function readReturnTo(query: ReturnType<typeof useRouter>['query']): string | null {
@@ -128,7 +129,10 @@ export default function OnboardingPage() {
         mode: skipRemaining ? 'skip' : 'complete',
         answers,
       });
-      void router.replace(resolveOnboardingFinishDestination(readReturnTo(router.query)));
+      await replaceOnboardingRoute(
+        (destination) => router.replace(destination),
+        resolveOnboardingFinishDestination(readReturnTo(router.query)),
+      );
     },
     [router],
   );
