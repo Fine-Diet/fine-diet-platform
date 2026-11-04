@@ -155,13 +155,30 @@ export function classifyMigrationReplay(branch, actionRuns) {
   if (!waitingStatuses.has(branchStatus) && !successfulTerminalStatuses.has(branchStatus)) {
     throw new Error(`Unrecognized terminal branch workflow status: ${String(branchStatus)}`);
   }
-  if (typeof branch?.id !== 'string' || branch.id.length === 0 || branch.latest_check_run_id == null) {
+  if (typeof branch?.id !== 'string' || branch.id.length === 0) {
     if (waitingStatuses.has(branchStatus)) return { state: 'pending', reason: 'branch workflow identifiers are not ready yet' };
     throw new Error('Branch record lacks the identifiers required to verify its migration workflow');
   }
   if (!Array.isArray(actionRuns)) throw new Error('Action run inventory is not an array');
-  const matchingRuns = actionRuns.filter((run) =>
-    run?.branch_id === branch.id && String(run?.check_run_id) === String(branch.latest_check_run_id));
+  const branchRuns = actionRuns.filter((run) => run?.branch_id === branch.id);
+  let matchingRuns;
+  if (branch.latest_check_run_id != null) {
+    matchingRuns = branchRuns.filter((run) => String(run?.check_run_id) === String(branch.latest_check_run_id));
+  } else {
+    const orderedRuns = branchRuns.map((run) => ({
+      run,
+      createdAt: Date.parse(run?.created_at),
+    }));
+    if (orderedRuns.some(({ createdAt }) => !Number.isFinite(createdAt))) {
+      if (orderedRuns.length === 0) return { state: 'pending', reason: 'latest action run is not visible yet' };
+      throw new Error('Branch action runs lack timestamps needed to identify the latest run');
+    }
+    orderedRuns.sort((left, right) => right.createdAt - left.createdAt);
+    if (orderedRuns.length > 1 && orderedRuns[0].createdAt === orderedRuns[1].createdAt) {
+      throw new Error('Latest branch migration action run is ambiguous');
+    }
+    matchingRuns = orderedRuns.length ? [orderedRuns[0].run] : [];
+  }
   if (matchingRuns.length > 1) throw new Error('Latest branch migration action run is ambiguous');
   if (matchingRuns.length === 0) return { state: 'pending', reason: 'latest action run is not visible yet' };
   const steps = matchingRuns[0]?.run_steps;
@@ -238,16 +255,20 @@ async function runHostedBranchOrchestration({
   };
 
   const actionRuns = async () => {
-    const { response, payload } = await api('GET', `/projects/${PARENT_REF}/actions?limit=100`);
-    if (!response.ok) throw new Error(`Action Runs preflight failed (HTTP ${response.status})`);
-    if (!Array.isArray(payload) || payload.some((run) =>
-      !run || typeof run !== 'object' || Array.isArray(run) ||
-      typeof run.id !== 'string' || typeof run.branch_id !== 'string' ||
-      run.check_run_id == null || !Array.isArray(run.run_steps) ||
-      run.run_steps.some((step) => !step || typeof step !== 'object' || Array.isArray(step) ||
-        typeof step.name !== 'string' || typeof step.status !== 'string')
-    )) throw new Error('Unexpected Action Runs response structure');
-    return payload;
+    const runs = [];
+    const limit = 100;
+    for (let offset = 0; ; offset += limit) {
+      const { response, payload } = await api('GET', `/projects/${PARENT_REF}/actions?limit=${limit}&offset=${offset}`);
+      if (!response.ok) throw new Error(`Action Runs preflight failed (HTTP ${response.status})`);
+      if (!Array.isArray(payload) || payload.some((run) =>
+        !run || typeof run !== 'object' || Array.isArray(run) ||
+        typeof run.id !== 'string' || typeof run.branch_id !== 'string' || !Array.isArray(run.run_steps) ||
+        run.run_steps.some((step) => !step || typeof step !== 'object' || Array.isArray(step) ||
+          typeof step.name !== 'string' || typeof step.status !== 'string')
+      )) throw new Error('Unexpected Action Runs response structure');
+      runs.push(...payload);
+      if (payload.length < limit) return runs;
+    }
   };
 
   // Read-only preflight. No Project Settings endpoint or Settings permission is used.

@@ -23,6 +23,7 @@ function fakeApi({
   deleteStatus = 204,
   branchStatus = 'MIGRATIONS_PASSED',
   migrationStatus = 'EXITED',
+  latestCheckRunId = 74,
 } = {}) {
   const calls = [];
   const branches = [];
@@ -40,6 +41,7 @@ function fakeApi({
         id: 'action-run-1',
         branch_id: branch.id,
         check_run_id: branch.latest_check_run_id,
+        created_at: '2026-11-04T20:15:31.000Z',
         run_steps: [{ name: 'migrate', status: migrationStatus }],
       })));
     }
@@ -57,7 +59,7 @@ function fakeApi({
         persistent: invalidBranch,
         with_data: false,
         status: branchStatus,
-        latest_check_run_id: 74,
+        ...(latestCheckRunId == null ? {} : { latest_check_run_id: latestCheckRunId }),
         preview_project_status: 'ACTIVE_HEALTHY',
       };
       branches.push(branch);
@@ -186,6 +188,35 @@ test('ACTIVE_HEALTHY child with MIGRATIONS_FAILED workflow is deleted before cre
   assert.equal(runnerStarted, false);
   assert.equal(api.branches.length, 0);
   assert.equal(api.calls.filter((call) => call.method === 'DELETE').length, 1);
+});
+
+test('missing branch workflow identity fails closed for a terminal branch', async () => {
+  assert.throws(() => classifyMigrationReplay({
+    status: 'ACTIVE_HEALTHY',
+    latest_check_run_id: 74,
+  }, []), /Branch record lacks the identifiers required to verify its migration workflow/);
+});
+
+test('missing latest_check_run_id uses the uniquely newest action run for the exact child branch', async () => {
+  const api = fakeApi({ branchStatus: 'ACTIVE_HEALTHY', latestCheckRunId: null });
+  const result = await run(api, { runHosted: async () => 'migration-pass' });
+  assert.equal(result, 'migration-pass');
+  const newestRunning = classifyMigrationReplay({ id: 'branch-record-1', status: 'ACTIVE_HEALTHY' }, [
+    { id: 'older-run', branch_id: 'branch-record-1', created_at: '2026-11-04T20:15:30Z', run_steps: [{ name: 'migrate', status: 'EXITED' }] },
+    { id: 'newer-run', branch_id: 'branch-record-1', created_at: '2026-11-04T20:15:31Z', run_steps: [{ name: 'migrate', status: 'RUNNING' }] },
+  ]);
+  assert.equal(newestRunning.state, 'pending');
+  assert.match(newestRunning.reason, /RUNNING/);
+});
+
+test('tied newest action runs are ambiguous and fail closed', async () => {
+  assert.throws(() => classifyMigrationReplay({
+    id: 'branch-record-1',
+    status: 'ACTIVE_HEALTHY',
+  }, [
+    { id: 'run-a', branch_id: 'branch-record-1', created_at: '2026-11-04T20:15:31Z', run_steps: [{ name: 'migrate', status: 'EXITED' }] },
+    { id: 'run-b', branch_id: 'branch-record-1', created_at: '2026-11-04T20:15:31Z', run_steps: [{ name: 'migrate', status: 'EXITED' }] },
+  ]), /Latest branch migration action run is ambiguous/);
 });
 
 test('DEAD migrate step is rejected even when branch preview is ACTIVE_HEALTHY', async () => {
