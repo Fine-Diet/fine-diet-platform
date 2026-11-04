@@ -1,9 +1,11 @@
 let mockAssignments: Array<Record<string, unknown>> = [];
 let mockFrom: jest.Mock;
+let mockListActiveAssignments: jest.Mock;
 
-jest.mock('@/lib/plans/programAssignmentServerService', () => ({
-  listActiveAssignmentsForPerson: jest.fn(async () => mockAssignments),
-}));
+jest.mock('@/lib/plans/programAssignmentServerService', () => {
+  mockListActiveAssignments = jest.fn(async () => mockAssignments);
+  return { listActiveAssignmentsForPerson: (...args: unknown[]) => mockListActiveAssignments(...args) };
+});
 
 jest.mock('@/lib/supabaseServerClient', () => {
   mockFrom = jest.fn((table: string) => {
@@ -56,6 +58,7 @@ describe('program progress current-access enforcement', () => {
       personId: 'person-1', contentItemId: 'item-1', status: 'in_progress',
     });
     expect(result).toMatchObject({ program_slug: 'gut-reset', person_id: 'person-1' });
+    expect(mockListActiveAssignments).toHaveBeenCalledWith('person-1', 'gut-reset');
     expect(mockFrom).toHaveBeenCalledWith('program_content_progress');
   });
 });

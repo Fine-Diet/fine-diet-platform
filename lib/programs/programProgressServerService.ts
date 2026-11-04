@@ -99,7 +99,7 @@ async function hasProgramAccess(
   // inside their effective window grant current access. Historical,
   // paused, cancelled, completed, and future assignments remain visible
   // in the library but cannot authorize paid content reads or writes.
-  const assignments = await listActiveAssignmentsForPerson(personId);
+  const assignments = await listActiveAssignmentsForPerson(personId, slug);
   return assignments.some((assignment) => assignment.program_slug === slug);
 }
 
