@@ -5,6 +5,16 @@ import { spawnSync } from 'node:child_process';
 import { chmod, mkdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  applyHostedSchemaAndMigration,
+  assertBranchHealthy,
+  armVerifiedBranchCleanup,
+  deleteAndVerifyBranch as deleteAndVerifyBranchCore,
+  identifyCleanupEligibleBranch,
+  parseExplainJsonOutput,
+  serviceRoleAuthoringCrud,
+  validateProtectedPassfile,
+} from './hostedRunnerCore.mjs';
 
 const PRODUCTION_REF = 'tssvlflebugqhtogqdfs';
 const BLOCKED_REFS = new Set([
@@ -29,12 +39,14 @@ const evidence = {
   candidateMigrationChanged: false,
   productionRowsQueried: false,
   hostedDatabaseWrites: false,
+  hostedSetupCompleted: false,
+  candidateMigrationCompleted: false,
   checks: [],
   queryPlans: [],
   cleanup: { armed: false, attempted: false, verifiedAbsent: false },
   limitations: [
     'This targets the program authorization boundary only; it is not a full Production schema replica.',
-    'No branch is created by this runner. A fresh cost approval and separately provisioned zero-data branch are required.',
+    'No branch is created by this runner. One separately provisioned zero-data branch is required under the existing founder approval.',
   ],
 };
 
@@ -103,27 +115,19 @@ async function managementRequest(method, route, body) {
 async function verifyBranchIdentity(targetRef, branchName) {
   const branches = await managementRequest('GET', `/projects/${PRODUCTION_REF}/branches`);
   const list = Array.isArray(branches) ? branches : branches?.branches;
-  if (!Array.isArray(list)) fail('Management API branch inventory shape', 'unexpected_response');
-  const matches = list.filter((branch) => branch.project_ref === targetRef);
-  if (matches.length !== 1) fail('Target project is not exactly one branch of Production', 'branch_identity_mismatch');
-  const branch = matches[0];
-  if (branch.name !== branchName || branch.parent_project_ref !== PRODUCTION_REF) {
-    fail('Target branch name or parent does not match the explicit run identity', 'branch_identity_mismatch');
+  let branch;
+  try {
+    branch = identifyCleanupEligibleBranch({ branches: list, targetRef, branchName, parentRef: PRODUCTION_REF });
+  } catch (error) {
+    fail(error.message, 'branch_identity_mismatch');
   }
-  if (branch.is_default || branch.persistent || branch.with_data !== false) {
-    fail('Target must be non-default, nonpersistent, and created with_data=false', 'unsafe_branch_properties');
-  }
-  if (branch.preview_project_status !== 'ACTIVE_HEALTHY') {
-    branchRecord = branch;
-    cleanupArmed = true;
-    evidence.cleanup.armed = true;
-    fail('Target preview database is not ACTIVE_HEALTHY', 'branch_unhealthy');
-  }
+  // Bind and independently verify the ref before cleanup is armed. The health
+  // check below may fail, but cleanup will still target this exact child ref.
+  armVerifiedBranchCleanup(evidence, branch);
   branchRecord = branch;
   cleanupArmed = true;
-  evidence.cleanup.armed = true;
-  evidence.targetProjectRef = targetRef;
-  evidence.targetBranchName = branch.name;
+  try { assertBranchHealthy(branch); }
+  catch { fail('Target preview database is not ACTIVE_HEALTHY', 'branch_unhealthy'); }
   evidence.branchStatus = branch.status;
   evidence.previewProjectStatus = branch.preview_project_status;
   record('isolated branch identity, parent, zero-data and health', true, {
@@ -203,6 +207,25 @@ async function restRequest(resource, { method = 'GET', token = null, query = {},
   let data = null;
   try { data = raw ? JSON.parse(raw) : null; } catch { /* response body not stored */ }
   return { status: response.status, data };
+}
+
+async function verifyHostedApiPrerequisites() {
+  let response;
+  try {
+    response = await fetch(`${projectUrl}/rest/v1/`, {
+      headers: { apikey: publishableKey, Accept: 'application/openapi+json' },
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch {
+    fail('PostgREST prerequisite request failed', 'postgrest_unreachable');
+  }
+  if (!response.ok) fail('PostgREST rejected the branch publishable key', `http_${response.status}`);
+  await response.body?.cancel();
+  record('PostgREST endpoint accepts the branch publishable key', true, { httpStatus: response.status });
+
+  const { error } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1 });
+  if (error) fail('Auth Admin prerequisite request failed', safeErrorCode(error));
+  record('Auth Admin accepts the branch server-side key', true);
 }
 
 function expectRows(name, response, count) {
@@ -344,9 +367,10 @@ function runPlan(name, personId, query) {
     `SELECT set_config('request.jwt.claim.role','authenticated',true);\n` +
     `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query};\nROLLBACK;\n`;
   const stdout = psql(['--quiet', '--no-align', '--tuples-only'], sql);
-  const line = stdout.split(/\r?\n/).map((part) => part.trim()).filter((part) => part.startsWith('[{')).at(-1);
-  if (!line) fail(`Could not parse EXPLAIN output for ${name}`, 'plan_parse_failed');
-  const [plan] = JSON.parse(line);
+  let plans;
+  try { plans = parseExplainJsonOutput(stdout); }
+  catch { fail(`Could not parse EXPLAIN output for ${name}`, 'plan_parse_failed'); }
+  const [plan] = plans;
   const nodes = [];
   const visit = (node) => {
     if (!node || typeof node !== 'object') return;
@@ -444,12 +468,15 @@ async function runHostedScenarios(rows) {
     status_visibility: ['active'], display_order: 990, day_start: 0, day_end: 1,
   });
   for (const [table, row] of [['program_modules', serviceModule], ['program_content_items', serviceItem], ['program_delivery_modules', serviceDelivery]]) {
-    const changed = await restRequest(table, {
-      method: 'PATCH', query: { id: `eq.${row.id}` }, body: { status: 'published' }, prefer: 'return=representation',
+    const { updateResult, deleteResult } = await serviceRoleAuthoringCrud(adminClient, table, row.id);
+    record(`server-side service-role authoring update ${table}`, !updateResult.error && Array.isArray(updateResult.data) && updateResult.data.length === 1, {
+      errorCode: updateResult.error ? safeErrorCode(updateResult.error) : undefined,
+      affectedRows: Array.isArray(updateResult.data) ? updateResult.data.length : null,
     });
-    record(`service-role authoring update ${table}`, changed.status === 200 && Array.isArray(changed.data) && changed.data.length === 1, { httpStatus: changed.status });
-    const deleted = await restRequest(table, { method: 'DELETE', query: { id: `eq.${row.id}` } });
-    record(`service-role cleanup delete ${table}`, deleted.status === 204, { httpStatus: deleted.status });
+    record(`server-side service-role cleanup delete ${table}`, !deleteResult.error && Array.isArray(deleteResult.data) && deleteResult.data.length === 1, {
+      errorCode: deleteResult.error ? safeErrorCode(deleteResult.error) : undefined,
+      affectedRows: Array.isArray(deleteResult.data) ? deleteResult.data.length : null,
+    });
   }
   response = await restRequest('program_modules', { token: users.entitled.accessToken, query: { select: 'id', id: `eq.${module.id}` } });
   // The original entitlement is still active at this point; the admin revoke
@@ -520,21 +547,27 @@ async function cleanupSyntheticRows() {
 
 async function deleteAndVerifyBranch() {
   if (!cleanupArmed || !branchRecord) return;
+  if (!evidence.targetProjectRef || branchRecord.project_ref !== evidence.targetProjectRef) {
+    fail('Cleanup target is not bound to independently verified branch reference', 'cleanup_identity_unverified');
+  }
   evidence.cleanup.attempted = true;
   await cleanupSyntheticRows();
-  await managementRequest('DELETE', `/branches/${encodeURIComponent(evidence.targetProjectRef)}`);
-  const deadline = Date.now() + 90_000;
-  while (Date.now() < deadline) {
-    const branches = await managementRequest('GET', `/projects/${PRODUCTION_REF}/branches`);
-    const list = Array.isArray(branches) ? branches : branches?.branches;
-    if (Array.isArray(list) && !list.some((branch) => branch.project_ref === evidence.targetProjectRef || branch.id === branchRecord.id)) {
-      evidence.cleanup.verifiedAbsent = true;
-      record('temporary branch deleted and absent from parent branch inventory', true);
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+  try {
+    await deleteAndVerifyBranchCore({
+      targetProjectRef: evidence.targetProjectRef,
+      branchRecord,
+      parentRef: PRODUCTION_REF,
+      deleteBranch: (ref) => managementRequest('DELETE', `/branches/${encodeURIComponent(ref)}`),
+      listBranches: async () => {
+        const branches = await managementRequest('GET', `/projects/${PRODUCTION_REF}/branches`);
+        return Array.isArray(branches) ? branches : branches?.branches;
+      },
+    });
+  } catch {
+    fail('Temporary branch deletion or absence verification failed', 'branch_cleanup_unverified');
   }
-  fail('Temporary branch deletion was not verified within 90 seconds', 'branch_cleanup_unverified');
+  evidence.cleanup.verifiedAbsent = true;
+  record('temporary branch deleted and absent from parent branch inventory', true);
 }
 
 async function main() {
@@ -542,7 +575,7 @@ async function main() {
   const expectedRef = required('FINE_DIET_RLS_EXPECTED_REF');
   const branchName = required('FINE_DIET_RLS_BRANCH_NAME');
   const approval = required('FINE_DIET_RLS_COST_APPROVED');
-  if (approval !== 'YES') fail('FINE_DIET_RLS_COST_APPROVED must be YES after explicit fresh cost approval', 'cost_approval_missing');
+  if (approval !== 'YES') fail('FINE_DIET_RLS_COST_APPROVED must be YES under the existing founder approval', 'cost_approval_missing');
   validateRef(targetRef, 'FINE_DIET_RLS_TARGET_REF');
   validateRef(expectedRef, 'FINE_DIET_RLS_EXPECTED_REF');
   if (targetRef !== expectedRef) fail('Explicit target and expected project references differ', 'project_ref_mismatch');
@@ -557,8 +590,11 @@ async function main() {
   const secretKey = required('SUPABASE_SECRET_KEY');
   const passfile = required('PGPASSFILE');
   const passStat = await stat(passfile).catch(() => null);
-  if (!passStat?.isFile()) fail('PGPASSFILE must point to an existing protected passfile', 'missing_passfile');
-  if ((passStat.mode & 0o077) !== 0) fail('PGPASSFILE must not be readable by group or others', 'unsafe_passfile_permissions');
+  try { validateProtectedPassfile(passStat); }
+  catch (error) {
+    const code = passStat ? 'unsafe_passfile_permissions' : 'missing_passfile';
+    fail(error.message, code);
+  }
   dbEnv = { ...process.env };
   for (const name of [
     'PGSERVICE', 'PGSERVICEFILE', 'PGHOSTADDR', 'PGPASSWORD', 'PGOPTIONS', 'DATABASE_URL',
@@ -577,10 +613,17 @@ async function main() {
   adminClient = createClient(projectUrl, secretKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
-  await psqlFile(hostedSetup);
-  evidence.hostedDatabaseWrites = true;
+  await verifyHostedApiPrerequisites();
+  try {
+    applyHostedSchemaAndMigration(
+      evidence,
+      () => psqlFile(hostedSetup),
+      () => psqlFile(candidateMigration),
+    );
+  } catch {
+    fail('Hosted schema setup or candidate migration failed; database output suppressed', 'hosted_schema_apply_failed');
+  }
   record('hosted-safe targeted schema setup applied', true);
-  await psqlFile(candidateMigration);
   record('unchanged PR #225 migration applied to isolated branch', true);
 
   const runId = branchName.slice('fine-diet-pr225-rls-'.length);

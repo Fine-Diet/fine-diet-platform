@@ -1,7 +1,7 @@
 {
   "title": "PR #225 hosted program-content RLS verification manifest",
   "status": "prepared_not_executed",
-  "sourceHeadAtPreparation": "fb69fdbfb120f7d0e90902f2b1fd8049bd6041d0",
+  "sourceHeadAtPreparation": "a4727f96bb6b34e36e768b495f8fe307ea6caf8b",
   "productionParentRef": "tssvlflebugqhtogqdfs",
   "targetProjectRef": null,
   "targetBranchNamePattern": "fine-diet-pr225-rls-<UTC timestamp YYYYMMDDtHHMMSSz>",
@@ -12,7 +12,8 @@
     "retiredTemporaryBranch": "slsmfdxxqktkgplliwhx"
   },
   "branchRequirements": {
-    "createdSeparatelyAfterFreshCostApproval": true,
+    "createdSeparatelyUnderExistingFounderApproval": true,
+    "freshCostApprovalNeededOnlyIfQuotedCostOrScopeChanges": true,
     "parentProjectRef": "tssvlflebugqhtogqdfs",
     "withData": false,
     "persistent": false,
@@ -32,6 +33,7 @@
     "candidateMigrationSha256": "49ad5e409f43058ad28804654308eaa23598970cbf6c7a9c245ef7fff4a73610"
   },
   "runner": "test/hosted/runProgramContentRlsHosted.mjs",
+  "runnerCore": "test/hosted/hostedRunnerCore.mjs",
   "requiredEnvironmentNames": [
     "FINE_DIET_RLS_TARGET_REF",
     "FINE_DIET_RLS_EXPECTED_REF",
@@ -51,7 +53,7 @@
     "member retains own historical enrollment and published-version metadata after access loss",
     "authenticated admin role reads, grants, and revokes a program entitlement",
     "authenticated member curriculum writes denied",
-    "service-role PostgREST authoring CRUD succeeds",
+    "server-side privileged supabase-js PostgREST authoring CRUD succeeds",
     "EXPLAIN ANALYZE BUFFERS on policy-protected helper/module/item/delivery queries with synthetic decoy volumes"
   ],
   "performanceSyntheticVolumes": {
@@ -68,10 +70,31 @@
     "absenceVerifiedAgainstParentBranchInventory": true,
     "timeoutSeconds": 90
   },
+  "offlineFailurePathTests": [
+    "protected refs and absent direct Management API credential fail before network/database access",
+    "healthy and unhealthy branch identity handling",
+    "empty/mismatched cleanup refs rejected before delete",
+    "Management API delete/inventory failures",
+    "branch deletion absence confirmation and timeout",
+    "multiline EXPLAIN JSON with preceding psql output",
+    "write-attempt evidence set before a failed fixture application",
+    "service-role client update/delete operations",
+    "protected passfile permission checks"
+  ],
+  "credentialPreflight": {
+    "supabaseManagementConnectorReadOnlyAccess": "PASS",
+    "directManagementApiToken": "MISSING",
+    "branchPublishableKey": "MISSING",
+    "branchSecretKey": "MISSING",
+    "protectedPgpassfile": "MISSING",
+    "psqlBinary": "AVAILABLE",
+    "supabaseCliDockerPodman": "UNAVAILABLE",
+    "branchProvisioning": "NOT_STARTED"
+  },
   "knownLimitations": [
     "This targeted fixture is not a complete Production schema replica and does not replay historical migrations.",
     "The local PostgreSQL fixture uses test-only simulated Auth role/JWT functions; it does not establish hosted Auth or PostgREST behavior.",
     "Performance results from the synthetic data volume are not Production latency/SLO evidence.",
-    "No isolated hosted project has been approved or provisioned for this run."
+    "One temporary branch is explicitly approved at $0.01344/hour plus applicable usage but has not been provisioned because direct runner credentials and a protected passfile are missing."
   ]
 }
