@@ -7,18 +7,16 @@
  * Access model:
  *   - Reads are scoped by person_id. Callers must pre-resolve the
  *     person for the signed-in user (the journal helpers already do).
- *   - Writes additionally verify that the person has access to the
- *     program that owns the item (entitlement OR any existing
- *     `program_assignments` row for that slug). This mirrors Packet 11
- *     access semantics so progress can't be fabricated for programs
- *     the user never acquired.
+ *   - Writes additionally verify that the person has current access to
+ *     the program that owns the item (a current entitlement OR an
+ *     active, in-window assignment), matching content delivery.
  *
  * Progress stays separate from `program_plan_guidance` and plan
  * runtime: no call from here touches guidance or assignments.
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { listAssignments } from '@/lib/plans/programAssignmentServerService';
+import { listActiveAssignmentsForPerson } from '@/lib/plans/programAssignmentServerService';
 import type {
   PublishedProgram,
   PublishedContentItem,
@@ -97,14 +95,12 @@ async function hasProgramAccess(
     return true;
   }
 
-  // Assignment check: any program_assignments row is enough (assigned_only
-  // access state in Packet 11 still counts as "user has this program").
-  const { rows } = await listAssignments({
-    personId,
-    programSlug: slug,
-    limit: 1,
-  });
-  return rows.length > 0;
+  // Match the RLS helper and content delivery: only active assignments
+  // inside their effective window grant current access. Historical,
+  // paused, cancelled, completed, and future assignments remain visible
+  // in the library but cannot authorize paid content reads or writes.
+  const assignments = await listActiveAssignmentsForPerson(personId);
+  return assignments.some((assignment) => assignment.program_slug === slug);
 }
 
 /**
