@@ -70,7 +70,9 @@ function clearAccessCodeClaimToken(): void {
  *   5xx / network throw                   → retryable_error     (keep token)
  *   other 4xx                             → failed              (clear token)
  */
-export async function claimPendingAccessCodeOffer(): Promise<AccessCodeClaimClientResult> {
+export async function claimPendingAccessCodeOffer(
+  options: { signal?: AbortSignal } = {},
+): Promise<AccessCodeClaimClientResult> {
   if (typeof window === 'undefined') {
     return { status: 'no_claim' };
   }
@@ -91,6 +93,7 @@ export async function claimPendingAccessCodeOffer(): Promise<AccessCodeClaimClie
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ claimToken }),
+      signal: options.signal,
     });
   } catch {
     // Network/unknown error — leave the token for a later retry.

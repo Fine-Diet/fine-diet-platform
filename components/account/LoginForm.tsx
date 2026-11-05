@@ -10,6 +10,41 @@ import { SocialLoginButtons } from './SocialLoginButtons';
 import { HAS_ACTIVE_SOCIAL_PROVIDERS } from '@/lib/config/auth';
 import { claimPendingAccessCodeOffer } from '@/lib/access/claimAccessCodeOffer';
 
+const LOGIN_OPERATION_TIMEOUT_MS = 15_000;
+const LOGIN_NAVIGATION_TIMEOUT_MS = 10_000;
+
+function runBounded<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  label: string,
+  timeoutMs = LOGIN_OPERATION_TIMEOUT_MS,
+): Promise<T> {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`${label} timed out`));
+    }, timeoutMs);
+  });
+
+  return Promise.race([Promise.resolve().then(() => operation(controller.signal)), deadline]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
+
+function runNavigationWithTimeout(
+  navigate: () => Promise<boolean>,
+  timeoutMs = LOGIN_NAVIGATION_TIMEOUT_MS,
+): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error('Navigation timed out')), timeoutMs);
+  });
+  return Promise.race([Promise.resolve().then(navigate), deadline]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
+
 interface LoginFormProps {
   onSwitchToSignup: () => void;
   onSuccess: () => void;
@@ -54,6 +89,28 @@ export const LoginForm = ({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recoveryTarget, setRecoveryTarget] = useState<string | null>(null);
+
+  const continueToTarget = async (target: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const navigated = await runNavigationWithTimeout(() => router.push(target));
+      if (!navigated) {
+        setRecoveryTarget(target);
+        setError('You are signed in, but the next page did not open. Select Continue to retry.');
+        return;
+      }
+      setRecoveryTarget(null);
+      onSuccess();
+    } catch (navigationError) {
+      console.warn('[LoginForm] Redirect navigation failed:', navigationError);
+      setRecoveryTarget(target);
+      setError('You are signed in, but the next page did not open. Select Continue to retry.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleForgotPassword = () => {
     onForgotPassword(email);
@@ -62,6 +119,7 @@ export const LoginForm = ({
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    setRecoveryTarget(null);
     setLoading(true);
 
     try {
@@ -122,36 +180,47 @@ export const LoginForm = ({
 
       // Link auth user to people record
       try {
-        const linkResponse = await fetch('/api/account/link-person', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            authUserId: data.user.id,
-            email: data.user.email,
-          }),
-        });
-
-        if (!linkResponse.ok) {
-          console.warn('[LoginForm] link-person response not OK:', linkResponse.status);
-        } else {
-          const linkData = await linkResponse.json();
-          if (linkData.profileCreated === false && linkData.profileError) {
-            console.warn('[LoginForm] Profile creation failed:', linkData.profileError);
+        const linkData = await runBounded(async (signal) => {
+          const linkResponse = await fetch('/api/account/link-person', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              authUserId: data.user.id,
+              email: data.user.email,
+            }),
+            signal,
+          });
+          if (!linkResponse.ok) {
+            throw new Error(`Identity linking failed (${linkResponse.status}).`);
           }
+          return linkResponse.json();
+        }, 'Identity linking');
+
+        if (!linkData?.ok || linkData.linked !== true) {
+          setError('We could not verify your account link. Please try again or contact support.');
+          return;
+        }
+        if (linkData.profileCreated === false && linkData.profileError) {
+          // Profile creation is ancillary; a confirmed person link is enough
+          // to continue through the normal protected-route authorization.
+          console.warn('[LoginForm] Profile creation failed:', linkData.profileError);
         }
       } catch (linkError) {
         console.warn('[LoginForm] Error calling link-person:', linkError);
+        setError('We could not verify your account link. Please try again.');
+        return;
       }
 
       // Claim any guest assessment submissions (non-blocking)
       try {
         const claimToken = localStorage.getItem('fd_gc_claimToken:last');
         if (claimToken) {
-          const claimResponse = await fetch('/api/assessments/claim', {
+          const claimResponse = await runBounded((signal) => fetch('/api/assessments/claim', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ claimToken }),
-          });
+            signal,
+          }), 'Assessment claim');
 
           if (claimResponse.ok || claimResponse.status === 204) {
             localStorage.removeItem('fd_gc_claimToken:last');
@@ -180,7 +249,10 @@ export const LoginForm = ({
         | 'retryable_error'
         | 'failed' = 'no_claim';
       try {
-        const claimResult = await claimPendingAccessCodeOffer();
+        const claimResult = await runBounded(
+          (signal) => claimPendingAccessCodeOffer({ signal }),
+          'Access-code claim',
+        );
         accessCodeClaimStatus = claimResult.status;
       } catch (claimError) {
         console.warn('[LoginForm] Error claiming access-code offer:', claimError);
@@ -219,15 +291,19 @@ export const LoginForm = ({
       // retryable_error keep the token in localStorage for a later retry.
       const target = getSafeRedirectTarget(postAuthRedirect, '');
       if (target) {
-        try {
-          await router.push(target);
-        } catch (pushErr) {
-          console.warn('[LoginForm] Redirect push failed:', pushErr);
-        }
+        await continueToTarget(target);
+        return;
       }
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
+      setError(
+        err instanceof Error && err.message.includes('timed out')
+          ? 'Sign-in is taking longer than expected. Please try again.'
+          : err instanceof Error
+            ? err.message
+            : 'An unexpected error occurred. Please try again.',
+      );
+    } finally {
       setLoading(false);
     }
   };
@@ -282,8 +358,18 @@ export const LoginForm = ({
 
         {/* Error */}
         {error && (
-          <div className="bg-semantic-error/20 border border-semantic-error/50 rounded-xl p-3">
+          <div role="alert" className="bg-semantic-error/20 border border-semantic-error/50 rounded-xl p-3">
             <p className="text-sm text-white antialiased">{error}</p>
+            {recoveryTarget && (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void continueToTarget(recoveryTarget)}
+                className="mt-2 text-sm underline text-white hover:text-white/80 disabled:opacity-50"
+              >
+                Continue
+              </button>
+            )}
           </div>
         )}
 
@@ -325,7 +411,7 @@ export const LoginForm = ({
             onClick={onSwitchToSignup}
             className="text-sm text-white/60 hover:text-white/90 transition-colors antialiased"
           >
-            Don't have an account? <span className="underline">Create account</span>
+            Don&apos;t have an account? <span className="underline">Create account</span>
           </button>
         </div>
       )}
