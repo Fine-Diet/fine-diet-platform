@@ -1,23 +1,24 @@
-/**
- * Regression guard: the OAuth / email-confirmation /auth/callback route stays
- * PKCE-only and unchanged by the Haul invite transport correction.
- * Haul invitations deliberately do NOT use this route (see haulInviteLanding.ts).
- */
+/** OAuth and email-confirmation callbacks link only the verified PKCE identity. */
 
-const mockExchange = jest.fn();
+const mockExchange = jest.fn<(...args: [string]) => Promise<any>>();
 const mockCookieStore = { getAll: jest.fn(() => []), set: jest.fn() };
+const mockLinkPerson = jest.fn<(...args: any[]) => Promise<any>>();
 
 jest.mock('next/headers', () => ({ cookies: () => mockCookieStore }));
 jest.mock('@supabase/ssr', () => ({
   createServerClient: () => ({ auth: { exchangeCodeForSession: mockExchange } }),
 }));
+jest.mock('@/lib/account/linkPersonForVerifiedUser', () => ({
+  linkPersonForVerifiedUser: mockLinkPerson,
+  PersonIdentityConflictError: class PersonIdentityConflictError extends Error {},
+}));
+
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/auth/callback/route';
 
 const ORIGIN = 'https://myfinediet.com';
-const originalFetch = global.fetch;
-
 function req(path: string): NextRequest {
   return new NextRequest(`${ORIGIN}${path}`);
 }
@@ -26,7 +27,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 }) as unknown as typeof fetch;
+  mockLinkPerson.mockResolvedValue({ linked: true });
   mockExchange.mockResolvedValue({
     data: { session: { access_token: 'a' }, user: { id: 'auth-1', email: 'u@example.com' } },
     error: null,
@@ -34,7 +35,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  global.fetch = originalFetch;
   jest.restoreAllMocks();
 });
 
@@ -42,11 +42,14 @@ describe('/auth/callback (PKCE) is unchanged', () => {
   it('exchanges ?code= for a session, links the person, and redirects to a safe next', async () => {
     const res = await GET(req('/auth/callback?code=abc&next=/app/plans'));
     expect(mockExchange).toHaveBeenCalledWith('abc');
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/account/link-person'),
-      expect.objectContaining({ method: 'POST' }),
-    );
+    expect(mockLinkPerson).toHaveBeenCalledWith({ id: 'auth-1', email: 'u@example.com' });
     expect(res.headers.get('location')).toBe(`${ORIGIN}/app/plans`);
+  });
+
+  it('does not redirect into the requested route when verified identity linking fails', async () => {
+    mockLinkPerson.mockRejectedValueOnce(new Error('identity conflict'));
+    const res = await GET(req('/auth/callback?code=abc&next=/app'));
+    expect(res.headers.get('location')).toBe(`${ORIGIN}/?auth_error=link_failed`);
   });
 
   it.each(['//evil.example', 'https://evil.example', 'javascript:alert(1)'])(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { linkPersonForVerifiedUser } from '@/lib/account/linkPersonForVerifiedUser';
 
 /**
  * GET /auth/callback
@@ -10,7 +11,7 @@ import { cookies } from 'next/headers';
  * Flow:
  * 1. Supabase redirects here with ?code=... (PKCE code exchange)
  * 2. We exchange the code for a session and write it to cookies
- * 3. We call /api/account/link-person to link the auth user to the people system
+ * 3. We link the exchanged, server-verified Auth user to the people system
  * 4. We redirect to ?next= or the homepage
  *
  * This route must be registered as an allowed redirect URL in the Supabase
@@ -76,26 +77,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/?auth_error=exchange_failed`);
   }
 
-  const { user, session } = data;
+  const { user } = data;
 
-  // Link auth user to the people/profiles system — same as email login path
+  // This identity comes from the successful server-side PKCE exchange. Call
+  // the trusted linker directly; the public API route requires its own session.
   try {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
-    const linkResponse = await fetch(`${siteUrl}/api/account/link-person`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        authUserId: user.id,
-        email: user.email,
-      }),
-    });
-
-    if (!linkResponse.ok) {
-      console.warn('[auth/callback] link-person response not OK:', linkResponse.status);
-    }
+    await linkPersonForVerifiedUser(user);
   } catch (linkError) {
-    // Non-fatal — user is authenticated even if linking fails
-    console.warn('[auth/callback] Error calling link-person:', linkError);
+    console.error('[auth/callback] Verified identity could not be linked:', linkError);
+    return NextResponse.redirect(`${origin}/?auth_error=link_failed`);
   }
 
   // Validate and sanitise the redirect target

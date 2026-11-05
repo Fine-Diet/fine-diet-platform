@@ -97,16 +97,11 @@ describe('LoginForm post-auth reliability', () => {
     jest.clearAllMocks();
   });
 
-  it('continues when identity is linked but optional profile creation warns', async () => {
+  it('continues on a minimal successful-link response', async () => {
     mockedFetch().mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({
-        ok: true,
-        linked: true,
-        profileCreated: false,
-        profileError: "Could not find table 'public.profiles'",
-      }),
+      json: async () => ({ ok: true, linked: true }),
     });
     await render();
 

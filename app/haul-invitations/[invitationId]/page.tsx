@@ -68,8 +68,6 @@ export default function HaulInvitationLandingPage() {
         try {
           const response = await fetch('/api/account/link-person', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ authUserId: user.id, email: user.email }),
           });
           return response.ok;
         } catch {

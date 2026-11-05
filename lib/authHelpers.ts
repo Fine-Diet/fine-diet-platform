@@ -195,8 +195,8 @@ export async function getUser() {
  * Sign in with an OAuth provider (Apple or Google).
  *
  * Redirects the browser to the provider's consent screen.
- * On return, Supabase redirects to /auth/callback which exchanges
- * the code for a session and calls /api/account/link-person.
+ * On return, Supabase redirects to /auth/callback, which exchanges
+ * the code for a session and links that verified user server-side.
  *
  * Requires the provider to be enabled in the Supabase project dashboard.
  * Buttons should degrade gracefully when a provider is not configured.

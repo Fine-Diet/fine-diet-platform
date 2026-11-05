@@ -184,10 +184,6 @@ export const LoginForm = ({
           const linkResponse = await fetch('/api/account/link-person', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              authUserId: data.user.id,
-              email: data.user.email,
-            }),
             signal,
           });
           if (!linkResponse.ok) {
@@ -199,11 +195,6 @@ export const LoginForm = ({
         if (!linkData?.ok || linkData.linked !== true) {
           setError('We could not verify your account link. Please try again or contact support.');
           return;
-        }
-        if (linkData.profileCreated === false && linkData.profileError) {
-          // Profile creation is ancillary; a confirmed person link is enough
-          // to continue through the normal protected-route authorization.
-          console.warn('[LoginForm] Profile creation failed:', linkData.profileError);
         }
       } catch (linkError) {
         console.warn('[LoginForm] Error calling link-person:', linkError);

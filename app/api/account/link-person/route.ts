@@ -1,350 +1,55 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 import {
-  upsertPerson,
-  logEvent,
-} from '@/lib/peopleService';
-import { supabaseAdmin } from '@/lib/supabaseServerClient';
-
-// Validation schema
-const linkPersonSchema = z.object({
-  authUserId: z.string().uuid('Invalid auth user ID'),
-  email: z.string().email('Invalid email address'),
-});
-
-type LinkPersonData = z.infer<typeof linkPersonSchema>;
+  linkPersonForVerifiedUser,
+  PersonIdentityConflictError,
+} from '@/lib/account/linkPersonForVerifiedUser';
 
 /**
  * POST /api/account/link-person
- * 
- * Links an authenticated user (auth.users) to a people record.
- * 
- * Behavior:
- * - Finds existing person by email (normalized)
- * - If found: updates auth_user_id if not already set
- * - If not found: creates new person record with auth_user_id
- * - Logs a 'profile_update' event with source 'auth_linkage'
- * 
- * This should be called after successful login/signup to ensure
- * the auth user is linked to their profile data.
+ * Link only the Supabase identity authenticated by this request's session.
+ * The request body is deliberately ignored; identity comes from auth.getUser().
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: Request): Promise<NextResponse> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('[link-person] Missing Supabase environment configuration.');
+    return NextResponse.json({ ok: false, linked: false }, { status: 500 });
+  }
+
   try {
-    // Parse and validate request body
-    const body = await request.json();
-    const validationResult = linkPersonSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid payload', details: validationResult.error.issues },
-        { status: 400 }
-      );
-    }
-
-    const data: LinkPersonData = validationResult.data;
-
-    // Log incoming request (in development or with explicit logging)
-    if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-      console.log('[link-person] Incoming request:', {
-        authUserId: data.authUserId,
-        email: data.email,
-      });
-    }
-
-    // Verify the auth user exists
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(
-      data.authUserId
-    );
-
-    if (authError || !authUser?.user) {
-      return NextResponse.json(
-        { error: 'Invalid auth user' },
-        { status: 404 }
-      );
-    }
-
-    // Verify the email matches (security check)
-    const normalizedEmail = data.email.trim().toLowerCase();
-    if (authUser.user.email?.toLowerCase() !== normalizedEmail) {
-      return NextResponse.json(
-        { error: 'Email mismatch' },
-        { status: 400 }
-      );
-    }
-
-    // Check if person already exists with this auth_user_id
-    const { data: existingByAuthId } = await supabaseAdmin
-      .from('people')
-      .select('*')
-      .eq('auth_user_id', data.authUserId)
-      .maybeSingle();
-
-    if (existingByAuthId) {
-      // Person already linked to this auth user
-      // Still ensure profile exists (will be handled below)
-      const person = existingByAuthId;
-      
-      // Ensure a profiles row exists for this user (for role management)
-      let profileCreated = false;
-      let profileError: string | null = null;
-      let profileExisted = false;
-
-      try {
-        // Check if profile already exists
-        const { data: existingProfile, error: checkError } = await supabaseAdmin
-          .from('profiles')
-          .select('id, role')
-          .eq('id', data.authUserId)
-          .maybeSingle();
-
-        if (checkError) {
-          profileError = `Failed to check existing profile: ${checkError.message}`;
-          console.error('[link-person] Error checking profile:', checkError);
-        } else if (existingProfile) {
-          profileExisted = true;
-          // Profile exists - do nothing (preserve existing role)
-          if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-            console.log('[link-person] Profile already exists:', {
-              authUserId: data.authUserId,
-              existingRole: existingProfile.role,
-            });
-          }
-        } else {
-          // Profile doesn't exist - insert with default role 'user'
-          if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-            console.log('[link-person] Creating new profile for user:', data.authUserId);
-          }
-
-          const { error: insertError } = await supabaseAdmin
-            .from('profiles')
-            .insert({
-              id: data.authUserId,
-              role: 'user', // Default role for new users
-            });
-
-          if (insertError) {
-            profileError = insertError.message;
-            console.error('[link-person] Failed to create profile:', {
-              authUserId: data.authUserId,
-              error: insertError.message,
-              code: insertError.code,
-              details: insertError.details,
-              hint: insertError.hint,
-            });
-          } else {
-            profileCreated = true;
-            if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-              console.log('[link-person] Successfully created profile for user:', data.authUserId);
-            }
-          }
-        }
-      } catch (profileErr) {
-        profileError = profileErr instanceof Error ? profileErr.message : 'Unknown error';
-        console.error('[link-person] Exception ensuring profile exists:', {
-          authUserId: data.authUserId,
-          error: profileErr,
-        });
-      }
-
-      return NextResponse.json({
-        ok: true,
-        routeVersion: 'link-person-v2-profiles',
-        person,
-        linked: true,
-        profileCreated,
-        profileExisted,
-        profileError: profileError || undefined,
-      });
-    }
-
-    // Check if person exists by email (but not yet linked)
-    const { data: existingByEmail } = await supabaseAdmin
-      .from('people')
-      .select('*')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
-
-    let person;
-    let wasExisting = false;
-    
-    if (existingByEmail) {
-      // Person exists but not linked - update to link them
-      if (existingByEmail.auth_user_id) {
-        // This shouldn't happen, but handle gracefully
-        // Still ensure profile exists
-        const person = existingByEmail;
-        
-        // Ensure a profiles row exists for this user
-        let profileCreated = false;
-        let profileError: string | null = null;
-        let profileExisted = false;
-
-        try {
-          // Check if profile already exists
-          const { data: existingProfile, error: checkError } = await supabaseAdmin
-            .from('profiles')
-            .select('id, role')
-            .eq('id', data.authUserId)
-            .maybeSingle();
-
-          if (checkError) {
-            profileError = `Failed to check existing profile: ${checkError.message}`;
-            console.error('[link-person] Error checking profile:', checkError);
-          } else if (existingProfile) {
-            profileExisted = true;
-            // Profile exists - do nothing (preserve existing role)
-          } else {
-            // Profile doesn't exist - insert with default role 'user'
-            const { error: insertError } = await supabaseAdmin
-              .from('profiles')
-              .insert({
-                id: data.authUserId,
-                role: 'user',
-              });
-
-            if (insertError) {
-              profileError = insertError.message;
-              console.error('[link-person] Failed to create profile:', insertError);
-            } else {
-              profileCreated = true;
-            }
-          }
-        } catch (profileErr) {
-          profileError = profileErr instanceof Error ? profileErr.message : 'Unknown error';
-          console.error('[link-person] Exception ensuring profile exists:', profileErr);
-        }
-
-        return NextResponse.json({
-          ok: true,
-          routeVersion: 'link-person-v2-profiles',
-          person,
-          linked: true,
-          profileCreated,
-          profileExisted,
-          profileError: profileError || undefined,
-        });
-      }
-
-      wasExisting = true;
-
-      // Update existing person with auth_user_id
-      const { data: updatedPerson, error: updateError } = await supabaseAdmin
-        .from('people')
-        .update({
-          auth_user_id: data.authUserId,
-          status: 'active_user', // Upgrade to active_user when they create account
-          last_source: 'account_creation',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingByEmail.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        throw new Error(`Failed to link existing person: ${updateError.message}`);
-      }
-
-      person = updatedPerson;
-    } else {
-      // Create new person with auth_user_id
-      person = await upsertPerson({
-        email: normalizedEmail,
-        authUserId: data.authUserId,
-        status: 'active_user', // Upgrade to active_user when they create account
-        source: 'account_creation',
-      });
-    }
-
-    // Log the linkage event
-    await logEvent({
-      personId: person.id,
-      eventType: 'profile_update',
-      source: 'auth_linkage',
-      channel: 'web',
-      metadata: {
-        authUserId: data.authUserId,
-        action: wasExisting ? 'linked_existing' : 'created_new',
+    const cookieStore = cookies();
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        },
       },
     });
 
-    // Ensure a profiles row exists for this user (for role management)
-    // This runs after person linking so login doesn't break if it fails
-    let profileCreated = false;
-    let profileError: string | null = null;
-    let profileExisted = false;
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    try {
-      // Check if profile already exists
-      const { data: existingProfile, error: checkError } = await supabaseAdmin
-        .from('profiles')
-        .select('id, role')
-        .eq('id', data.authUserId)
-        .maybeSingle();
-
-      if (checkError) {
-        profileError = `Failed to check existing profile: ${checkError.message}`;
-        console.error('[link-person] Error checking profile:', checkError);
-      } else if (existingProfile) {
-        profileExisted = true;
-        // Profile exists - do nothing (preserve existing role)
-        if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-          console.log('[link-person] Profile already exists:', {
-            authUserId: data.authUserId,
-            existingRole: existingProfile.role,
-          });
-        }
-      } else {
-        // Profile doesn't exist - insert with default role 'user'
-        if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-          console.log('[link-person] Creating new profile for user:', data.authUserId);
-        }
-
-        const { error: insertError } = await supabaseAdmin
-          .from('profiles')
-          .insert({
-            id: data.authUserId,
-            role: 'user', // Default role for new users
-          });
-
-        if (insertError) {
-          profileError = insertError.message;
-          console.error('[link-person] Failed to create profile:', {
-            authUserId: data.authUserId,
-            error: insertError.message,
-            code: insertError.code,
-            details: insertError.details,
-            hint: insertError.hint,
-          });
-        } else {
-          profileCreated = true;
-          if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-            console.log('[link-person] Successfully created profile for user:', data.authUserId);
-          }
-        }
-      }
-    } catch (profileErr) {
-      profileError = profileErr instanceof Error ? profileErr.message : 'Unknown error';
-      console.error('[link-person] Exception ensuring profile exists:', {
-        authUserId: data.authUserId,
-        error: profileErr,
-      });
+    if (authError || !user) {
+      return NextResponse.json({ ok: false, linked: false }, { status: 401 });
     }
 
-    return NextResponse.json({
-      ok: true,
-      routeVersion: 'link-person-v2-profiles',
-      person,
-      linked: true,
-      profileCreated,
-      profileExisted,
-      profileError: profileError || undefined,
-    });
+    await linkPersonForVerifiedUser(user);
+    return NextResponse.json({ ok: true, linked: true });
   } catch (error) {
-    console.error('Link person API error:', error);
-    return NextResponse.json(
-      { error: 'Server error' },
-      { status: 500 }
-    );
+    if (error instanceof PersonIdentityConflictError) {
+      return NextResponse.json({ ok: false, linked: false }, { status: 409 });
+    }
+    console.error('[link-person] Account linkage failed:', error);
+    return NextResponse.json({ ok: false, linked: false }, { status: 500 });
   }
 }
-

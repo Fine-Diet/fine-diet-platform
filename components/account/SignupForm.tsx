@@ -35,7 +35,8 @@ export interface SignupFormProps {
  * SignupForm Component
  * 
  * Handles new user registration with email and password.
- * After successful signup, calls /api/account/link-person to create/link people record.
+ * Session-bearing signups link through /api/account/link-person. Email-confirmation
+ * signups defer linking to the server-side PKCE callback.
  */
 export const SignupForm = ({
   onSwitchToLogin,
@@ -105,39 +106,23 @@ export const SignupForm = ({
         return;
       }
 
-      // Link auth user to people record
-      try {
-        const linkResponse = await fetch('/api/account/link-person', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            authUserId: data.user.id,
-            email: data.user.email || email,
-          }),
-        });
-
-        if (!linkResponse.ok) {
-          console.warn('[SignupForm] link-person response not OK:', linkResponse.status);
-        } else {
-          const linkData = await linkResponse.json();
-          if (linkData.profileCreated === false && linkData.profileError) {
-            console.warn(
-              '[SignupForm] Profile creation failed:',
-              linkData.profileError,
-              'User ID:',
-              data.user.id
-            );
-          } else if (linkData.profileCreated === true) {
-            console.log('[SignupForm] Profile created successfully for user:', data.user.id);
-          } else if (linkData.profileExisted === true) {
-            console.log('[SignupForm] Profile already existed for user:', data.user.id);
+      // Link only after Supabase has established a browser session. When email
+      // confirmation is required, /auth/callback links the verified exchange.
+      if (data.session) {
+        try {
+          const linkResponse = await fetch('/api/account/link-person', { method: 'POST' });
+          const linkData = linkResponse.ok ? await linkResponse.json() : null;
+          if (!linkData?.ok || linkData.linked !== true) {
+            setError('Your account was created, but setup could not be completed. Please log in again to retry.');
+            setLoading(false);
+            return;
           }
+        } catch (linkError) {
+          console.warn('[SignupForm] Account identity linking failed:', linkError);
+          setError('Your account was created, but setup could not be completed. Please log in again to retry.');
+          setLoading(false);
+          return;
         }
-      } catch (linkError) {
-        console.warn('[SignupForm] Error calling link-person:', linkError);
-        // Don't fail signup if linking fails - user is still authenticated
       }
 
       // Claim any guest assessment submissions (non-blocking)
