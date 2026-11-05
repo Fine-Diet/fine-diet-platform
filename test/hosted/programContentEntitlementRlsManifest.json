@@ -1,0 +1,100 @@
+{
+  "title": "PR #225 hosted program-content RLS verification manifest",
+  "status": "prepared_not_executed",
+  "sourceHeadAtPreparation": "a4727f96bb6b34e36e768b495f8fe307ea6caf8b",
+  "productionParentRef": "tssvlflebugqhtogqdfs",
+  "targetProjectRef": null,
+  "targetBranchNamePattern": "fine-diet-pr225-rls-<UTC timestamp YYYYMMDDtHHMMSSz>",
+  "blockedProjectRefs": {
+    "production": "tssvlflebugqhtogqdfs",
+    "paymentsQa": "ikvkqpbwlpevqlshdkdz",
+    "foodLogQa": "ymdhsvuaixiwhlioiree",
+    "retiredTemporaryBranch": "slsmfdxxqktkgplliwhx"
+  },
+  "branchRequirements": {
+    "createdSeparatelyUnderExistingFounderApproval": true,
+    "freshCostApprovalNeededOnlyIfQuotedCostOrScopeChanges": true,
+    "parentProjectRef": "tssvlflebugqhtogqdfs",
+    "withData": false,
+    "persistent": false,
+    "isDefault": false,
+    "previewProjectStatus": "ACTIVE_HEALTHY",
+    "runnerCreatesBranch": false,
+    "runnerDeletesBranchAfterAttempt": true
+  },
+  "setup": {
+    "file": "test/hosted/programContentEntitlementRlsHostedSetup.sql",
+    "sha256": "7344644f76ffd472b12f7fd56c06c4669df9f74458ac5fd77a7d979b4610294e",
+    "scope": "Nine-table authorization boundary, production-catalog-derived policies and helpers only",
+    "createsOrModifiesSupabaseManagedAuthObjects": false,
+    "createsRolesOrJwtFunctions": false,
+    "usesAuthUsersForeignKey": true,
+    "candidateMigrationChanged": false,
+    "candidateMigrationSha256": "49ad5e409f43058ad28804654308eaa23598970cbf6c7a9c245ef7fff4a73610"
+  },
+  "runner": "test/hosted/runProgramContentRlsHosted.mjs",
+  "runnerCore": "test/hosted/hostedRunnerCore.mjs",
+  "requiredEnvironmentNames": [
+    "FINE_DIET_RLS_TARGET_REF",
+    "FINE_DIET_RLS_EXPECTED_REF",
+    "FINE_DIET_RLS_BRANCH_NAME",
+    "FINE_DIET_RLS_COST_APPROVED",
+    "SUPABASE_ACCESS_TOKEN",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_SECRET_KEY",
+    "PGPASSFILE"
+  ],
+  "secretHandling": "Values must be supplied via a protected environment/secret manager and are never copied to evidence. PGPASSFILE must be mode 0600 or stricter. The runner writes redacted evidence with mode 0600.",
+  "hostedScenarios": [
+    "anonymous published program catalog metadata remains visible",
+    "anonymous direct module and content-item reads denied",
+    "Auth Admin creates synthetic users; password sign-in obtains Auth-issued sessions",
+    "real PostgREST bearer-token requests for active entitlement, active assignment, missing, expired, future, wrong-program, and revoked access",
+    "member retains own historical enrollment and published-version metadata after access loss",
+    "authenticated admin role reads, grants, and revokes a program entitlement",
+    "authenticated member curriculum writes denied",
+    "server-side privileged supabase-js PostgREST authoring CRUD succeeds",
+    "EXPLAIN ANALYZE BUFFERS on policy-protected helper/module/item/delivery queries with synthetic decoy volumes"
+  ],
+  "performanceSyntheticVolumes": {
+    "entitlementRows": 10000,
+    "assignmentRows": 10000,
+    "additionalModules": 500,
+    "additionalContentItems": 500,
+    "additionalDeliveryModules": 500,
+    "measured": ["planning time", "execution time", "shared hit blocks", "shared read blocks", "plan nodes/index names"]
+  },
+  "cleanup": {
+    "syntheticAuthUsersDeletedBeforeBranchDeletion": true,
+    "targetBranchDeletedViaManagementApi": true,
+    "absenceVerifiedAgainstParentBranchInventory": true,
+    "timeoutSeconds": 90
+  },
+  "offlineFailurePathTests": [
+    "protected refs and absent direct Management API credential fail before network/database access",
+    "healthy and unhealthy branch identity handling",
+    "empty/mismatched cleanup refs rejected before delete",
+    "Management API delete/inventory failures",
+    "branch deletion absence confirmation and timeout",
+    "multiline EXPLAIN JSON with preceding psql output",
+    "write-attempt evidence set before a failed fixture application",
+    "service-role client update/delete operations",
+    "protected passfile permission checks"
+  ],
+  "credentialPreflight": {
+    "supabaseManagementConnectorReadOnlyAccess": "PASS",
+    "directManagementApiToken": "MISSING",
+    "branchPublishableKey": "MISSING",
+    "branchSecretKey": "MISSING",
+    "protectedPgpassfile": "MISSING",
+    "psqlBinary": "AVAILABLE",
+    "supabaseCliDockerPodman": "UNAVAILABLE",
+    "branchProvisioning": "NOT_STARTED"
+  },
+  "knownLimitations": [
+    "This targeted fixture is not a complete Production schema replica and does not replay historical migrations.",
+    "The local PostgreSQL fixture uses test-only simulated Auth role/JWT functions; it does not establish hosted Auth or PostgREST behavior.",
+    "Performance results from the synthetic data volume are not Production latency/SLO evidence.",
+    "One temporary branch is explicitly approved at $0.01344/hour plus applicable usage but has not been provisioned because direct runner credentials and a protected passfile are missing."
+  ]
+}

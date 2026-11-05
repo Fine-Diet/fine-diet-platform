@@ -370,10 +370,10 @@ export async function listLibraryForPerson(
 // ============================================================================
 
 /**
- * Detailed view for a single program. Returns null when the user has no
- * access to that slug (no entitlement AND no assignment). Callers
- * should 404 in that case so we don't leak catalogue metadata to
- * unauthorized users.
+ * Detailed view for a single program. Returns null unless the person has
+ * current access (an in-window entitlement or active in-window assignment).
+ * Historical assignments remain visible in the library list, but they do
+ * not authorize service-role reads of curriculum content.
  */
 export async function getLibraryDetailForPerson(
   personId: string,
@@ -391,8 +391,11 @@ export async function getLibraryDetailForPerson(
 
   const hasEntitlement = entitledSlugs.has(trimmed);
   const assignments = assignmentList.rows;
+  const hasCurrentAssignment = assignments.some(
+    (assignment) => toRuntimeState(assignment, now) === 'active_now',
+  );
 
-  if (!hasEntitlement && assignments.length === 0) {
+  if (!hasEntitlement && !hasCurrentAssignment) {
     return null;
   }
 

@@ -148,15 +148,19 @@ export async function getAssignmentById(
  */
 export async function listActiveAssignmentsForPerson(
   personId: string,
+  programSlug?: string,
 ): Promise<ProgramAssignment[]> {
   const nowIso = new Date().toISOString();
-  const { data, error } = await supabaseAdmin
+  let q = supabaseAdmin
     .from('program_assignments')
     .select('*')
     .eq('person_id', personId)
     .eq('status', 'active')
     .or(`active_from.is.null,active_from.lte.${nowIso}`)
     .or(`active_to.is.null,active_to.gt.${nowIso}`);
+
+  if (programSlug) q = q.eq('program_slug', programSlug.trim().toLowerCase());
+  const { data, error } = await q;
 
   if (error) {
     throw new Error(

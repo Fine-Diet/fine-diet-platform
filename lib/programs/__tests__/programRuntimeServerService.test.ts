@@ -10,6 +10,7 @@ import type { ProgramEnrollment } from '../runtimeTypes';
 let mockFrom!: jest.Mock;
 let mockHasEntitlement!: jest.Mock;
 let mockListAssignments!: jest.Mock;
+let mockListActiveAssignments!: jest.Mock;
 
 jest.mock('@/lib/supabaseServerClient', () => {
   mockFrom = jest.fn();
@@ -29,8 +30,10 @@ jest.mock('@/lib/access/accessService', () => {
 
 jest.mock('@/lib/plans/programAssignmentServerService', () => {
   mockListAssignments = jest.fn();
+  mockListActiveAssignments = jest.fn().mockResolvedValue([]);
   return {
     listAssignments: mockListAssignments,
+    listActiveAssignmentsForPerson: (...args: unknown[]) => mockListActiveAssignments(...args),
   };
 });
 
@@ -329,6 +332,42 @@ describe('program runtime enrollment writes', () => {
     expect(mockFrom).toHaveBeenCalledTimes(4);
   });
 
+  test.each(['revoked', 'expired', 'future'])(
+    'denies ordinary enrollment when no current entitlement remains after the %s record',
+    async () => {
+      mockHasEntitlement.mockResolvedValue(false);
+      mockListActiveAssignments.mockResolvedValue([]);
+
+      await expect(createProgramEnrollmentFromAccess({
+        personId: 'person-1',
+        programSlug: 'baseline',
+        selectedStartDate: '2026-05-22',
+        timezone: 'UTC',
+      })).rejects.toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+
+      expect(mockHasEntitlement).toHaveBeenCalledWith('person-1', 'program:baseline');
+      expect(mockFrom).not.toHaveBeenCalledWith('program_enrollments');
+    },
+  );
+
+  test.each(['cancelled', 'expired', 'future', 'wrong-person'])(
+    'denies ordinary enrollment when the current-access query excludes a %s assignment',
+    async () => {
+      mockHasEntitlement.mockResolvedValue(false);
+      mockListActiveAssignments.mockResolvedValue([]);
+
+      await expect(createProgramEnrollmentFromAccess({
+        personId: 'person-1',
+        programSlug: 'baseline',
+        selectedStartDate: '2026-05-22',
+        timezone: 'UTC',
+      })).rejects.toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+
+      expect(mockListActiveAssignments).toHaveBeenCalledWith('person-1', 'baseline');
+      expect(mockFrom).not.toHaveBeenCalledWith('program_enrollments');
+    },
+  );
+
   test('enrolls after the same person has a completed prerequisite, including by assignment', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
     const created = baseEnrollment({
@@ -341,18 +380,15 @@ describe('program runtime enrollment writes', () => {
     });
     const insertQuery = query({ singleData: created });
     mockHasEntitlement.mockResolvedValue(false);
-    mockListAssignments.mockResolvedValue({
-      rows: [{ id: 'assignment-1' }],
-      total: 1,
-      limit: 1,
-      offset: 0,
-    });
+    mockListActiveAssignments.mockResolvedValue([{
+      id: 'assignment-1', person_id: 'person-1', program_slug: 'digestive-foundations',
+      status: 'active', active_from: null, active_to: null,
+    }]);
     mockFrom
       .mockReturnValueOnce(query({ data: null }))
       .mockReturnValueOnce(query({ data: { ...programHeaderRow(), id: 'program-digestive', slug: 'digestive-foundations' } }))
       .mockReturnValueOnce(query({ data: publishedVersionRow({ id: 'version-digestive', program_id: 'program-digestive' }) }))
       .mockReturnValueOnce(query({ data: [baseEnrollment({ status: 'completed', program_slug: 'baseline', completed_at: '2026-05-01T00:00:00.000Z' })] }))
-      .mockReturnValueOnce(query({ data: { id: 'assignment-1' } }))
       .mockReturnValueOnce(insertQuery);
 
     const out = await createProgramEnrollmentFromAccess({
@@ -402,12 +438,10 @@ describe('program runtime enrollment writes', () => {
     });
     const insertQuery = query({ singleData: created });
     mockHasEntitlement.mockResolvedValue(false);
-    mockListAssignments.mockResolvedValue({
-      rows: [{ id: 'assignment-1' }],
-      total: 1,
-      limit: 1,
-      offset: 0,
-    });
+    mockListActiveAssignments.mockResolvedValue([{
+      id: 'assignment-1', person_id: 'person-1', program_slug: 'digestive-foundations',
+      status: 'active', active_from: null, active_to: null,
+    }]);
     mockFrom
       .mockReturnValueOnce(query({ data: null }))
       .mockReturnValueOnce(query({ data: { ...programHeaderRow(), id: 'program-digestive', slug: 'digestive-foundations' } }))
@@ -428,7 +462,6 @@ describe('program runtime enrollment writes', () => {
           }),
         ],
       }))
-      .mockReturnValueOnce(query({ data: { id: 'assignment-1' } }))
       .mockReturnValueOnce(insertQuery);
 
     const out = await createProgramEnrollmentFromAccess({
@@ -499,11 +532,11 @@ describe('program runtime enrollment writes', () => {
     expect(mockFrom).toHaveBeenCalledTimes(2);
   });
 
-  test('lets a verified admin grant bypass prerequisite and validation-only gates', async () => {
+  test('lets a verified admin grant bypass prerequisite and validation-only gates without member access', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
     const created = baseEnrollment({ id: 'qa-enrollment', program_slug: 'digestive-foundations' });
     const insertQuery = query({ singleData: created });
-    mockHasEntitlement.mockResolvedValue(true);
+    mockHasEntitlement.mockResolvedValue(false);
     mockFrom
       .mockReturnValueOnce(query({ data: null }))
       .mockReturnValueOnce(query({ data: { ...programHeaderRow(), id: 'program-digestive', slug: 'digestive-foundations' } }))
@@ -527,7 +560,7 @@ describe('program runtime enrollment writes', () => {
 
   test('throws when the person has no entitlement or assignment access', async () => {
     mockHasEntitlement.mockResolvedValue(false);
-    mockListAssignments.mockResolvedValue({ rows: [], total: 0, limit: 1, offset: 0 });
+    mockListActiveAssignments.mockResolvedValue([]);
 
     await expect(
       createProgramEnrollmentFromAccess({
@@ -1567,6 +1600,21 @@ describe('canary-safe default enrollment version', () => {
     });
   });
 
+  test('rejects an unverified admin-grant enrollment source', async () => {
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }));
+
+    await expect(createProgramEnrollment({
+      personId: 'person-1',
+      programSlug: 'baseline',
+      selectedStartDate: '2026-05-22',
+      sourceType: 'admin_grant',
+    })).rejects.toMatchObject({ code: 'PROGRAM_ASSIGNMENT_DENIED' });
+    expect(mockFrom.mock.results.every((result) => !result.value?.insert?.mock?.calls?.length)).toBe(true);
+  });
+
   test('still lets a verified admin grant enroll in an explicitly targeted validation-only version', async () => {
     const created = baseEnrollment({
       id: 'qa-enrollment',
@@ -1601,10 +1649,27 @@ describe('program runtime check-in responses', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    mockHasEntitlement.mockResolvedValue(true);
   });
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  test('requires current program access for check-in responses on an owned historical enrollment', async () => {
+    const enrollment = baseEnrollment({ status: 'active', program_slug: 'baseline' });
+    mockHasEntitlement.mockResolvedValue(false);
+    mockListActiveAssignments.mockResolvedValue([]);
+    mockFrom.mockReturnValueOnce(query({ data: enrollment }));
+
+    await expect(respondToProgramCheckin({
+      personId: 'person-1',
+      enrollmentId: enrollment.id,
+      checkinDay: 7,
+      responseStatus: 'completed',
+      responsesJson: { energy: 4 },
+    })).rejects.toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+    expect(mockFrom).toHaveBeenCalledTimes(1);
   });
 
   test('upserts a skipped check-in row explicitly', async () => {
