@@ -3,7 +3,7 @@
     "title": "Read your body.\nReset your health.",
     "description": "Your body keeps receipts — learn how to read them and reclaim how you feel, look and live.",
     "buttons": [
-      { "label": "Start Your Free Journal", "variant": "primary", "href": "https://journal.myfinediet.com/" },
+      { "label": "Start Your Free Journal", "variant": "primary", "href": "/app/log" },
       { "label": "Explore The Program", "variant": "tertiary", "href": "/the-fine-diet-method" }
     ],
     "images": {
@@ -16,7 +16,7 @@
       "title": "Break up with sugar, feel like yourself again.",
       "description": "The Food & Mood Journal helps you build awareness and make better choices. Free with account.",
       "buttons": [
-        { "label": "Learn More", "variant": "primary", "href": "/journal" },
+        { "label": "Learn More", "variant": "primary", "href": "/app/log" },
         { "label": "Join", "variant": "tertiary", "href": "/login" }
       ],
       "images": {
@@ -33,7 +33,7 @@
             "mobile": "/images/home/integrative-care-mobile.jpg"
           },
           "buttons": [
-            { "label": "Explore Integrative Care", "variant": "primary", "href": "/journal" },
+            { "label": "Explore Integrative Care", "variant": "primary", "href": "/app/log" },
             { "label": "View Success Stories", "variant": "tertiary", "href": "/signup" }
           ]
         },
@@ -69,7 +69,7 @@
       "title": "Meet your nutrition intelligence journal",
       "description": "You’re not tracking — you’re translating. Decode the relationship between what you eat and how you feel.",
       "buttons": [
-            { "label": "Explore Programs", "variant": "primary", "href": "https://journal.myfinediet.com/" }
+            { "label": "Explore Programs", "variant": "primary", "href": "/app/programs" }
           ],
       "images": {
         "desktop": "/images/home/intelligence-journal-desktop.jpg",
@@ -102,7 +102,7 @@
     "button": {
       "label": "Start Tracking",
       "variant": "primary",
-      "href": "/journal"
+      "href": "/app/log"
     },
     "images": {
       "desktop": "/images/home/hero-desktop.jpg",

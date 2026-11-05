@@ -429,8 +429,6 @@ export const MobileNav = ({
                   href={navigation.topLinks.journal.href}
                   className="flex items-center gap-1.5 px-5 py-4 text-sm font-semibold text-white antialiased transition-colors hover:bg-white/5 w-full"
                   onClick={closeNav}
-                  target="_blank"
-                  rel="noopener noreferrer"
                 >
                   <span className="text-white">•</span>
                   <span>Start Your Journal</span>

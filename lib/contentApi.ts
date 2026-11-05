@@ -29,6 +29,7 @@ import {
   journalPageContentSchema,
   assessmentLandingPageContentSchema,
 } from './contentValidators';
+import { normalizeJournalLinks } from './content/normalizeJournalLinks';
 
 // JSON fallback imports
 import navigationFallback from '@/data/navigation.json';
@@ -70,7 +71,7 @@ export async function getNavigationContent(
     );
 
     if (supabaseContent) {
-      return supabaseContent;
+      return normalizeJournalLinks(supabaseContent);
     }
   } catch (error) {
     // Silently fall back to JSON if Supabase fails
@@ -78,7 +79,7 @@ export async function getNavigationContent(
   }
 
   // Fallback to JSON
-  return navigationJson;
+  return normalizeJournalLinks(navigationJson);
 }
 
 /**
@@ -98,14 +99,14 @@ export async function getHomeContent(
     );
 
     if (supabaseContent) {
-      return supabaseContent;
+      return normalizeJournalLinks(supabaseContent);
     }
   } catch (error) {
     console.warn('Failed to fetch home content from Supabase, using JSON fallback:', error);
   }
 
   // Fallback to JSON
-  return homeContentJson;
+  return normalizeJournalLinks(homeContentJson);
 }
 
 /**
@@ -125,14 +126,14 @@ export async function getFooterContent(
     );
 
     if (supabaseContent) {
-      return supabaseContent;
+      return normalizeJournalLinks(supabaseContent);
     }
   } catch (error) {
     console.warn('Failed to fetch footer content from Supabase, using JSON fallback:', error);
   }
 
   // Fallback to JSON
-  return footerContentJson;
+  return normalizeJournalLinks(footerContentJson);
 }
 
 /**

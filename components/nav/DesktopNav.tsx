@@ -1,6 +1,5 @@
 import { NavigationData } from './types';
 import { NavCategoryButton } from './NavCategoryButton';
-import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
 
 interface DesktopNavProps {
   navigation: NavigationData;
@@ -43,11 +42,8 @@ export const DesktopNav = ({
           <a
             href={navigation.topLinks.journal.href}
             className="relative flex items-center gap-1 px-4 pt-2 pb-[6px] text-black transition hover:opacity-90 antialiased"
-            target="_blank"
-            rel="noopener noreferrer"
           >
             <span>{navigation.topLinks.journal.label.replace(/\s*↗$/, '')}</span>
-            <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px]" strokeWidth={3.5} />
           </a>
         </div>
         <div className="relative flex flex-col items-center">

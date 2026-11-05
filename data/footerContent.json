@@ -6,7 +6,7 @@
   "explore": {
     "title": "Explore",
     "links": [
-      { "label": "The Journal", "href": "/journal" },
+      { "label": "The Journal", "href": "/app/log" },
       { "label": "The Program", "href": "/the-fine-diet-method" },
       { "label": "Programs", "href": "/programs" },
       { "label": "Nutrition Foundations", "href": "/programs/nutrition" }
