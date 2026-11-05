@@ -26,6 +26,7 @@ interface MyAppProps extends AppProps {
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   exchange_failed: "We couldn\u2019t complete sign-in. Please try again.",
   missing_code: 'Sign-in was cancelled or the link expired. Please try again.',
+  link_failed: 'We couldn\u2019t finish setting up your account. Please sign in again or contact support.',
 };
 
 function MyApp({ Component, pageProps, navigation, footerContent, globalContent }: MyAppProps) {

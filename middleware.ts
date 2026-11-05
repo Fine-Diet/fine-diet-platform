@@ -42,51 +42,9 @@ function redirectToWaitlist(url: URL, pathname: string, search: string): NextRes
  * skip vs completion are distinct onboarding states).
  */
 export async function middleware(request: NextRequest) {
-  const host = request.headers.get('host') || '';
   const pathname = request.nextUrl.pathname;
   const search = request.nextUrl.search || '';
   const url = request.nextUrl.clone();
-
-  // -------------------------------------------------------------------------
-  // Journal subdomain routing: journal.myfinediet.com
-  // -------------------------------------------------------------------------
-  const isJournalSubdomain = host.startsWith('journal.myfinediet.com');
-  if (isJournalSubdomain && pathname === '/') {
-    const user = await getCurrentUserWithRoleFromMiddleware(request);
-
-    if (!user) {
-      url.pathname = '/login';
-      url.searchParams.set('redirect', redirectParam('/', search));
-      url.searchParams.set('ctx', 'generic');
-      return NextResponse.redirect(url);
-    }
-
-    try {
-      const decision = await resolveEffectiveAccessForAuthUser(user.id);
-      if (!decision.allowed) {
-        return redirectToWaitlist(url, '/', search);
-      }
-
-      if (mustEnterOnboarding({
-        onboarding_completed_at: decision.onboarding.completedAt,
-        onboarding_skipped_at: decision.onboarding.skippedAt,
-        onboarding_started_at: decision.onboarding.startedAt,
-        onboarding_last_step: decision.onboarding.lastStep,
-      })) {
-        const dest = buildOnboardingRedirectDestination(APP_ROUTES.log, '');
-        const [destPath, destQuery] = dest.split('?');
-        url.pathname = destPath;
-        url.search = destQuery ? `?${destQuery}` : '';
-        return NextResponse.redirect(url);
-      }
-
-      url.pathname = APP_ROUTES.log;
-      return NextResponse.rewrite(url);
-    } catch (err) {
-      console.error('[Middleware] Journal subdomain access check failed:', err);
-      return redirectToWaitlist(url, '/', search);
-    }
-  }
 
   // -------------------------------------------------------------------------
   // Signed-in app gate: /app, /app/*, /journal, and /journal/*

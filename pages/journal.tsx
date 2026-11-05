@@ -13,6 +13,7 @@ import {
   toDateKey,
   parseLocalDate,
   journalService,
+  entryBelongsToJournalDate,
   calculateDailyTotals,
   type JournalEntry,
   type UserGoals,
@@ -98,6 +99,8 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   // Entries state (single fetch at page level to avoid race conditions)
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [entriesLoadError, setEntriesLoadError] = useState(false);
+  const [entriesRetryCount, setEntriesRetryCount] = useState(0);
   const fetchIdRef = useRef(0);
 
   // Food nutrient data for flag computation (keyed by food_object_id)
@@ -278,16 +281,21 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
     // Increment fetch ID to track stale requests
     const currentFetchId = ++fetchIdRef.current;
     setIsLoading(true);
+    setEntriesLoadError(false);
 
     (async () => {
       try {
-        const list = await journalService.listEntriesByDay(selectedDate);
+        const list = await journalService.listEntriesByDayOrThrow(selectedDate);
         // Only update state if this is still the latest request
         if (currentFetchId !== fetchIdRef.current) return;
 
-        // Filter to only entries matching this local date
-        const filtered = list.filter((e) => toDateKey(e.timestamp) === selectedDateKey);
+        // Match the server-authored consumed day. The browser's timezone may
+        // differ from the member's saved Journal timezone.
+        const filtered = list.filter((entry) =>
+          entryBelongsToJournalDate(entry, selectedDateKey),
+        );
         setEntries(filtered);
+        setEntriesLoadError(false);
 
         // Extract unique food object IDs for batch nutrient fetch (intake entries only)
         const foodIds = Array.from(
@@ -317,6 +325,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
         if (currentFetchId === fetchIdRef.current) {
           setEntries([]);
           setFoodNutrientMap(new Map());
+          setEntriesLoadError(true);
         }
       } finally {
         if (currentFetchId === fetchIdRef.current) {
@@ -324,7 +333,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
         }
       }
     })();
-  }, [router.isReady, selectedDateKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [router.isReady, selectedDateKey, entriesRetryCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enabledMealSlots = getEnabledMealSlots(mealSchedule);
 
@@ -424,8 +433,22 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
           {/* Copy ↔ module spacing — adjust this container to tune the gap above the meal border */}
           <div className="mt-3" aria-hidden />
 
+          {entriesLoadError && (
+            <div role="alert" className="mb-4 rounded-lg border border-red-300/30 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+              Saved Journal entries could not be loaded. No changes were made to your saved entries.
+              <button
+                type="button"
+                onClick={() => setEntriesRetryCount((count) => count + 1)}
+                disabled={isLoading}
+                className="ml-2 underline disabled:opacity-50"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Meal schedule slots */}
-          <div className="rounded-2xl border-[1.5px] border-brand-300">
+          {!entriesLoadError && <div className="rounded-2xl border-[1.5px] border-brand-300">
             <div className="flex flex-col pt-0">
               {enabledMealSlots.map((slot, index) => (
                 <Fragment key={slot.key}>
@@ -443,12 +466,12 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
                 </Fragment>
               ))}
             </div>
-          </div>
+          </div>}
         </div>
       </StackedPageSection>
 
       {/* Remaining inputs section — preference-driven tracking modules + More Today chips */}
-      {!isLoading && (
+      {!isLoading && !entriesLoadError && (
         <StackedPageSection layer={2} className="bg-neutral-900 py-10 pb-[100px]" contentClassName="max-w-[1000px]">
           <LogSummaryAnchor>
             <DailySummary

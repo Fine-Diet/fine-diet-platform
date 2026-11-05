@@ -461,6 +461,7 @@ export function OnboardingFlowView({
         await onFinish(answers, { skipRemaining });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not save your onboarding.');
+      } finally {
         setSubmitting(false);
       }
     },

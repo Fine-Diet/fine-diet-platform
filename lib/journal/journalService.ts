@@ -23,7 +23,11 @@ import {
   type MealTemplateItem,
 } from './types';
 import { CONSUMED_TIME_ZONE_HEADER } from './consumedTimeZoneRequest';
-import { attributeConsumedDay, deriveBlockForAttribution } from '@/lib/nds/dayIdentity';
+import {
+  attributeConsumedDay,
+  belongsToConsumedDay,
+  deriveBlockForAttribution,
+} from '@/lib/nds/dayIdentity';
 import { notifyNdsConsumptionCommitted } from '@/lib/nds/ndsDayStore';
 
 // Default goals for client-side fallback
@@ -143,6 +147,35 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   }
 
   return res.json();
+}
+
+async function fetchEntriesByDay(date: Date): Promise<JournalEntry[]> {
+  const dateKey = toDateKey(date);
+  const { entries } = await apiFetch<{ entries: ApiEntryResponse[] }>(
+    `/api/journal/entries?date=${dateKey}`
+  );
+  const parsed = entries.map(parseApiEntry);
+  parsed.sort((a, b) => {
+    const timeDiff = a.timestamp.getTime() - b.timestamp.getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return a.id.localeCompare(b.id);
+  });
+  return parsed;
+}
+
+/**
+ * Match the server-authored consumed-day identity. A member may travel or use a
+ * device whose local timezone differs from their saved Journal timezone, so the
+ * timestamp's browser-local date is not authoritative for Journal grouping.
+ */
+export function entryBelongsToJournalDate(entry: JournalEntry, dateKey: string): boolean {
+  return belongsToConsumedDay(
+    {
+      occurred_at: entry.timestamp.toISOString(),
+      payload: (entry.payload ?? {}) as Record<string, unknown>,
+    },
+    dateKey,
+  );
 }
 
 // ============================================================================
@@ -346,23 +379,17 @@ export const journalService = {
    * Returns entries sorted by timestamp ASC, then id ASC for deterministic ordering.
    */
   async listEntriesByDay(date: Date): Promise<JournalEntry[]> {
-    const dateKey = toDateKey(date);
     try {
-      const { entries } = await apiFetch<{ entries: ApiEntryResponse[] }>(
-        `/api/journal/entries?date=${dateKey}`
-      );
-      const parsed = entries.map(parseApiEntry);
-      // Sort client-side as safety net for deterministic ordering
-      parsed.sort((a, b) => {
-        const timeDiff = a.timestamp.getTime() - b.timestamp.getTime();
-        if (timeDiff !== 0) return timeDiff;
-        return a.id.localeCompare(b.id);
-      });
-      return parsed;
+      return await fetchEntriesByDay(date);
     } catch (error) {
       console.error('[journalService.listEntriesByDay] Error:', error);
       return [];
     }
+  },
+
+  /** List a day's saved entries and preserve read errors for views with retry UI. */
+  async listEntriesByDayOrThrow(date: Date): Promise<JournalEntry[]> {
+    return fetchEntriesByDay(date);
   },
 
   /**

@@ -15,10 +15,15 @@ import {
   type OnboardingAnswers,
 } from '@/lib/onboarding/defaultOnboardingFlow';
 import {
+  OnboardingPersistenceCoordinator,
+  persistOnboarding,
+} from '@/lib/onboarding/onboardingPersistence';
+import {
   resolveCompletedUserDestination,
   resolveOnboardingFinishDestination,
   resolveSkippedUserDestination,
 } from '@/lib/onboarding/onboardingGate';
+import { replaceOnboardingRoute } from '@/lib/onboarding/onboardingNavigation';
 import type { OnboardingFlowConfig } from '@/lib/onboarding/onboardingFlowTypes';
 
 function readReturnTo(query: ReturnType<typeof useRouter>['query']): string | null {
@@ -31,27 +36,23 @@ function coerceAnswers(raw: unknown): OnboardingAnswers {
   return { ...INITIAL_ANSWERS, ...(raw as Partial<OnboardingAnswers>) };
 }
 
-async function persistOnboarding(body: Record<string, unknown>): Promise<void> {
-  const res = await fetch('/api/onboarding/persist', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? 'Could not save your onboarding.');
-  }
-}
-
 export default function OnboardingPage() {
   const router = useRouter();
-  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'leaving'>('loading');
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'leaving' | 'error'>('loading');
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [flowConfig, setFlowConfig] = useState<OnboardingFlowConfig | null>(null);
   const [initialAnswers, setInitialAnswers] = useState<OnboardingAnswers>(INITIAL_ANSWERS);
   const [initialStep, setInitialStep] = useState(0);
   const startedRef = useRef(false);
-  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistenceRef = useRef<OnboardingPersistenceCoordinator | null>(null);
+  if (!persistenceRef.current) {
+    persistenceRef.current = new OnboardingPersistenceCoordinator(async (payload) => {
+      await persistOnboarding(payload);
+    });
+  }
+  const persistence = persistenceRef.current;
+
+  useEffect(() => () => persistence.cancelPendingProgress(), [persistence]);
 
   useEffect(() => {
     const returnTo = readReturnTo(router.query);
@@ -76,6 +77,20 @@ export default function OnboardingPage() {
             setLoadState('leaving');
             void router.replace(resolveSkippedUserDestination(returnTo));
             return;
+          }
+
+          if (profile.onboarding_skipped_at && router.query.resume) {
+            try {
+              const resume = await persistOnboarding({ mode: 'resume' });
+              if (typeof resume?.resumeToken !== 'string') {
+                throw new Error('Could not resume your setup.');
+              }
+              persistence.setResumeToken(resume.resumeToken);
+            } catch {
+              setLoadError('We could not resume your setup. Please try again.');
+              setLoadState('error');
+              return;
+            }
           }
 
           const blob = profile.onboarding;
@@ -108,30 +123,43 @@ export default function OnboardingPage() {
   const markStarted = useCallback(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    void persistOnboarding({ mode: 'started' }).catch(() => {});
-  }, []);
+    persistence.markStarted();
+  }, [persistence]);
 
   const persistProgress = useCallback((answers: OnboardingAnswers, step: number) => {
-    if (progressTimer.current) clearTimeout(progressTimer.current);
-    progressTimer.current = setTimeout(() => {
-      void persistOnboarding({
-        mode: 'progress',
-        answers,
-        lastStep: step,
-      }).catch(() => {});
-    }, 400);
-  }, []);
+    persistence.scheduleProgress(answers, step);
+  }, [persistence]);
 
   const handleFinish = useCallback(
     async (answers: OnboardingAnswers, { skipRemaining }: { skipRemaining: boolean }) => {
-      await persistOnboarding({
+      await persistence.finalize({
         mode: skipRemaining ? 'skip' : 'complete',
         answers,
       });
-      void router.replace(resolveOnboardingFinishDestination(readReturnTo(router.query)));
+      await replaceOnboardingRoute(
+        (destination) => router.replace(destination),
+        resolveOnboardingFinishDestination(readReturnTo(router.query)),
+      );
     },
-    [router],
+    [persistence, router],
   );
+
+  if (loadState === 'error') {
+    return (
+      <div className="min-h-screen bg-[#CECAB9] flex flex-col items-center justify-center gap-4 px-5">
+        <p role="alert" className="text-[#4F4234] text-base">
+          {loadError ?? 'We could not resume your setup. Please try again.'}
+        </p>
+        <button
+          type="button"
+          onClick={() => router.reload()}
+          className="rounded-full bg-[#4F4234] px-5 py-3 text-sm font-semibold text-white"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   if (loadState === 'loading' || loadState === 'leaving') {
     return (

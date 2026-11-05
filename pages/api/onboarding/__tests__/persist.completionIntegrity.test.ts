@@ -18,22 +18,96 @@ const COMPLETE_REQUIRED_ANSWERS: OnboardingAnswers = {
 };
 
 const updateCalls: Array<{ payload: Record<string, unknown> }> = [];
+const updateFilters: Array<{ column: string; value: unknown }> = [];
 let currentMetadata: Record<string, unknown> = {
   meal_schedule: { slots: { breakfast: { enabled: true } }, updated_at: '2020-01-01T00:00:00.000Z' },
   onboarding: { answers: { sex: 'female' } },
   primary_goal: 'existing_goal',
 };
+let concurrentReadBarrier: Promise<void> | null = null;
+let releaseConcurrentReads: (() => void) | null = null;
+let concurrentReadsReady: Promise<void> | null = null;
+let signalConcurrentReadsReady: (() => void) | null = null;
+let concurrentReadCount = 0;
+let skipWriteBarrier: Promise<void> | null = null;
+let releaseSkipWrite: (() => void) | null = null;
+let skipWriteStarted: Promise<void> | null = null;
+let signalSkipWriteStarted: (() => void) | null = null;
+
+function holdTwoConcurrentReads() {
+  concurrentReadCount = 0;
+  concurrentReadBarrier = new Promise<void>((resolve) => { releaseConcurrentReads = resolve; });
+  concurrentReadsReady = new Promise<void>((resolve) => { signalConcurrentReadsReady = resolve; });
+}
+
+function holdSkipFinalizationWrite() {
+  skipWriteBarrier = new Promise<void>((resolve) => { releaseSkipWrite = resolve; });
+  skipWriteStarted = new Promise<void>((resolve) => { signalSkipWriteStarted = resolve; });
+}
 
 jest.mock('@/lib/supabaseServerClient', () => {
   const chain: any = {
     select: () => chain,
     eq: () => chain,
-    single: async () => ({ data: { metadata: currentMetadata }, error: null }),
+    single: async () => {
+      const metadataSnapshot = structuredClone(currentMetadata);
+      if (concurrentReadBarrier) {
+        concurrentReadCount += 1;
+        if (concurrentReadCount === 2) signalConcurrentReadsReady?.();
+        await concurrentReadBarrier;
+      }
+      return { data: { metadata: metadataSnapshot }, error: null };
+    },
     update: (payload: Record<string, unknown>) => {
       updateCalls.push({ payload });
-      return {
-        eq: async () => ({ error: null }),
+      const filters: Array<{ column: string; value: unknown; operator: 'is' | 'eq' }> = [];
+      const matches = () => filters.every(({ column, value, operator }) => {
+        const key = column.replace('metadata->>', '');
+        const actual = currentMetadata[key] ?? null;
+        return operator === 'is' ? actual === value : String(actual) === String(value);
+      });
+      const apply = () => {
+        if (!matches()) return false;
+        currentMetadata = (payload.metadata ?? {}) as Record<string, unknown>;
+        return true;
       };
+      const updateQuery: any = {
+        is: (column: string, value: unknown) => {
+          updateFilters.push({ column, value });
+          filters.push({ column, value, operator: 'is' });
+          return updateQuery;
+        },
+        not: (column: string, operator: 'is', value: unknown) => {
+          updateFilters.push({ column: `${column}!${operator}`, value });
+          filters.push({ column, value, operator: 'eq' });
+          return updateQuery;
+        },
+        eq: (column: string, value: unknown) => {
+          if (column.startsWith('metadata->>')) {
+            updateFilters.push({ column, value });
+            filters.push({ column, value, operator: 'eq' });
+          }
+          return updateQuery;
+        },
+        select: () => updateQuery,
+        maybeSingle: async () => {
+          const onboarding = payload.metadata && (payload.metadata as Record<string, unknown>).onboarding;
+          const isSkipFinalization = Boolean(
+            onboarding && typeof onboarding === 'object' && (onboarding as Record<string, unknown>).skipped_at,
+          );
+          if (isSkipFinalization && skipWriteBarrier) {
+            signalSkipWriteStarted?.();
+            await skipWriteBarrier;
+          }
+          return { data: apply() ? { id: 'person-1' } : null, error: null };
+        },
+        then: (resolve: (value: { error: null }) => unknown) =>
+          Promise.resolve({ error: null }).then(() => {
+            apply();
+            return resolve({ error: null });
+          }),
+      };
+      return updateQuery;
     },
   };
   return {
@@ -61,6 +135,10 @@ function makeReq(body: unknown): NextApiRequest {
   } as unknown as NextApiRequest;
 }
 
+function makeGetReq(): NextApiRequest {
+  return { method: 'GET', headers: {}, cookies: {} } as unknown as NextApiRequest;
+}
+
 function makeRes(): NextApiResponse & { statusCode: number; body: unknown } {
   const res: any = {
     statusCode: 200,
@@ -82,6 +160,16 @@ function makeRes(): NextApiResponse & { statusCode: number; body: unknown } {
 describe('POST /api/onboarding/persist completion integrity', () => {
   beforeEach(() => {
     updateCalls.length = 0;
+    updateFilters.length = 0;
+    concurrentReadBarrier = null;
+    releaseConcurrentReads = null;
+    concurrentReadsReady = null;
+    signalConcurrentReadsReady = null;
+    concurrentReadCount = 0;
+    skipWriteBarrier = null;
+    releaseSkipWrite = null;
+    skipWriteStarted = null;
+    signalSkipWriteStarted = null;
     currentMetadata = {
       meal_schedule: { slots: { breakfast: { enabled: true } }, updated_at: '2020-01-01T00:00:00.000Z' },
       onboarding: { answers: { sex: 'female' } },
@@ -139,6 +227,77 @@ describe('POST /api/onboarding/persist completion integrity', () => {
     expect(meta.onboarding_completed_at).toBeUndefined();
   });
 
+  it('rejects Skip when onboarding is already completed', async () => {
+    currentMetadata = {
+      onboarding_completed_at: '2026-11-04T12:00:00.000Z',
+      onboarding: { answers: { ...COMPLETE_REQUIRED_ANSWERS }, completed_at: '2026-11-04T12:00:00.000Z' },
+    };
+    const { default: handler } = await import('@/pages/api/onboarding/persist');
+    const res = makeRes();
+
+    await handler(makeReq({ mode: 'skip', answers: INITIAL_ANSWERS }), res);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: 'onboarding_already_completed' });
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it('does not let a stale overlapping Skip overwrite a completed state', async () => {
+    const { default: handler } = await import('@/pages/api/onboarding/persist');
+    holdTwoConcurrentReads();
+    holdSkipFinalizationWrite();
+
+    const skipRes = makeRes();
+    const completeRes = makeRes();
+    const skipPromise = handler(makeReq({ mode: 'skip', answers: INITIAL_ANSWERS }), skipRes);
+    const completePromise = handler(
+      makeReq({ mode: 'complete', answers: COMPLETE_REQUIRED_ANSWERS }),
+      completeRes,
+    );
+
+    await concurrentReadsReady;
+    releaseConcurrentReads?.();
+    await skipWriteStarted;
+
+    await completePromise;
+    expect(completeRes.statusCode).toBe(200);
+    expect(currentMetadata.onboarding_completed_at).toBeTruthy();
+    const completedAnswers = (currentMetadata.onboarding as { answers: OnboardingAnswers }).answers;
+
+    releaseSkipWrite?.();
+    await skipPromise;
+
+    expect(skipRes.statusCode).toBe(409);
+    expect(skipRes.body).toEqual({ error: 'onboarding_finalization_conflict' });
+    expect(currentMetadata.onboarding_completed_at).toBeTruthy();
+    expect(currentMetadata.onboarding_skipped_at).toBeUndefined();
+    expect((currentMetadata.onboarding as { answers: OnboardingAnswers }).answers).toEqual(completedAnswers);
+    expect(updateFilters).toContainEqual({
+      column: 'metadata->>onboarding_completed_at',
+      value: null,
+    });
+  });
+
+  it('allows an ordinary Skip followed by a legitimate Complete', async () => {
+    const { default: handler } = await import('@/pages/api/onboarding/persist');
+    const skipRes = makeRes();
+    await handler(makeReq({ mode: 'skip', answers: INITIAL_ANSWERS }), skipRes);
+
+    expect(skipRes.statusCode).toBe(200);
+    expect(currentMetadata.onboarding_skipped_at).toBeTruthy();
+
+    const completeRes = makeRes();
+    await handler(
+      makeReq({ mode: 'complete', answers: COMPLETE_REQUIRED_ANSWERS }),
+      completeRes,
+    );
+
+    expect(completeRes.statusCode).toBe(200);
+    expect(currentMetadata.onboarding_completed_at).toBeTruthy();
+    expect(currentMetadata.onboarding_skipped_at).toBeUndefined();
+    expect((currentMetadata.onboarding as { answers: OnboardingAnswers }).answers).toEqual(COMPLETE_REQUIRED_ANSWERS);
+  });
+
   it('progress does not overwrite meal_schedule or canonical profile fields', async () => {
     const { default: handler } = await import('@/pages/api/onboarding/persist');
     const res = makeRes();
@@ -155,5 +314,109 @@ describe('POST /api/onboarding/persist completion integrity', () => {
     expect(meta.onboarding_completed_at).toBeUndefined();
     expect(meta.onboarding_last_step).toBe(1);
     expect(meta.onboarding).toBeTruthy();
+    expect(updateFilters).toEqual([
+      { column: 'metadata->>onboarding_completed_at', value: null },
+      { column: 'metadata->>onboarding_skipped_at', value: null },
+    ]);
+  });
+
+  it('ignores a progress request when onboarding is already finalized', async () => {
+    currentMetadata = { onboarding_skipped_at: '2026-11-04T12:00:00.000Z' };
+    const { default: handler } = await import('@/pages/api/onboarding/persist');
+    const res = makeRes();
+
+    await handler(makeReq({ mode: 'progress', answers: INITIAL_ANSWERS, lastStep: 1 }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it('supports skip → authenticated resume → progress → profile reload', async () => {
+    const { default: persistHandler } = await import('@/pages/api/onboarding/persist');
+    const { default: profileHandler } = await import('@/pages/api/journal/profile');
+    const skipAnswers = { ...INITIAL_ANSWERS, disliked_foods: 'mushrooms' };
+
+    await persistHandler(makeReq({ mode: 'skip', answers: skipAnswers }), makeRes());
+    expect(currentMetadata.onboarding_skipped_at).toBeTruthy();
+
+    const resumeRes = makeRes();
+    await persistHandler(makeReq({ mode: 'resume' }), resumeRes);
+    const resumeToken = (resumeRes.body as { resumeToken: string }).resumeToken;
+    expect(resumeRes.statusCode).toBe(200);
+    expect(resumeToken).toBeTruthy();
+
+    const resumedAnswers = { ...skipAnswers, disliked_foods: 'mushrooms and olives' };
+    const progressRes = makeRes();
+    await persistHandler(
+      makeReq({ mode: 'progress', answers: resumedAnswers, lastStep: 1, resumeToken }),
+      progressRes,
+    );
+    expect(progressRes.statusCode).toBe(200);
+    expect((currentMetadata.onboarding as { answers: OnboardingAnswers }).answers.disliked_foods)
+      .toBe('mushrooms and olives');
+    expect(updateFilters).toContainEqual({
+      column: 'metadata->>onboarding_resume_token',
+      value: resumeToken,
+    });
+
+    const profileRes = makeRes();
+    await profileHandler(makeGetReq(), profileRes);
+    const profile = (profileRes.body as { profile: Record<string, any> }).profile;
+    expect(profile.onboarding.answers.disliked_foods).toBe('mushrooms and olives');
+    expect(profile.onboarding_resume_token).toBeUndefined();
+  });
+
+  it('rejects a stale pre-skip progress write after skip', async () => {
+    const { default: handler } = await import('@/pages/api/onboarding/persist');
+    const savedAnswers = { ...INITIAL_ANSWERS, disliked_foods: 'saved answer' };
+    await handler(makeReq({ mode: 'skip', answers: savedAnswers }), makeRes());
+    const writesAfterSkip = updateCalls.length;
+
+    await handler(
+      makeReq({
+        mode: 'progress',
+        answers: { ...INITIAL_ANSWERS, disliked_foods: 'stale answer' },
+        lastStep: 0,
+      }),
+      makeRes(),
+    );
+
+    expect(updateCalls).toHaveLength(writesAfterSkip);
+    expect(currentMetadata.onboarding_skipped_at).toBeTruthy();
+    expect((currentMetadata.onboarding as { answers: OnboardingAnswers }).answers.disliked_foods)
+      .toBe('saved answer');
+  });
+
+  it('does not let progress overwrite completed onboarding', async () => {
+    currentMetadata = {
+      onboarding_completed_at: '2026-11-04T12:00:00.000Z',
+      onboarding: { answers: { disliked_foods: 'completed answer' } },
+    };
+    const { default: handler } = await import('@/pages/api/onboarding/persist');
+
+    await handler(
+      makeReq({
+        mode: 'progress',
+        answers: { ...INITIAL_ANSWERS, disliked_foods: 'stale answer' },
+        lastStep: 0,
+      }),
+      makeRes(),
+    );
+
+    expect(updateCalls).toHaveLength(0);
+    expect((currentMetadata.onboarding as { answers: { disliked_foods: string } }).answers.disliked_foods)
+      .toBe('completed answer');
+  });
+
+  it('does not issue a resume token unless the persisted state is skipped', async () => {
+    currentMetadata = { onboarding_started_at: '2026-11-04T12:00:00.000Z' };
+    const { default: handler } = await import('@/pages/api/onboarding/persist');
+    const res = makeRes();
+
+    await handler(makeReq({ mode: 'resume' }), res);
+
+    expect(res.statusCode).toBe(409);
+    expect((res.body as { error: string }).error).toBe('onboarding_not_resumable');
+    expect(updateCalls).toHaveLength(0);
   });
 });

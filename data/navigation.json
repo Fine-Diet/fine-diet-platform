@@ -1,8 +1,8 @@
 {
   "topLinks": {
     "journal": {
-      "label": "Start or Access Your Journal ↗",
-      "href": "https://journal.myfinediet.com"
+      "label": "Start or Access Your Journal",
+      "href": "/app/log"
     },
     "account": {
       "label": "Account",
