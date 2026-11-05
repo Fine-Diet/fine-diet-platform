@@ -56,6 +56,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const currentMeta = (current.metadata ?? {}) as Record<string, unknown>;
     const lifecycle = deriveOnboardingState(currentMeta);
 
+    if (mode === 'skip' && lifecycle.phase === 'completed') {
+      return res.status(409).json({ error: 'onboarding_already_completed' });
+    }
+
     if (mode === 'resume') {
       if (lifecycle.phase !== 'skipped' || !lifecycle.skippedAt) {
         return res.status(409).json({ error: 'onboarding_not_resumable' });
@@ -193,6 +197,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from('people')
       .update({ ...columnUpdates, metadata: updatedMeta, updated_at: new Date().toISOString() })
       .eq('id', personId);
+
+    if (mode === 'skip') {
+      // A stale Skip must not replace a completion written after this request
+      // read metadata. PostgREST applies this predicate atomically with UPDATE.
+      const { data: skipped, error: skipErr } = await updateQuery
+        .is('metadata->>onboarding_completed_at', null)
+        .select('id')
+        .maybeSingle();
+
+      if (skipErr) {
+        console.error('[API /onboarding/persist] Update error:', skipErr);
+        return res.status(500).json({ error: 'Failed to persist onboarding' });
+      }
+      if (!skipped) {
+        return res.status(409).json({ error: 'onboarding_finalization_conflict' });
+      }
+      return res.status(200).json({ ok: true, mode });
+    }
 
     if (mode === 'progress') {
       // Make a late, in-flight progress request re-check final state when its
