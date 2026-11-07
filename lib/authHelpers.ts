@@ -11,6 +11,7 @@ import { createClient } from './supabaseBrowser';
 import type { User, Session } from '@supabase/supabase-js';
 import { NEUTRAL_POST_AUTH_TARGET } from './auth/authContext';
 import { getSafeRedirectTarget } from './redirectHelpers';
+import { getSiteOrigin } from './siteOrigin';
 
 /**
  * Get the current session and user
@@ -47,9 +48,7 @@ export async function signUp(email: string, password: string, redirectTo?: strin
   const normalizedEmail = email.trim().toLowerCase();
   const supabase = createClient();
 
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : '');
+  const siteUrl = getSiteOrigin() || '';
   const next = getSafeRedirectTarget(redirectTo, NEUTRAL_POST_AUTH_TARGET);
   const emailRedirectTo = siteUrl
     ? `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`
@@ -143,8 +142,7 @@ export async function resetPasswordForEmail(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
   
   // Get the site URL for the redirect
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
-    (typeof window !== 'undefined' ? window.location.origin : '');
+  const siteUrl = getSiteOrigin() || '';
   
   if (!siteUrl) {
     if (process.env.NODE_ENV === 'development') {
@@ -206,9 +204,7 @@ export async function signInWithOAuth(
   redirectTo?: string
 ) {
   const supabase = createClient();
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : '');
+  const siteUrl = getSiteOrigin() || '';
 
   const callbackUrl = new URL('/auth/callback', siteUrl);
   if (redirectTo) {

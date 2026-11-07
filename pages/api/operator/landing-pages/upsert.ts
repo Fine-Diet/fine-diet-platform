@@ -31,6 +31,7 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getSiteOriginOrDefault } from '@/lib/siteOrigin';
 import { requireOperatorAuth } from '@/lib/operator/auth';
 import { assessmentLandingPageContentSchema } from '@/lib/contentValidators';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
@@ -134,7 +135,7 @@ export default async function handler(
       console.warn('[OperatorLandingPagesUpsert] Audit log error (non-blocking):', auditErr);
     }
 
-    const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://myfinediet.com';
+    const base = getSiteOriginOrDefault('https://myfinediet.com');
     const reviewLink = `${base}/lp/${slug}`;
 
     // Fire review notification (non-blocking)

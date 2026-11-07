@@ -35,6 +35,7 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getSiteOriginOrDefault } from '@/lib/siteOrigin';
 import { requireOperatorAuth } from '@/lib/operator/auth';
 import { upsertResultsPackRevision, type LevelId } from '@/lib/operator/assessmentService';
 import { sendOperatorReviewNotifications } from '@/lib/operator/notifications';
@@ -112,7 +113,7 @@ export default async function handler(
       actorId
     );
 
-    const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://myfinediet.com';
+    const base = getSiteOriginOrDefault('https://myfinediet.com');
     const reviewLink = `${base}/admin/results-packs/${result.packId}`;
 
     // Fire review notification (non-blocking, skip if content unchanged)

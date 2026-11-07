@@ -23,6 +23,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { getSiteOriginOrDefault } from '@/lib/siteOrigin';
 import type { GroceryHaulDetail, GroceryHaulItem } from '@/lib/plans/types';
 import {
   GroceryHaulConflictError,
@@ -274,7 +275,7 @@ export async function listHaulInvitationsForOwner(args: {
 }
 
 function siteBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://myfinediet.com';
+  return getSiteOriginOrDefault('https://myfinediet.com', { includeServerSiteUrl: true });
 }
 
 /**

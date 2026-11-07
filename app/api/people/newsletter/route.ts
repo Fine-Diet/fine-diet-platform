@@ -10,6 +10,7 @@ import {
   type SubscriptionType,
 } from '@/lib/peopleService';
 import { buildUnsubscribeUrl } from '@/lib/emailLinks';
+import { getSiteOriginOrDefault } from '@/lib/siteOrigin';
 
 // ============================================================================
 // Validation schema
@@ -184,7 +185,7 @@ export async function POST(request: NextRequest) {
     });
 
     // n8n webhook
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://myfinediet.com';
+    const siteUrl = getSiteOriginOrDefault('https://myfinediet.com');
     const unsubscribeUrl = buildUnsubscribeUrl(siteUrl, person.id, person.email);
 
     await emitN8nWebhook({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { getSiteOrigin } from '@/lib/siteOrigin';
 
 /**
  * GET /auth/callback
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
 
   // Link auth user to the people/profiles system — same as email login path
   try {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
+    const siteUrl = getSiteOrigin({ requestOrigin: origin }) || origin;
     const linkResponse = await fetch(`${siteUrl}/api/account/link-person`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

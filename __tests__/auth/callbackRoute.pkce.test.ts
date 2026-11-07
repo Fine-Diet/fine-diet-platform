@@ -14,6 +14,7 @@ jest.mock('@supabase/ssr', () => ({
 
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/auth/callback/route';
+import { PAYMENTS_QA_BRANCH, PAYMENTS_QA_PROJECT_ID } from '@/lib/siteOrigin';
 
 const ORIGIN = 'https://myfinediet.com';
 const originalFetch = global.fetch;
@@ -72,5 +73,41 @@ describe('/auth/callback (PKCE) is unchanged', () => {
     mockExchange.mockResolvedValue({ data: { session: null, user: null }, error: { message: 'bad' } });
     const res = await GET(req('/auth/callback?code=abc'));
     expect(res.headers.get('location')).toBe(`${ORIGIN}/?auth_error=exchange_failed`);
+  });
+
+  it('uses Vercel generated QA origin for the post-auth link-person call', async () => {
+    const keys = [
+      'NEXT_PUBLIC_SITE_URL',
+      'VERCEL_PROJECT_ID',
+      'VERCEL_ENV',
+      'VERCEL_GIT_COMMIT_REF',
+      'VERCEL_BRANCH_URL',
+    ] as const;
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    const branchUrl =
+      'fine-diet-payments-qa-target-git-codex-payments-reconstruct-fine-diet.vercel.app';
+    const qaOrigin = `https://${branchUrl}`;
+
+    try {
+      delete process.env.NEXT_PUBLIC_SITE_URL;
+      process.env.VERCEL_PROJECT_ID = PAYMENTS_QA_PROJECT_ID;
+      process.env.VERCEL_ENV = 'preview';
+      process.env.VERCEL_GIT_COMMIT_REF = PAYMENTS_QA_BRANCH;
+      process.env.VERCEL_BRANCH_URL = branchUrl;
+
+      const res = await GET(new NextRequest(`${qaOrigin}/auth/callback?code=abc`));
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${qaOrigin}/api/account/link-person`,
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(res.headers.get('location')).toBe(`${qaOrigin}/`);
+    } finally {
+      for (const key of keys) {
+        const value = previous[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   });
 });
