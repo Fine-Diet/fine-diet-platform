@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/qa/attestPaymentsPreviewCredentials.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
@@ -20,7 +20,8 @@
     "assessments:baseline-readiness:x6-1-republish": "tsx scripts/assessments/baseline-readiness-x6-1-republish.ts",
     "assessments:live-e2e": "tsx scripts/assessments/assessment-live-e2e.ts",
     "assessments:staging-qa": "tsx scripts/assessments/assessment-staging-qa.ts",
-    "assessments:copyversion-republish": "tsx scripts/assessments/assessment-copyversion-republish.ts"
+    "assessments:copyversion-republish": "tsx scripts/assessments/assessment-copyversion-republish.ts",
+    "test:payments-attestation": "node --test scripts/qa/attestPaymentsPreviewCredentials.test.mjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

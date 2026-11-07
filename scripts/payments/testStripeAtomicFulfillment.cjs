@@ -27,6 +27,7 @@ async function seed(slug = 'baseline') {
     VALUES($1,$2,$3,$4,$5,$6)`,[instance,person,offer,customer,session,sub]);
   return receipt({ instance_id:instance,person_id:person,offer_key:offer,customer_id:customer,
     account_id:'acct_Fixture',livemode:false,expected_revision:'0',source_ref:sub,state:'active',
+    paid_through:new Date(Date.now()+86400000).toISOString(),
     identifiers:{stripe_subscription_id:sub},entitlements:[{entitlement_key:'journal',duration_days:null}],
     checkout_record:{stripe_checkout_session_id:session} });
 }
@@ -38,10 +39,25 @@ async function commit(input, role='service_role') {
     return (await client.query('SELECT public.fd_commit_stripe_fulfillment($1::jsonb) AS result',[JSON.stringify(input)])).rows[0].result;
   } finally { await client.query('RESET ROLE'); client.release(); }
 }
+async function recordRisk(input, role='service_role') {
+  assert(['service_role','anon','authenticated'].includes(role));
+  const client=await pool.connect();
+  try {
+    await client.query(`SET ROLE ${role}`);
+    return (await client.query('SELECT public.fd_record_stripe_risk_review($1::jsonb) AS result',[JSON.stringify(input)])).rows[0].result;
+  } finally { await client.query('RESET ROLE'); client.release(); }
+}
+async function riskReceipt(instanceInput, kind='dispute') {
+  const value=await receipt(instanceInput);
+  await pool.query("UPDATE public.stripe_events SET type='charge.dispute.created' WHERE stripe_event_id=$1",[value.event_id]);
+  return {event_id:value.event_id,token:value.token,account_id:'acct_Fixture',livemode:false,risk_kind:kind,
+    source_ref:instanceInput.source_ref,instance_id:instanceInput.instance_id,person_id:instanceInput.person_id,
+    customer_id:instanceInput.customer_id};
+}
 async function state(input) {
   const [instance,entitlements,programs,events,checkouts] = await Promise.all([
-    pool.query('SELECT status,fulfillment_revision::text AS revision FROM public.stripe_offer_instances WHERE id=$1',[input.instance_id]),
-    pool.query('SELECT id,entitlement_key,is_active,starts_at::text,ends_at::text,source_ref FROM public.person_entitlements WHERE person_id=$1 ORDER BY entitlement_key,id',[input.person_id]),
+    pool.query('SELECT status,fulfillment_revision::text AS revision,paid_through FROM public.stripe_offer_instances WHERE id=$1',[input.instance_id]),
+    pool.query('SELECT id,entitlement_key,is_active,starts_at::text,ends_at::text,source_ref,stripe_is_recurring FROM public.person_entitlements WHERE person_id=$1 ORDER BY entitlement_key,id',[input.person_id]),
     pool.query('SELECT id,status,source_ref,auto_created FROM public.program_assignments WHERE person_id=$1 ORDER BY id',[input.person_id]),
     pool.query('SELECT processed_at IS NOT NULL AS completed FROM public.stripe_events WHERE stripe_event_id=$1',[input.event_id]),
     pool.query('SELECT count(*)::integer AS n FROM public.checkout_events WHERE person_id=$1',[input.person_id]),
@@ -58,6 +74,8 @@ async function main() {
   assert.equal((await commit(input)).status,'committed');
   let view = await state(input);
   assert.equal(view.instance.revision,'1'); assert.equal(view.instance.status,'active');
+  assert.ok(Date.parse(view.instance.paid_through)>Date.now());
+  assert.equal(view.grants[0].stripe_is_recurring,true); assert.ok(Date.parse(view.grants[0].ends_at)>Date.now());
   assert.equal(view.grants.length,1); assert.equal(view.programs.length,1); assert.equal(view.checkouts,1); assert.equal(view.completed,true);
   pass('purchase, grant, program, checkout and receipt commit together as service_role');
   const before = view;
@@ -162,8 +180,15 @@ async function main() {
   input = await seed();
   await pool.query(`INSERT INTO public.person_entitlements(person_id,entitlement_key,source,source_ref)
     VALUES($1,'journal','manual','manual_existing')`,[input.person_id]);
-  await unchangedFailure(input,/idx_person_entitlements_active_unique/);
-  pass('conflicting other-source grant fails atomically without stealing existing access');
+  await commit(input);
+  view=await state(input);
+  assert.equal(view.grants.find(grant=>grant.source_ref==='manual_existing').is_active,true);
+  assert.equal(view.grants.find(grant=>grant.source_ref===input.source_ref).is_active,true);
+  pass('Stripe fulfillment preserves an independent manual entitlement alongside its own paid-through grant');
+
+  input=await seed();
+  await unchangedFailure({...input,person_id:randomUUID()},/attribution mismatch/);
+  pass('person mismatch cannot fulfill a purchase or cross-write another person\'s grants');
 
   input = await seed();
   for (const role of ['anon','authenticated']) await assert.rejects(commit(input,role),/permission denied/);
@@ -173,7 +198,93 @@ async function main() {
     has_function_privilege('authenticated','public.fd_commit_stripe_fulfillment(jsonb)','EXECUTE') AS authenticated
     FROM pg_proc p WHERE p.oid='public.fd_commit_stripe_fulfillment(jsonb)'::regprocedure`);
   assert.deepEqual(privileges.rows[0],{definer:false,service:true,anon:false,authenticated:false});
-  pass('SECURITY INVOKER RPC is executable only by service_role, not client roles');
+  const protectedGates = await pool.query(`SELECT
+    has_function_privilege('service_role','public.fd_expire_stripe_fulfillment(integer)','EXECUTE') AS expiry_service,
+    has_function_privilege('anon','public.fd_expire_stripe_fulfillment(integer)','EXECUTE') AS expiry_anon,
+    has_function_privilege('authenticated','public.fd_expire_stripe_fulfillment(integer)','EXECUTE') AS expiry_authenticated,
+    has_function_privilege('service_role','public.fd_record_stripe_risk_review(jsonb)','EXECUTE') AS risk_service,
+    has_function_privilege('anon','public.fd_record_stripe_risk_review(jsonb)','EXECUTE') AS risk_anon,
+    has_function_privilege('authenticated','public.fd_record_stripe_risk_review(jsonb)','EXECUTE') AS risk_authenticated,
+    (SELECT relrowsecurity FROM pg_class WHERE oid='public.stripe_risk_reviews'::regclass) AS risk_rls`);
+  assert.deepEqual(protectedGates.rows[0],{expiry_service:true,expiry_anon:false,expiry_authenticated:false,
+    risk_service:true,risk_anon:false,risk_authenticated:false,risk_rls:true});
+  for (const role of ['anon','authenticated']) await assert.rejects(recordRisk(await riskReceipt(input),role),/permission denied/);
+  pass('SECURITY INVOKER fulfillment, expiry, and risk RPCs are service_role-only; risk queue RLS is enabled');
+  await assert.rejects(pool.query('SELECT public.fd_expire_stripe_fulfillment(501)'),/Expiry batch/);
+  pass('expiry worker rejects any requested batch over its hard cap');
+
+  input=await seed();
+  const risk=await riskReceipt(input,'dispute');
+  assert.equal((await recordRisk(risk)).status,'committed');
+  assert.equal((await pool.query("SELECT status FROM public.stripe_risk_reviews WHERE stripe_event_id=$1",[risk.event_id])).rows[0].status,'open');
+  await unchangedFailure(input,/open Stripe risk review/);
+  assert.equal((await state(input)).grants.length,0);
+  pass('verified risk queue receipt holds later fulfillment without granting or revoking access');
+
+  input=await seed();
+  const racingRisk=await riskReceipt(input,'dispute');
+  let riskClient=null, fulfillmentClient=null, fixtureFunction=false, fixtureTrigger=false;
+  try {
+    await pool.query(`CREATE FUNCTION public.fixture_delay_risk_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN PERFORM pg_sleep(1.2); RETURN NEW; END; $$`); fixtureFunction=true;
+    await pool.query('CREATE TRIGGER fixture_delay_risk_insert BEFORE INSERT ON public.stripe_risk_reviews FOR EACH ROW EXECUTE FUNCTION public.fixture_delay_risk_insert()'); fixtureTrigger=true;
+    riskClient=await pool.connect(); fulfillmentClient=await pool.connect();
+    await riskClient.query('SET ROLE service_role'); await fulfillmentClient.query('SET ROLE service_role');
+    const riskPending=riskClient.query('SELECT public.fd_record_stripe_risk_review($1::jsonb)',[JSON.stringify(racingRisk)])
+      .then(()=>({ok:true}),error=>({ok:false,error}));
+    let riskSleeping=false;
+    for(let attempt=0;attempt<100;attempt++) {
+      const observed=await pool.query("SELECT count(*)::integer AS n FROM pg_stat_activity WHERE wait_event='PgSleep' AND query LIKE '%fd_record_stripe_risk_review%'");
+      if(observed.rows[0].n>0){riskSleeping=true;break;}
+      await new Promise(resolve=>setTimeout(resolve,20));
+    }
+    assert(riskSleeping,'risk event did not acquire its source lock before fulfillment race');
+    const fulfillmentPending=fulfillmentClient.query('SELECT public.fd_commit_stripe_fulfillment($1::jsonb)',[JSON.stringify(input)])
+      .then(()=>({ok:true}),error=>({ok:false,error}));
+    const [riskResult,fulfillmentResult]=await Promise.all([riskPending,fulfillmentPending]);
+    assert.equal(riskResult.ok,true);
+    assert.equal(fulfillmentResult.ok,false);
+    assert.match(fulfillmentResult.error.message,/open Stripe risk review/);
+  } finally {
+    if(riskClient){try{await riskClient.query('RESET ROLE');}catch{} riskClient.release();}
+    if(fulfillmentClient){try{await fulfillmentClient.query('RESET ROLE');}catch{} fulfillmentClient.release();}
+    if(fixtureTrigger) await pool.query('DROP TRIGGER fixture_delay_risk_insert ON public.stripe_risk_reviews');
+    if(fixtureFunction) await pool.query('DROP FUNCTION public.fixture_delay_risk_insert()');
+  }
+  assert.equal((await state(input)).grants.length,0);
+  pass('simultaneous dispute review and fulfillment serialize on the source; review hold wins before entitlement grant');
+
+  input=await seed();
+  await commit(input);
+  const cutoffRows=await pool.query('SELECT paid_through FROM public.stripe_offer_instances WHERE id=$1',[input.instance_id]);
+  const cutoff=cutoffRows.rows[0].paid_through;
+  const boundary=await pool.query(`SELECT
+    (SELECT ends_at FROM public.person_entitlements WHERE person_id=$1 AND source_ref=$2)>$3::timestamptz-interval '1 microsecond' AS before_cutoff,
+    (SELECT ends_at FROM public.person_entitlements WHERE person_id=$1 AND source_ref=$2)>$3::timestamptz AS at_cutoff,
+    (SELECT active_to FROM public.program_assignments WHERE person_id=$1 AND source_ref=$2)>$3::timestamptz AS assignment_at_cutoff`,[input.person_id,input.source_ref,cutoff]);
+  assert.deepEqual(boundary.rows[0],{before_cutoff:true,at_cutoff:false,assignment_at_cutoff:false});
+  await pool.query("UPDATE public.stripe_offer_instances SET paid_through=clock_timestamp() WHERE id=$1",[input.instance_id]);
+  await pool.query(`INSERT INTO public.person_entitlements(person_id,entitlement_key,source,source_ref,is_active)
+    VALUES($1,'manual-access','manual','manual_fixture',true)`,[input.person_id]);
+  await pool.query(`INSERT INTO public.program_assignments(person_id,program_slug,source_ref,auto_created,acquisition_source,status)
+    VALUES($1,'manual-program','manual_fixture',false,'admin_grant','active')`,[input.person_id]);
+  const expired=await pool.query('SELECT public.fd_expire_stripe_fulfillment(100) AS result');
+  assert.equal(expired.rows[0].result.expired_purchases,1);
+  assert.equal((await pool.query("SELECT is_active FROM public.person_entitlements WHERE person_id=$1 AND source_ref=$2",[input.person_id,input.source_ref])).rows[0].is_active,false);
+  assert.equal((await pool.query("SELECT status FROM public.program_assignments WHERE person_id=$1 AND source_ref=$2",[input.person_id,input.source_ref])).rows[0].status,'inactive');
+  assert.equal((await pool.query("SELECT is_active FROM public.person_entitlements WHERE person_id=$1 AND source_ref='manual_fixture'",[input.person_id])).rows[0].is_active,true);
+  assert.equal((await pool.query("SELECT status FROM public.program_assignments WHERE person_id=$1 AND source_ref='manual_fixture'",[input.person_id])).rows[0].status,'active');
+  assert.equal((await pool.query('SELECT (public.fd_expire_stripe_fulfillment(100)->>\'expired_purchases\')::integer AS n')).rows[0].n,0);
+  pass('cutoff expiry is idempotent and changes only same-subscription grants and purchase-created assignments');
+
+  const renewed=await receipt({...input,expected_revision:'3',checkout_record:null});
+  renewed.paid_through=new Date(Date.now()+86400000).toISOString();
+  assert.equal((await commit(renewed)).status,'committed');
+  const renewedGrant=(await pool.query("SELECT is_active,ends_at>now() AS current FROM public.person_entitlements WHERE person_id=$1 AND source_ref=$2",[input.person_id,input.source_ref])).rows[0];
+  const renewedAssignment=(await pool.query("SELECT status,active_to>now() AS current FROM public.program_assignments WHERE person_id=$1 AND source_ref=$2",[input.person_id,input.source_ref])).rows[0];
+  assert.equal(renewedGrant.is_active,true); assert.equal(renewedGrant.current,true);
+  assert.equal(renewedAssignment.status,'active'); assert.equal(renewedAssignment.current,true);
+  pass('verified late renewal reuses the same Stripe grant and tracked assignment after no-event expiry');
   console.log(`RESULT: ${passed} PostgreSQL-backed atomic fulfillment checks passed`);
 }
 main().catch(error=>{ console.error(error); process.exitCode=1; }).finally(()=>pool.end());

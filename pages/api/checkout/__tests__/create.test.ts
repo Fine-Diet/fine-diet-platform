@@ -45,7 +45,7 @@ beforeEach(() => {
   delete process.env.STRIPE_ATOMIC_FULFILLMENT;
   live = false; errors = {}; writes = []; order = []; pendingResult = { id: 'purchase_fixture' };
   offer = { offer_key: 'method', name: 'Method', is_active: true, billing_model: 'subscription', stripe_price_id: 'price_Fixture',
-    stripe_phase_price_ids: ['price_Intro'], stripe_phase_iterations: [3], success_path: '/app/log', cancel_path: '/start', trial_period_days: 14 };
+    stripe_phase_price_ids: null, stripe_phase_iterations: null, success_path: '/app/log', cancel_path: '/start', trial_period_days: 14 };
   mappings = [{ entitlement_key: 'journal', duration_days: null, is_active: true }];
   price = { id: 'price_Fixture', active: true, livemode: false, type: 'recurring', billing_scheme: 'per_unit', unit_amount: 2499,
     custom_unit_amount: null, transform_quantity: null, product: { id: 'prod_fixture', active: true, livemode: false },
@@ -86,9 +86,31 @@ describe('POST /api/checkout/create pre-charge boundary', () => {
     offer.billing_model = model; const response = await request();
     expect(response.statusCode).toBe(409); expect(response.body.error).toBe('billing_model_not_enabled'); noPaymentSideEffects();
   });
+  it.each([
+    ['phase prices', { stripe_phase_price_ids: ['price_Intro'] }],
+    ['phase iterations', { stripe_phase_iterations: [3] }],
+    ['empty phase configuration', { stripe_phase_price_ids: [] }],
+  ])('rejects legacy %s configuration before any Stripe mutation', async (_label, fields) => {
+    Object.assign(offer, fields);
+    const response = await request();
+    expect(response.statusCode).toBe(409); expect(response.body.error).toBe('billing_schedule_not_enabled');
+    expect(mockPrice).not.toHaveBeenCalled(); noPaymentSideEffects();
+  });
   it.each(['installment', 'intro_then_subscription'])('blocks a selected %s price option before charge', async model => {
     mockResolve.mockResolvedValue({ ok: true, billing: { billingModel: model, stripePriceId: 'price_Option', trialPeriodDays: null } });
     expect((await request({ offer_key: 'method', price_option_key: 'option_fixture' })).statusCode).toBe(409); noPaymentSideEffects();
+  });
+  it.each([
+    ['phase prices', { stripePhasePriceIds: ['price_Intro'] }],
+    ['phase iterations', { stripePhaseIterations: [3] }],
+    ['intro price', { introPriceId: 'price_Intro' }],
+    ['intro iterations', { introIterations: 2 }],
+    ['renewal price', { renewalPriceId: 'price_Renewal' }],
+  ])('rejects selected price option with %s before Stripe mutations', async (_label, fields) => {
+    mockResolve.mockResolvedValue({ ok: true, billing: { billingModel: 'subscription', stripePriceId: 'price_Option', trialPeriodDays: null, ...fields } });
+    const response = await request({ offer_key: 'method', price_option_key: 'option_fixture' });
+    expect(response.statusCode).toBe(409); expect(response.body.error).toBe('billing_schedule_not_enabled');
+    expect(mockPrice).not.toHaveBeenCalled(); noPaymentSideEffects();
   });
   it('uses the selected server price option, never client price/model fields', async () => {
     mockResolve.mockResolvedValue({ ok: true, billing: { billingModel: 'subscription', stripePriceId: 'price_Option', trialPeriodDays: null } });

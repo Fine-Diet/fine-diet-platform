@@ -19,6 +19,7 @@ export interface AtomicFulfillmentInput {
   receipt: FulfillmentReceipt;
   state: PurchaseAccessState;
   sourceRef: string;
+  paidThrough?: string | null;
   identifiers?: Record<string, string | null>;
   checkoutRecord?: Record<string, string | null> | null;
 }
@@ -73,6 +74,7 @@ export async function commitStripeFulfillment(input: AtomicFulfillmentInput): Pr
     customer_id: instance.stripe_customer_id, expected_revision: revision,
     event_id: receipt.eventId, token: receipt.token, account_id: context.accountId, livemode: context.livemode,
     state, source_ref: sourceRef, identifiers: input.identifiers ?? {}, entitlements,
+    paid_through: input.paidThrough ?? null,
     checkout_record: input.checkoutRecord ?? null,
   } });
   if (error) throw error;

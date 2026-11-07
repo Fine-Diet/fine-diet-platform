@@ -5,7 +5,11 @@ BEGIN;
 ALTER TABLE public.stripe_offer_instances
   ADD COLUMN IF NOT EXISTS fulfillment_revision bigint NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS stripe_account_id text,
-  ADD COLUMN IF NOT EXISTS stripe_livemode boolean;
+  ADD COLUMN IF NOT EXISTS stripe_livemode boolean,
+  ADD COLUMN IF NOT EXISTS paid_through timestamptz;
+ALTER TABLE public.person_entitlements
+  ADD COLUMN IF NOT EXISTS stripe_is_recurring boolean,
+  ADD COLUMN IF NOT EXISTS stripe_duration_ends_at timestamptz;
 ALTER TABLE public.stripe_events
   ADD COLUMN IF NOT EXISTS fulfillment_instance_id uuid,
   ADD COLUMN IF NOT EXISTS fulfillment_account_id text,
@@ -35,6 +39,31 @@ CREATE TABLE IF NOT EXISTS public.stripe_program_suspensions (
 ALTER TABLE public.stripe_program_suspensions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.stripe_program_suspensions FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.stripe_program_suspensions TO service_role;
+
+CREATE TABLE IF NOT EXISTS public.stripe_risk_reviews (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  stripe_event_id text NOT NULL UNIQUE REFERENCES public.stripe_events(stripe_event_id),
+  stripe_account_id text NOT NULL CHECK (stripe_account_id ~ '^acct_[A-Za-z0-9]+$'),
+  livemode boolean NOT NULL,
+  risk_kind text NOT NULL CHECK (risk_kind IN ('refund','dispute','early_fraud_warning')),
+  source_ref text,
+  instance_id uuid REFERENCES public.stripe_offer_instances(id) ON DELETE SET NULL,
+  person_id uuid REFERENCES public.people(id) ON DELETE SET NULL,
+  status text NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  resolved_at timestamptz,
+  resolved_by text,
+  resolution_reason text,
+  CHECK ((instance_id IS NULL) = (person_id IS NULL)),
+  CHECK ((status='open' AND resolved_at IS NULL AND resolved_by IS NULL AND resolution_reason IS NULL)
+      OR (status='resolved' AND resolved_at IS NOT NULL AND resolved_by IS NOT NULL AND resolution_reason IS NOT NULL))
+);
+ALTER TABLE public.stripe_risk_reviews ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.stripe_risk_reviews FROM PUBLIC,anon,authenticated;
+GRANT SELECT,INSERT,UPDATE,DELETE ON public.stripe_risk_reviews TO service_role;
+CREATE INDEX IF NOT EXISTS idx_stripe_risk_reviews_open_source
+  ON public.stripe_risk_reviews(stripe_account_id,livemode,source_ref)
+  WHERE status='open' AND source_ref IS NOT NULL;
 
 -- One database transaction owns the purchase, grants, program changes, checkout
 -- record, and completion receipt. No Stripe API request is made inside it.
@@ -68,6 +97,11 @@ DECLARE
   v_count integer;
   v_now timestamptz;
   v_new_revision bigint;
+  v_paid_through timestamptz := nullif(p_input->>'paid_through','')::timestamptz;
+  v_billing_model text;
+  v_recurring boolean;
+  v_duration_end timestamptz;
+  v_program_end timestamptz;
 BEGIN
   IF v_instance_id IS NULL OR v_person_id IS NULL OR v_revision IS NULL OR v_revision < 0
      OR v_event_id IS NULL OR v_token IS NULL OR v_token = ''
@@ -99,6 +133,12 @@ BEGIN
 
   -- Serialize this path for a person's competing purchases as well as this
   -- instance. Existing unique constraints remain intact and conflicts fail.
+  PERFORM pg_advisory_xact_lock(hashtextextended('fd-stripe-source:' || v_account || ':' || v_live::text || ':' || v_source,0));
+  IF v_state='active' AND EXISTS (SELECT 1 FROM public.stripe_risk_reviews r
+      WHERE r.stripe_account_id=v_account AND r.livemode=v_live
+        AND r.source_ref=v_source AND r.status='open') THEN
+    RAISE EXCEPTION 'Purchase has an open Stripe risk review' USING ERRCODE='40001';
+  END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('fd-stripe-person:' || v_person_id::text,0));
   SELECT * INTO STRICT v_instance FROM public.stripe_offer_instances
     WHERE id=v_instance_id FOR UPDATE;
@@ -134,6 +174,18 @@ BEGIN
   END IF;
 
   IF v_state='active' THEN
+    SELECT coalesce(po.billing_model,o.billing_model) INTO v_billing_model
+      FROM public.offers o LEFT JOIN public.price_options po
+        ON po.price_option_key=v_instance.price_option_key AND po.offer_key=o.offer_key
+      WHERE o.offer_key=v_instance.offer_key FOR SHARE OF o;
+    IF NOT FOUND OR v_billing_model NOT IN ('subscription','one_time') THEN
+      RAISE EXCEPTION 'Billing model is not approved for atomic fulfillment';
+    END IF;
+    v_recurring := v_billing_model='subscription';
+    IF (v_recurring AND (v_paid_through IS NULL OR v_paid_through<=clock_timestamp())) OR
+       (NOT v_recurring AND v_paid_through IS NOT NULL) THEN
+      RAISE EXCEPTION 'Active purchase has invalid paid-through evidence';
+    END IF;
     IF jsonb_array_length(v_mappings)=0 THEN RAISE EXCEPTION 'No entitlement mappings'; END IF;
     IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_mappings) m
       GROUP BY m->>'entitlement_key' HAVING count(*)>1) THEN
@@ -150,15 +202,25 @@ BEGIN
       SELECT * INTO v_grant FROM public.person_entitlements
         WHERE person_id=v_person_id AND entitlement_key=v_key AND source='stripe' AND source_ref=v_source FOR UPDATE;
       IF FOUND THEN
-        IF v_grant.ends_at IS NULL OR v_grant.ends_at>v_now THEN
+        IF v_recurring AND v_grant.stripe_is_recurring IS DISTINCT FROM FALSE THEN
+          v_duration_end := coalesce(v_grant.stripe_duration_ends_at,
+            CASE WHEN v_grant.stripe_is_recurring IS NULL THEN v_grant.ends_at ELSE NULL END);
+          IF v_duration_end IS NULL OR v_duration_end>v_now THEN
+            UPDATE public.person_entitlements SET is_active=true,
+              stripe_is_recurring=true,stripe_duration_ends_at=v_duration_end,
+              ends_at=CASE WHEN v_duration_end IS NULL THEN v_paid_through ELSE least(v_duration_end,v_paid_through) END,
+              updated_at=v_now WHERE id=v_grant.id;
+          END IF;
+        ELSIF v_grant.ends_at IS NULL OR v_grant.ends_at>v_now THEN
           UPDATE public.person_entitlements SET is_active=true,updated_at=v_now WHERE id=v_grant.id;
         END IF;
       ELSE
+        v_duration_end := CASE WHEN v_days>0 THEN v_now + make_interval(days=>v_days) ELSE NULL END;
         INSERT INTO public.person_entitlements
-          (person_id,entitlement_key,is_active,starts_at,ends_at,source,source_ref,note)
+          (person_id,entitlement_key,is_active,starts_at,ends_at,source,source_ref,note,stripe_is_recurring,stripe_duration_ends_at)
         VALUES (v_person_id,v_key,true,v_now,
-          CASE WHEN v_days>0 THEN v_now + make_interval(days=>v_days) ELSE NULL END,
-          'stripe',v_source,'Granted via Stripe checkout for offer: ' || v_instance.offer_key);
+          CASE WHEN v_recurring THEN CASE WHEN v_duration_end IS NULL THEN v_paid_through ELSE least(v_duration_end,v_paid_through) END ELSE v_duration_end END,
+          'stripe',v_source,'Granted via Stripe checkout for offer: ' || v_instance.offer_key,v_recurring,v_duration_end);
       END IF;
     END LOOP;
 
@@ -171,20 +233,25 @@ BEGIN
       AND NOT EXISTS (SELECT 1 FROM public.person_entitlements
         WHERE person_id=v_person_id AND source='stripe' AND source_ref=v_source
           AND entitlement_key='program:' || v_slug AND ends_at<=v_now) THEN
+      SELECT min(ends_at) INTO v_program_end FROM public.person_entitlements
+        WHERE person_id=v_person_id AND source='stripe' AND source_ref=v_source
+          AND is_active AND starts_at<=v_now;
       SELECT * INTO v_program FROM public.program_assignments
         WHERE person_id=v_person_id AND program_slug=v_slug AND source_ref=v_source FOR UPDATE;
       IF NOT FOUND THEN
         INSERT INTO public.program_assignments
-          (person_id,program_slug,acquisition_source,status,priority,source_ref,notes,auto_created)
+          (person_id,program_slug,acquisition_source,status,priority,source_ref,notes,auto_created,active_to)
         VALUES (v_person_id,v_slug,'purchase','active',0,v_source,
-          'Auto-created from Stripe checkout for offer ' || v_instance.offer_key || '.',true);
+          'Auto-created from Stripe checkout for offer ' || v_instance.offer_key || '.',true,v_program_end);
       ELSIF v_program.auto_created AND v_program.acquisition_source='purchase'
          AND v_program.status='inactive'
-         AND (v_program.active_to IS NULL OR v_program.active_to>v_now)
          AND EXISTS (SELECT 1 FROM public.stripe_program_suspensions
            WHERE assignment_id=v_program.id AND instance_id=v_instance_id) THEN
-        UPDATE public.program_assignments SET status='active',updated_at=v_now WHERE id=v_program.id;
+        UPDATE public.program_assignments SET status='active',active_to=v_program_end,updated_at=v_now WHERE id=v_program.id;
         DELETE FROM public.stripe_program_suspensions WHERE assignment_id=v_program.id AND instance_id=v_instance_id;
+      ELSIF v_program.auto_created AND v_program.acquisition_source='purchase' AND v_program.status='active'
+         AND v_recurring THEN
+        UPDATE public.program_assignments SET active_to=v_program_end,updated_at=v_now WHERE id=v_program.id;
       END IF;
     END IF;
   ELSE
@@ -200,7 +267,8 @@ BEGIN
   END IF;
 
   UPDATE public.stripe_offer_instances SET status=v_state,stripe_subscription_id=v_sub,
-    stripe_payment_intent_id=v_payment,stripe_account_id=v_account,stripe_livemode=v_live,updated_at=v_now
+    stripe_payment_intent_id=v_payment,stripe_account_id=v_account,stripe_livemode=v_live,
+    paid_through=CASE WHEN v_state='active' THEN v_paid_through ELSE NULL END,updated_at=v_now
     WHERE id=v_instance_id RETURNING fulfillment_revision INTO v_new_revision;
 
   IF v_checkout IS NOT NULL AND v_checkout <> 'null'::jsonb THEN
@@ -235,4 +303,73 @@ REVOKE ALL ON FUNCTION public.fd_commit_stripe_fulfillment(jsonb) FROM PUBLIC, a
 GRANT EXECUTE ON FUNCTION public.fd_commit_stripe_fulfillment(jsonb) TO service_role;
 COMMENT ON FUNCTION public.fd_commit_stripe_fulfillment(jsonb) IS
  'Service-role only. Atomic purchase/access/program/checkout/receipt changes, fenced by event lease and pre-provider-read purchase revision.';
+
+CREATE OR REPLACE FUNCTION public.fd_record_stripe_risk_review(p_input jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog SET lock_timeout='3s' AS $$
+DECLARE
+  v_event public.stripe_events%ROWTYPE;
+  v_instance public.stripe_offer_instances%ROWTYPE;
+  v_event_id text := p_input->>'event_id';
+  v_token text := p_input->>'token';
+  v_account text := p_input->>'account_id';
+  v_live boolean := (p_input->>'livemode')::boolean;
+  v_kind text := p_input->>'risk_kind';
+  v_source text := nullif(p_input->>'source_ref','');
+  v_instance_id uuid := nullif(p_input->>'instance_id','')::uuid;
+  v_person_id uuid := nullif(p_input->>'person_id','')::uuid;
+  v_customer text := nullif(p_input->>'customer_id','');
+BEGIN
+  IF v_event_id IS NULL OR v_token IS NULL OR v_token='' OR v_account IS NULL
+     OR v_account !~ '^acct_[A-Za-z0-9]+$' OR v_live IS NULL
+     OR v_kind IS NULL OR v_kind NOT IN ('refund','dispute','early_fraud_warning')
+     OR ((v_instance_id IS NULL) <> (v_person_id IS NULL))
+     OR (v_instance_id IS NOT NULL AND (v_source IS NULL OR v_customer IS NULL)) THEN
+    RAISE EXCEPTION 'Invalid Stripe risk review request' USING ERRCODE='22023';
+  END IF;
+  SELECT * INTO STRICT v_event FROM public.stripe_events WHERE stripe_event_id=v_event_id FOR UPDATE;
+  IF v_event.processed_at IS NOT NULL THEN
+    IF v_event.fulfillment_instance_id IS NOT DISTINCT FROM v_instance_id
+       AND v_event.fulfillment_account_id IS NOT DISTINCT FROM v_account
+       AND v_event.fulfillment_livemode IS NOT DISTINCT FROM v_live THEN
+      RETURN jsonb_build_object('status','already_processed','receipt_completed',true);
+    END IF;
+    RAISE EXCEPTION 'Completed receipt belongs to different risk review';
+  END IF;
+  IF v_event.processing_token IS DISTINCT FROM v_token OR v_event.processing_lease_expires_at IS NULL
+     OR v_event.processing_lease_expires_at<=clock_timestamp() THEN
+    RAISE EXCEPTION 'Risk review claim lost or expired' USING ERRCODE='40001';
+  END IF;
+  IF v_source IS NOT NULL THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended('fd-stripe-source:' || v_account || ':' || v_live::text || ':' || v_source,0));
+  END IF;
+  IF v_event.processing_lease_expires_at<=clock_timestamp() THEN
+    RAISE EXCEPTION 'Risk review lease expired while waiting' USING ERRCODE='40001';
+  END IF;
+  IF v_instance_id IS NOT NULL THEN
+    SELECT * INTO STRICT v_instance FROM public.stripe_offer_instances WHERE id=v_instance_id FOR UPDATE;
+    IF v_instance.person_id IS DISTINCT FROM v_person_id OR v_instance.stripe_customer_id IS DISTINCT FROM v_customer
+       OR (v_instance.stripe_account_id IS NOT NULL AND v_instance.stripe_account_id<>v_account)
+       OR (v_instance.stripe_livemode IS NOT NULL AND v_instance.stripe_livemode<>v_live)
+       OR coalesce(v_instance.stripe_subscription_id,v_instance.stripe_payment_intent_id) IS DISTINCT FROM v_source
+       OR NOT EXISTS (SELECT 1 FROM public.stripe_customer_accounts c WHERE c.person_id=v_person_id
+          AND c.stripe_account_id=v_account AND c.livemode=v_live AND c.stripe_customer_id=v_customer) THEN
+      RAISE EXCEPTION 'Risk review purchase attribution mismatch';
+    END IF;
+  END IF;
+  INSERT INTO public.stripe_risk_reviews(stripe_event_id,stripe_account_id,livemode,risk_kind,
+    source_ref,instance_id,person_id)
+  VALUES(v_event_id,v_account,v_live,v_kind,v_source,v_instance_id,v_person_id);
+  IF v_event.processing_lease_expires_at<=clock_timestamp() THEN
+    RAISE EXCEPTION 'Risk review lease expired before commit' USING ERRCODE='40001';
+  END IF;
+  UPDATE public.stripe_events SET processed_at=clock_timestamp(),processing_token=NULL,
+    processing_lease_expires_at=NULL,fulfillment_instance_id=v_instance_id,
+    fulfillment_account_id=v_account,fulfillment_livemode=v_live WHERE stripe_event_id=v_event_id;
+  RETURN jsonb_build_object('status','committed','receipt_completed',true,'linked',v_instance_id IS NOT NULL);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.fd_record_stripe_risk_review(jsonb) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.fd_record_stripe_risk_review(jsonb) TO service_role;
+COMMENT ON FUNCTION public.fd_record_stripe_risk_review(jsonb) IS
+  'Service-role-only receipt plus sanitized refund/dispute/fraud review queue; never mutates entitlements.';
 COMMIT;

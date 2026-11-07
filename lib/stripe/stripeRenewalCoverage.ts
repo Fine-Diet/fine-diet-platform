@@ -25,6 +25,7 @@ function invoiceSubscription(invoice: JsonObject): string | null {
   return stripeReferenceId(object(parent?.subscription_details)?.subscription ?? invoice.subscription);
 }
 interface Scope { subscription: string; customer: string; livemode: boolean; item: string; price: string; currency: string; }
+export interface RenewalAccessDecision { state: PurchaseAccessState; paidThrough: string | null; }
 
 function checkInvoiceIdentity(invoice: JsonObject, scope: Scope): void {
   if (typeof invoice.id !== 'string' || !invoice.id || invoice.livemode !== scope.livemode ||
@@ -48,17 +49,23 @@ function lineCovers(line: JsonObject, scope: Scope, now: number): boolean {
     period.start <= now && now < period.end;
 }
 
-export async function resolveRenewalAccessState(
+export async function resolveRenewalAccess(
   subscription: Stripe.Subscription, previousState: string,
   clock: () => number = () => Date.now() / 1000,
-): Promise<PurchaseAccessState> {
+): Promise<RenewalAccessDecision> {
   const now = clock();
   if (!Number.isFinite(now) || now < 0) throw new Error('Invalid reconciliation clock');
-  if (previousState === 'ended' || !['active', 'past_due'].includes(subscription.status)) {
-    return subscriptionAccessState(subscription, previousState, now);
-  }
   if (subscription.schedule || subscription.pause_collection || subscription.pending_update) {
     throw new Error('Scheduled, paused-collection or pending-change subscriptions require review');
+  }
+  if (subscription.status === 'trialing' && previousState !== 'ended') {
+    const end = subscription.trial_end;
+    return typeof end === 'number' && Number.isSafeInteger(end) && end > now
+      ? { state: 'active', paidThrough: new Date(end * 1000).toISOString() }
+      : { state: 'canceled', paidThrough: null };
+  }
+  if (previousState === 'ended' || !['active', 'past_due'].includes(subscription.status)) {
+    return { state: subscriptionAccessState(subscription, previousState, now), paidThrough: null };
   }
   const items = page(subscription.items);
   const item = items.data[0], price = object(item?.price);
@@ -73,14 +80,14 @@ export async function resolveRenewalAccessState(
   let reads = 0;
   const budget = () => { if (++reads > 12) throw new Error('Paid-period evidence read budget exceeded'); };
 
-  async function covers(invoice: JsonObject): Promise<boolean> {
+  async function covers(invoice: JsonObject): Promise<number | null> {
     checkInvoiceIdentity(invoice, scope);
-    if (invoice.status !== 'paid' || invoice.amount_remaining !== 0) return false;
+    if (invoice.status !== 'paid' || invoice.amount_remaining !== 0) return null;
     const paidAt = object(invoice.status_transitions)?.paid_at;
     if (!epoch(paidAt) || paidAt > clock()) throw new Error('Paid invoice has invalid settlement timestamp');
     // Credited/refunded purchase policies are separate; do not infer coverage
     // from an adjusted invoice. Charge-level refunds/disputes still need review.
-    if (typeof invoice.post_payment_credit_notes_amount !== 'number' || invoice.post_payment_credit_notes_amount !== 0) return false;
+    if (typeof invoice.post_payment_credit_notes_amount !== 'number' || invoice.post_payment_credit_notes_amount !== 0) return null;
     const initial = page(invoice.lines);
     let lines = initial.data;
     if (initial.has_more) {
@@ -101,14 +108,17 @@ export async function resolveRenewalAccessState(
     for (const line of lines) {
       if (line.invoice != null && stripeReferenceId(line.invoice) !== invoice.id) throw new Error('Invoice line ownership mismatch');
     }
-    return lines.some(line => lineCovers(line, scope, clock()));
+    const matching = lines.find(line => lineCovers(line, scope, clock()));
+    const end = object(matching?.period)?.end;
+    return epoch(end) ? end : null;
   }
 
   const latest = object(subscription.latest_invoice);
   if (!latest) throw new Error('Latest subscription invoice must be expanded');
   checkInvoiceIdentity(latest, scope);
   // Do not make an uncollectible/void invoice a new paid period.
-  if (await covers(latest)) return 'active';
+  const latestEnd = await covers(latest);
+  if (latestEnd !== null) return { state: 'active', paidThrough: new Date(latestEnd * 1000).toISOString() };
   let cursor: string | undefined;
   for (let i = 0; i < 3; i++) {
     budget();
@@ -116,12 +126,21 @@ export async function resolveRenewalAccessState(
       status: 'paid', limit: 20, ...(cursor ? { starting_after: cursor } : {}),
     }));
     for (const invoice of response.data) {
-      if (await covers(invoice)) return 'active';
+      const end = await covers(invoice);
+      if (end !== null) return { state: 'active', paidThrough: new Date(end * 1000).toISOString() };
     }
-    if (!response.has_more) return 'canceled';
+    if (!response.has_more) return { state: 'canceled', paidThrough: null };
     const next = response.data[response.data.length - 1]?.id;
     if (typeof next !== 'string' || !next || next === cursor) throw new Error('Incomplete paid-invoice evidence');
     cursor = next;
   }
   throw new Error('Paid-invoice history exceeds bounded review scope');
+}
+
+/** Compatibility helper for callers that need only the access state. */
+export async function resolveRenewalAccessState(
+  subscription: Stripe.Subscription, previousState: string,
+  clock: () => number = () => Date.now() / 1000,
+): Promise<PurchaseAccessState> {
+  return (await resolveRenewalAccess(subscription, previousState, clock)).state;
 }

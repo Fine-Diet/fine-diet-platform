@@ -1,6 +1,6 @@
 /** Actual route + RPC adapter + paid-period resolver; transports are synthetic. */
 import type { NextApiRequest, NextApiResponse } from 'next';
-const mockFrom=jest.fn(), mockRpc=jest.fn(), mockSession=jest.fn(), mockSubscription=jest.fn();
+const mockFrom=jest.fn(), mockRpc=jest.fn(), mockSession=jest.fn(), mockSubscription=jest.fn(), mockCharge=jest.fn();
 const mockClaim=jest.fn(), mockComplete=jest.fn(), mockRelease=jest.fn(), mockAssign=jest.fn();
 const mockInvoices=jest.fn(), mockLines=jest.fn();
 let event: any, instance: any, session: any, subscription: any, model: string, live: boolean, order: string[], paid: any;
@@ -8,6 +8,7 @@ jest.mock('micro',()=>({buffer:async()=>Buffer.from('atomic_fixture')}));
 jest.mock('@/lib/stripe/stripeServer',()=>({stripe:{
   webhooks:{constructEvent:()=>event},checkout:{sessions:{retrieve:(...args:unknown[])=>mockSession(...args)}},
   subscriptions:{retrieve:(...args:unknown[])=>mockSubscription(...args)},
+  charges:{retrieve:(...args:unknown[])=>mockCharge(...args)},
   invoices:{list:(...args:unknown[])=>mockInvoices(...args),listLineItems:(...args:unknown[])=>mockLines(...args)},
 }}));
 jest.mock('@/lib/stripe/stripeAccountContext',()=>({getStripeAccountContext:()=>({accountId:'acct_Fixture',livemode:live})}));
@@ -54,6 +55,7 @@ beforeEach(()=>{
   subscription={id:'sub_fixture',customer:'cus_fixture',livemode:false,status:'active',latest_invoice:paid,
     items:{has_more:false,data:[{id:'si_fixture',quantity:1,price:{id:'price_Fixture',currency:'usd',recurring:{usage_type:'licensed'}}}]},
     metadata:{person_id:'person_fixture',offer_key:'method'}};
+  mockCharge.mockResolvedValue({id:'ch_fixture',livemode:false,customer:'cus_fixture',payment_intent:'pi_fixture',invoice:paid});
   event={id:'evt_fixture',type:'checkout.session.completed',created:1762000000,livemode:false,data:{object:session}};
   mockFrom.mockImplementation(query);mockSession.mockImplementation(async()=>{order.push('stripe:session');return session;});
   mockSubscription.mockImplementation(async()=>{order.push('stripe:subscription');return subscription;});
@@ -112,6 +114,7 @@ describe('atomic webhook integration',()=>{
     expect(await deliver()).toBe(200);expect(mockRpc.mock.calls[0][1].p_input.state).toBe('active');
     expect(order.indexOf('db:stripe_offer_instances')).toBeLessThan(order.indexOf('stripe:invoices'));
     expect(order.indexOf('stripe:invoices')).toBeLessThan(order.indexOf('rpc'));
+    expect(mockRpc.mock.calls[0][1].p_input.paid_through).toEqual(expect.any(String));
   });
   it('suspends only when the verified prior paid period has ended',async()=>{
     invoiceEvent();paid.lines.data[0].period.end=Math.floor(Date.now()/1000)-1;
@@ -129,6 +132,19 @@ describe('atomic webhook integration',()=>{
     invoiceEvent();subscription.latest_invoice={...paid,status:'open'};
     mockInvoices.mockImplementation(async()=>({data:[{...paid,id:`in_${mockInvoices.mock.calls.length}`,lines:{data:[],has_more:false}}],has_more:true}));
     expect(await deliver()).toBe(500);expect(mockRpc).not.toHaveBeenCalled();expect(mockRelease).toHaveBeenCalled();
+  });
+  it.each([
+    ['charge.refunded','refund',{id:'ch_fixture'}],
+    ['charge.dispute.created','dispute',{id:'dp_fixture',charge:'ch_fixture'}],
+    ['radar.early_fraud_warning.created','early_fraud_warning',{id:'issfr_fixture',charge:'ch_fixture'}],
+  ])('queues verified %s for review without direct access writes',async(type,riskKind,obj)=>{
+    event.type=type;event.data.object=obj;
+    expect(await deliver()).toBe(200);
+    expect(mockCharge).toHaveBeenCalledWith('ch_fixture',{expand:['invoice']});
+    expect(mockRpc.mock.calls[0][0]).toBe('fd_record_stripe_risk_review');
+    expect(mockRpc.mock.calls[0][1].p_input).toEqual(expect.objectContaining({risk_kind:riskKind,source_ref:'sub_fixture',instance_id:'instance_fixture',person_id:'person_fixture'}));
+    expect(mockFrom.mock.calls.every(call=>call[0]==='stripe_offer_instances')).toBe(true);
+    expect(mockComplete).not.toHaveBeenCalled();
   });
   it('does not reopen a terminal purchase even with current paid coverage',async()=>{
     invoiceEvent('invoice.paid');instance.status='ended';expect(await deliver()).toBe(200);

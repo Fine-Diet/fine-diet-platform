@@ -1,5 +1,6 @@
 -- Pre-live Stripe identity isolation; apply only after reviewing the sandbox
 -- ownership audit. Existing stripe_customers records are preserved unchanged.
+BEGIN;
 CREATE TABLE IF NOT EXISTS public.stripe_customer_accounts (
   person_id uuid NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
   stripe_account_id text NOT NULL CHECK (stripe_account_id ~ '^acct_[A-Za-z0-9]+$'),
@@ -17,3 +18,4 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON public.stripe_customer_accounts TO service_
 -- Do not backfill existing stripe_customers here. That statement lives in
 -- stripeCustomerAccountsLegacySandboxBackfill.sql and must stay out of the
 -- production apply. The application creates account-scoped rows at checkout.
+COMMIT;

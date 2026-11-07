@@ -5,7 +5,7 @@ jest.mock('../stripeServer', () => ({ stripe: { invoices: {
   list: (...args: unknown[]) => mockInvoices(...args),
   listLineItems: (...args: unknown[]) => mockLines(...args),
 } } }));
-import { resolveRenewalAccessState } from '../stripeRenewalCoverage';
+import { resolveRenewalAccess, resolveRenewalAccessState } from '../stripeRenewalCoverage';
 const NOW = 1800000000;
 function line(overrides: Record<string, unknown> = {}) {
   return { id: 'il_current', amount: 2499, currency: 'usd', livemode: false, quantity: 1,
@@ -39,6 +39,10 @@ describe('verified paid service periods', () => {
   it('accepts current paid service coverage, not just a paid header', async () => {
     expect(await resolve(subscription())).toBe('active'); expect(mockInvoices).not.toHaveBeenCalled();
   });
+  it('returns the exact verified invoice-line end as a paid-through cutoff', async () => {
+    const decision = await resolveRenewalAccess(subscription(), 'active', () => NOW);
+    expect(decision).toEqual({ state: 'active', paidThrough: new Date((NOW + 100) * 1000).toISOString() });
+  });
   it.each(['draft', 'open'])('preserves still-paid access when newest invoice is %s', async status => {
     mockInvoices.mockResolvedValue({ data: [invoice({ id: 'in_prior' })], has_more: false });
     expect(await resolve(subscription({ latest_invoice: invoice({ status }) }))).toBe('active');
@@ -62,6 +66,10 @@ describe('verified paid service periods', () => {
   it('supports a valid free trial without manufacturing paid coverage', async () => {
     expect(await resolve(subscription({ status: 'trialing', trial_end: NOW + 60, latest_invoice: null }))).toBe('active');
     expect(mockInvoices).not.toHaveBeenCalled();
+  });
+  it('returns trial_end as the bounded paid-through-style access cutoff', async () => {
+    await expect(resolveRenewalAccess(subscription({ status: 'trialing', trial_end: NOW + 60 }), 'active', () => NOW))
+      .resolves.toEqual({ state: 'active', paidThrough: new Date((NOW + 60) * 1000).toISOString() });
   });
   it('does not extend an expired trial', async () => {
     expect(await resolve(subscription({ status: 'trialing', trial_end: NOW }))).toBe('canceled');
@@ -117,6 +125,10 @@ describe('verified paid service periods', () => {
   });
   it.each(['schedule', 'pause_collection', 'pending_update'])('requires review of %s instead of inferring coverage', async field => {
     await expect(resolve(subscription({ [field]: {} }))).rejects.toThrow('require review');
+  });
+  it.each(['schedule', 'pause_collection', 'pending_update'])('rejects trial access when %s is present', async field => {
+    await expect(resolve(subscription({ status: 'trialing', trial_end: NOW + 60, [field]: {} })))
+      .rejects.toThrow('require review');
   });
   it('rejects multi-item subscriptions', async () => {
     const value = subscription(); (value.items.data as unknown[]).push({ id: 'si_other' });

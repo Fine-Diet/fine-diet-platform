@@ -3,6 +3,10 @@
 CREATE TABLE public.offers (
   offer_key text PRIMARY KEY, assigns_program_slug text, billing_model text NOT NULL DEFAULT 'subscription'
 );
+CREATE TABLE public.price_options (
+  price_option_key text PRIMARY KEY, offer_key text NOT NULL REFERENCES public.offers(offer_key),
+  billing_model text NOT NULL DEFAULT 'subscription'
+);
 CREATE TABLE public.stripe_offer_instances (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), person_id uuid NOT NULL REFERENCES public.people(id),
   offer_key text NOT NULL REFERENCES public.offers(offer_key), stripe_customer_id text NOT NULL,
@@ -43,9 +47,12 @@ ALTER TABLE public.stripe_offer_instances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.person_entitlements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.program_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.checkout_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.price_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stripe_events ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.offers,public.stripe_offer_instances,public.person_entitlements,
  public.program_assignments,public.checkout_events,public.stripe_events FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON public.price_options FROM PUBLIC,anon,authenticated;
 GRANT USAGE ON SCHEMA public TO service_role;
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.offers,public.stripe_offer_instances,public.person_entitlements,
  public.program_assignments,public.checkout_events,public.stripe_events TO service_role;
+GRANT SELECT ON public.price_options TO service_role;

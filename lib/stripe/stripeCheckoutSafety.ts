@@ -15,6 +15,14 @@ export async function assertCheckoutSafety(billing: PriceOptionBilling): Promise
   if (billing.billingModel !== 'subscription' && billing.billingModel !== 'one_time') {
     throw new CheckoutSafetyError('billing_model_not_enabled', 409);
   }
+  // Legacy installment/intro/phase fields remain in the catalog. Reject them
+  // before even the read-only Stripe Price lookup so they cannot reach customer
+  // creation, checkout receipts, or Checkout Session creation.
+  const hasValue = (value: unknown): boolean => value !== null && value !== undefined;
+  if (hasValue(billing.stripePhasePriceIds) || hasValue(billing.stripePhaseIterations) ||
+      hasValue(billing.introPriceId) || hasValue(billing.introIterations) || hasValue(billing.renewalPriceId)) {
+    throw new CheckoutSafetyError('billing_schedule_not_enabled', 409);
+  }
   const context = getStripeAccountContext();
   if (context.livemode && process.env.STRIPE_ATOMIC_FULFILLMENT !== '1') {
     throw new CheckoutSafetyError('checkout_not_ready');

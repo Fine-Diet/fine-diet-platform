@@ -20,6 +20,7 @@ async function main() {
   await pool.query('CREATE TRIGGER fixture_crash_delay BEFORE INSERT ON public.program_assignments FOR EACH ROW EXECUTE FUNCTION public.fixture_crash_delay()');
   const input={instance_id:instance,person_id:person,offer_key:offer,customer_id:`cus_${key}`,account_id:'acct_Fixture',livemode:false,
     expected_revision:'0',event_id:`evt_${key}`,token:'crash-token',source_ref:`sub_${key}`,state:'active',
+    paid_through:new Date(Date.now()+86400000).toISOString(),
     entitlements:[{entitlement_key:'journal',duration_days:null}],checkout_record:{stripe_checkout_session_id:`cs_${key}`}};
   const worker=await pool.connect(); worker.on('error',()=>{});
   try {

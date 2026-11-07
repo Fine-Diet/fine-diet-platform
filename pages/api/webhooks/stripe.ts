@@ -14,7 +14,7 @@ import { resolveEffectiveOfferEntitlementMappings } from '@/lib/access/offerEnti
 import { claimStripeEvent, completeStripeEvent, releaseStripeEvent } from '@/lib/stripe/stripeWebhookEventStore';
 import { atomicFulfillmentEnabled, commitStripeFulfillment, type FulfillmentInstance, type FulfillmentReceipt } from '@/lib/stripe/stripeAtomicFulfillment';
 import { checkoutPaymentReady, readFineDietAttribution, stripeReferenceId, subscriptionAccessState, type PurchaseAccessState } from '@/lib/stripe/stripeLifecyclePolicy';
-import { resolveRenewalAccessState } from '@/lib/stripe/stripeRenewalCoverage';
+import { resolveRenewalAccess, type RenewalAccessDecision } from '@/lib/stripe/stripeRenewalCoverage';
 
 export const config = { api: { bodyParser: false } };
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -30,7 +30,7 @@ interface Attempt {
   atomic: boolean;
 }
 const INSTANCE_FIELDS = 'id, person_id, offer_key, status, stripe_customer_id, stripe_checkout_session_id, stripe_subscription_id, stripe_payment_intent_id, price_option_key';
-async function findInstance(column: 'stripe_checkout_session_id' | 'stripe_subscription_id', value: string, atomic: boolean): Promise<PurchaseInstance | null> {
+async function findInstance(column: 'stripe_checkout_session_id' | 'stripe_subscription_id' | 'stripe_payment_intent_id', value: string, atomic: boolean): Promise<PurchaseInstance | null> {
   const fields = atomic ? `${INSTANCE_FIELDS}, fulfillment_revision` : INSTANCE_FIELDS;
   const { data, error } = await supabaseAdmin.from('stripe_offer_instances').select(fields).eq(column, value).maybeSingle();
   if (error) throw error;
@@ -99,11 +99,13 @@ async function revokeEntitlementsBySourceRef(personId: string, sourceRef: string
 async function applyPurchaseState(
   instance: PurchaseInstance, state: PurchaseAccessState, sourceRef: string, attempt: Attempt,
   identifiers: Record<string, string | null> = {}, checkoutRecord: Record<string, string | null> | null = null,
+  paidThrough: string | null = null,
 ): Promise<boolean> {
   if (!['pending', 'active', 'canceled', 'ended'].includes(instance.status)) throw new Error('Unknown purchase state');
   const nextState = instance.status === 'ended' ? 'ended' : state;
   if (attempt.atomic) {
     await commitStripeFulfillment({ instance, state: nextState, sourceRef, identifiers,
+      paidThrough: nextState === 'active' ? paidThrough : null,
       checkoutRecord: nextState === 'active' ? checkoutRecord : null, context: attempt.context, receipt: attempt.receipt });
     return true;
   }
@@ -126,12 +128,11 @@ async function retrieveSubscription(id: string, instance: PurchaseInstance): Pro
   assertObjectMode(subscription); assertCustomer(instance, subscription.customer); assertAttribution(instance, subscription.metadata);
   return subscription;
 }
-async function currentAccessState(subscription: Stripe.Subscription, instance: PurchaseInstance, attempt: Attempt): Promise<PurchaseAccessState> {
+async function currentAccessState(subscription: Stripe.Subscription, instance: PurchaseInstance, attempt: Attempt): Promise<RenewalAccessDecision> {
   // Every invoice read happens after the purchase revision was captured. A
   // concurrent commit invalidates it; failed evidence reads never imply revoke.
-  return attempt.atomic
-    ? resolveRenewalAccessState(subscription, instance.status)
-    : subscriptionAccessState(subscription, instance.status);
+  if (attempt.atomic) return resolveRenewalAccess(subscription, instance.status);
+  return { state: subscriptionAccessState(subscription, instance.status), paidThrough: null };
 }
 function checkoutRecord(session: Stripe.Checkout.Session): Record<string, string | null> {
   const metadata = session.metadata ?? {};
@@ -177,19 +178,18 @@ async function reconcileCheckout(snapshot: Stripe.Checkout.Session, eventType: s
     return false;
   }
   let state: PurchaseAccessState = instance.status === 'ended' ? 'ended' : 'active';
+  let paidThrough: string | null = null;
   if (session.mode === 'subscription') {
     if (!subscriptionId) throw new Error('Subscription checkout is missing a subscription');
-    state = await currentAccessState(await retrieveSubscription(subscriptionId, instance), instance, attempt);
+    const decision = await currentAccessState(await retrieveSubscription(subscriptionId, instance), instance, attempt);
+    state = decision.state; paidThrough = decision.paidThrough;
   } else if (session.mode !== 'payment') throw new Error('Unsupported checkout mode for purchased access');
-  const committed = await applyPurchaseState(instance, state, sourceRef, attempt, identifiers, state === 'active' ? checkoutRecord(session) : null);
+  const committed = await applyPurchaseState(instance, state, sourceRef, attempt, identifiers,
+    state === 'active' ? checkoutRecord(session) : null, paidThrough);
   if (committed || state !== 'active') return committed;
-  // Sandbox legacy only. The atomic path explicitly rejects these billing
-  // models and cannot perform schedule API mutations after a committed receipt.
-  const metadata = session.metadata ?? {};
-  if (metadata.billing_model === 'installment' && subscriptionId) await createInstallmentSchedule(instance.offer_key, subscriptionId);
-  if (metadata.billing_model === 'intro_then_subscription' && subscriptionId && metadata.price_option_key) {
-    await createIntroThenSubscriptionSchedule(metadata.price_option_key, subscriptionId);
-  }
+  // The atomic path commits its receipt together with access. Legacy sandbox
+  // completion keeps the historical attribution record only; schedule APIs
+  // are deliberately disabled for unsupported billing models.
   await recordCompletedCheckout(session, instance);
   return false;
 }
@@ -204,37 +204,50 @@ async function reconcileSubscription(subscriptionId: string, attempt: Attempt, s
     throw new Error('Attributed subscription has no linked purchase instance yet');
   }
   assertCustomer(instance, subscription.customer); assertAttribution(instance, subscription.metadata); assertAttribution(instance, snapshotMetadata);
-  return applyPurchaseState(instance, await currentAccessState(subscription, instance, attempt), subscriptionId, attempt);
+  const decision = await currentAccessState(subscription, instance, attempt);
+  return applyPurchaseState(instance, decision.state, subscriptionId, attempt, {}, null, decision.paidThrough);
+}
+async function recordStripeRiskEvent(event: Stripe.Event, attempt: Attempt): Promise<boolean> {
+  const eventObject = event.data.object as unknown as Record<string, unknown>;
+  const riskKind = event.type === 'charge.refunded' ? 'refund'
+    : event.type === 'charge.dispute.created' ? 'dispute' : 'early_fraud_warning';
+  const chargeRef = riskKind === 'refund' ? eventObject.id
+    : riskKind === 'dispute' ? stripeReferenceId(eventObject.charge)
+      : stripeReferenceId(eventObject.charge);
+  if (typeof chargeRef !== 'string' || !/^ch_[A-Za-z0-9]+$/.test(chargeRef)) {
+    throw new Error('Risk event has no valid charge reference');
+  }
+  const charge = await stripe.charges.retrieve(chargeRef, { expand: ['invoice'] }) as unknown as Stripe.Charge & { invoice?: Stripe.Invoice | string | null };
+  if (charge.id !== chargeRef) throw new Error('Retrieved risk charge identity mismatch');
+  assertObjectMode(charge);
+  const customerId = stripeReferenceId(charge.customer);
+  if (!customerId) throw new Error('Risk charge has no customer');
+  const paymentIntentId = stripeReferenceId(charge.payment_intent);
+  const invoice = typeof charge.invoice === 'object' && charge.invoice ? charge.invoice as Stripe.Invoice : null;
+  const subscriptionId = invoice ? invoiceSubscriptionId(invoice) : null;
+  let instance = subscriptionId
+    ? await findInstance('stripe_subscription_id', subscriptionId, attempt.atomic)
+    : null;
+  if (!instance && paymentIntentId) instance = await findInstance('stripe_payment_intent_id', paymentIntentId, attempt.atomic);
+  if (instance) assertCustomer(instance, customerId);
+  const sourceRef = instance?.stripe_subscription_id || subscriptionId || paymentIntentId || chargeRef;
+  const { data, error } = await supabaseAdmin.rpc('fd_record_stripe_risk_review', { p_input: {
+    event_id: event.id, token: attempt.receipt.token,
+    account_id: attempt.context.accountId, livemode: attempt.context.livemode,
+    risk_kind: riskKind, source_ref: sourceRef,
+    instance_id: instance?.id ?? null, person_id: instance?.person_id ?? null,
+    customer_id: instance?.stripe_customer_id ?? null,
+  } });
+  if (error) throw error;
+  if (!data || data.receipt_completed !== true ||
+      (data.status !== 'committed' && data.status !== 'already_processed')) {
+    throw new Error('Risk review event was not durably recorded');
+  }
+  return true;
 }
 function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const legacy = invoice as Stripe.Invoice & { subscription?: unknown };
   return stripeReferenceId(invoice.parent?.subscription_details?.subscription ?? legacy.subscription);
-}
-
-/** Preserved sandbox-only schedule behavior; never selected by the atomic path. */
-async function createInstallmentSchedule(offerKey: string, subscriptionId: string): Promise<void> {
-  try {
-    const { data: offer } = await supabaseAdmin.from('offers').select('stripe_phase_price_ids, stripe_phase_iterations').eq('offer_key', offerKey).maybeSingle();
-    if (!offer?.stripe_phase_price_ids || !offer?.stripe_phase_iterations || offer.stripe_phase_price_ids.length < 1) {
-      console.warn(`[stripe-webhook] No installment config for offer ${offerKey}`); return;
-    }
-    const priceIds: string[] = offer.stripe_phase_price_ids, iterations: number[] = offer.stripe_phase_iterations;
-    const schedule = await stripe.subscriptionSchedules.create({ from_subscription: subscriptionId });
-    const phases: Stripe.SubscriptionScheduleUpdateParams.Phase[] = priceIds.map((priceId, i) => ({ items: [{ price: priceId, quantity: 1 }], iterations: iterations[i] }));
-    await stripe.subscriptionSchedules.update(schedule.id, { end_behavior: 'cancel', phases });
-  } catch (error) { console.error(`[stripe-webhook] Failed to create installment schedule for ${subscriptionId}:`, error); }
-}
-async function createIntroThenSubscriptionSchedule(priceOptionKey: string, subscriptionId: string): Promise<void> {
-  try {
-    const { data: option } = await supabaseAdmin.from('price_options').select('intro_price_id, intro_iterations, renewal_price_id, stripe_price_id').eq('price_option_key', priceOptionKey).maybeSingle();
-    const introPriceId: string | null = option?.intro_price_id ?? null, introIterations: number | null = option?.intro_iterations ?? null;
-    const renewalPriceId: string | null = option?.renewal_price_id ?? option?.stripe_price_id ?? null;
-    if (!introPriceId || !introIterations || !renewalPriceId) { console.warn(`[stripe-webhook] Incomplete intro_then_subscription config for ${priceOptionKey}`); return; }
-    const schedule = await stripe.subscriptionSchedules.create({ from_subscription: subscriptionId });
-    const introPhase = { items: [{ price: introPriceId, quantity: 1 }], iterations: introIterations }, renewalPhase = { items: [{ price: renewalPriceId, quantity: 1 }] };
-    const phases: Stripe.SubscriptionScheduleUpdateParams.Phase[] = [introPhase, renewalPhase];
-    await stripe.subscriptionSchedules.update(schedule.id, { end_behavior: 'release', phases });
-  } catch (error) { console.error(`[stripe-webhook] Failed to create intro_then_subscription schedule for ${subscriptionId}:`, error); }
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -265,6 +278,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     let committed = false;
     switch (event.type) {
+      case 'charge.refunded':
+      case 'charge.dispute.created':
+      case 'radar.early_fraud_warning.created':
+        committed = await recordStripeRiskEvent(event, attempt); break;
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded':
       case 'checkout.session.async_payment_failed':
