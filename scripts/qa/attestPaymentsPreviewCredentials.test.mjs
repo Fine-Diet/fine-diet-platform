@@ -9,6 +9,7 @@ import {
   QA_BRANCH,
   QA_SUPABASE_URL,
   QA_STRIPE_ACCOUNT_ID,
+  QA_STRIPE_SUBSCRIPTION_ID,
 } from './attestPaymentsPreviewCredentials.mjs';
 
 const validEnv = () => ({
@@ -21,13 +22,31 @@ const validEnv = () => ({
   STRIPE_ACCOUNT_ID: QA_STRIPE_ACCOUNT_ID,
   STRIPE_SECRET_KEY: 'sk_test_placeholder',
 });
-const response = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body });
+const STRIPE_SUBSCRIPTION_URL = 'https://api.stripe.com/v1/subscriptions/' + QA_STRIPE_SUBSCRIPTION_ID;
+const verifiedSubscription = () => ({
+  id: QA_STRIPE_SUBSCRIPTION_ID,
+  object: 'subscription',
+  livemode: false,
+});
+const response = (status, body, jsonImpl) => ({
+  status,
+  ok: status >= 200 && status < 300,
+  json: jsonImpl || (async () => body),
+});
 function goodFetch(calls = []) {
   return async (url, init) => {
     calls.push({ url, init });
     if (String(url).includes('/rest/v1/rpc/')) return response(400, { code: '22023', message: 'do not log' });
-    if (String(url) === 'https://api.stripe.com/v1/account') return response(200, { id: QA_STRIPE_ACCOUNT_ID });
+    if (String(url) === STRIPE_SUBSCRIPTION_URL) return response(200, verifiedSubscription());
     throw new Error('unexpected URL');
+  };
+}
+function supabaseThenStripe(stripeResult) {
+  return async (url, init) => {
+    if (String(url).includes('/rest/v1/rpc/')) return response(400, { code: '22023' });
+    if (String(url) !== STRIPE_SUBSCRIPTION_URL) throw new Error('unexpected URL ' + url);
+    if (typeof stripeResult === 'function') return stripeResult(url, init);
+    return stripeResult;
   };
 }
 async function rejectsCode(promise, code) {
@@ -41,16 +60,25 @@ test('non-QA local/Production build skips provider calls when no QA marker is pr
   assert.equal(called, false);
 });
 
-test('recognized QA Preview passes using Stripe Account response without livemode', async () => {
+test('recognized QA Preview passes by retrieving the verified TEST subscription', async () => {
   const calls = [];
-  const result = await attest(validEnv(), goodFetch(calls));
+  const env = { ...validEnv(), STRIPE_SECRET_KEY: 'rk_test_placeholder' };
+  const result = await attest(env, goodFetch(calls));
   assert.deepEqual(result, { status: 'passed' });
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, QA_SUPABASE_URL + '/rest/v1/rpc/fd_expire_stripe_fulfillment');
   assert.deepEqual(JSON.parse(calls[0].init.body), { p_limit: 0 });
   assert.equal(calls[0].init.redirect, 'error');
-  assert.equal(calls[1].url, 'https://api.stripe.com/v1/account');
+  assert.equal(calls[1].url, STRIPE_SUBSCRIPTION_URL);
+  assert.equal(calls[1].init.method, 'GET');
+  assert.equal(calls[1].init.cache, 'no-store');
   assert.equal(calls[1].init.redirect, 'error');
+  assert.equal(Object.hasOwn(calls[1].init.headers, 'Stripe-Account'), false);
+  assert.equal(Object.hasOwn(calls[1].init.headers, 'stripe-account'), false);
+  assert.equal(calls[1].init.body, undefined);
+  assert.equal(calls[1].init.headers.authorization === 'Bearer rk_test_placeholder', true);
+  assert.equal(calls.some((call) => String(call.url).includes('/v1/account')), false);
+  assert.equal(JSON.stringify(result).includes('rk_test_placeholder'), false);
 });
 
 test('recognized QA project fails closed if the marker is missing', async () => {
@@ -90,8 +118,44 @@ test('rejects missing, live, malformed, or mismatched Stripe credentials/account
   await rejectsCode(attest({ ...validEnv(), STRIPE_SECRET_KEY: 'rk_live_placeholder' }, goodFetch()), 'STRIPE_CREDENTIAL');
   await rejectsCode(attest({ ...validEnv(), STRIPE_SECRET_KEY: 'unknown' }, goodFetch()), 'STRIPE_CREDENTIAL');
   await rejectsCode(attest({ ...validEnv(), STRIPE_ACCOUNT_ID: 'acct_wrong' }, goodFetch()), 'STRIPE_ACCOUNT');
-  await rejectsCode(attest(validEnv(), async (url) => String(url).includes('/rest/v1/rpc/')
-    ? response(400, { code: '22023' }) : response(200, { id: 'acct_wrong' })), 'STRIPE_IDENTITY');
+  await rejectsCode(attest(validEnv(), supabaseThenStripe(response(200, {
+    id: 'sub_other', object: 'subscription', livemode: false,
+  }))), 'STRIPE_IDENTITY');
+});
+
+test('subscription identity fails closed without echoing provider bodies or credentials', async () => {
+  const secret = 'sk_test_private_example';
+  const env = { ...validEnv(), STRIPE_SECRET_KEY: secret };
+  const cases = [
+    response(401, { error: { message: 'bad key ' + secret } }),
+    response(403, { error: { message: 'missing subscription_read ' + secret } }),
+    response(404, { error: { code: 'resource_missing', message: 'No such subscription ' + secret } }),
+    response(500, { error: { message: 'upstream ' + secret } }),
+    response(200, { id: QA_STRIPE_ACCOUNT_ID, object: 'account' }),
+    response(200, { id: QA_STRIPE_SUBSCRIPTION_ID, object: 'customer', livemode: false }),
+    response(200, { id: QA_STRIPE_SUBSCRIPTION_ID, object: 'subscription', livemode: true }),
+    response(200, { id: QA_STRIPE_SUBSCRIPTION_ID, object: 'subscription' }),
+    response(200, { id: QA_STRIPE_SUBSCRIPTION_ID, object: 'subscription', livemode: 'false' }),
+    response(200, null, async () => { throw new Error('malformed ' + secret); }),
+  ];
+  for (const stripeResult of cases) {
+    await assert.rejects(attest(env, supabaseThenStripe(stripeResult)), (error) => {
+      assert.equal(error instanceof AttestationError && error.code === 'STRIPE_IDENTITY', true);
+      assert.equal(error.message.includes(secret), false);
+      assert.equal(error.message.includes('subscription'), false);
+      assert.equal(JSON.stringify(error).includes(secret), false);
+      return true;
+    });
+  }
+  await assert.rejects(attest(env, async (url) => {
+    if (String(url).includes('/rest/v1/rpc/')) return response(400, { code: '22023' });
+    throw new Error('network timeout ' + secret);
+  }), (error) => {
+    assert.equal(error.code, 'STRIPE_IDENTITY');
+    assert.equal(error.message.includes(secret), false);
+    assert.equal(error.message.includes('timeout'), false);
+    return true;
+  });
 });
 
 test('provider/network failures return safe codes without credentials or provider text', async () => {

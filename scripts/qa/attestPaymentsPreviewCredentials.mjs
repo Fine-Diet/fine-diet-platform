@@ -5,6 +5,11 @@ export const QA_PROJECT_ID = 'prj_dhm3g8xGGRQaPbpcgQmQwnSe7qU2';
 export const QA_BRANCH = 'codex/payments-reconstruction-20261106';
 export const QA_SUPABASE_URL = 'https://ikvkqpbwlpevqlshdkdz.supabase.co';
 export const QA_STRIPE_ACCOUNT_ID = 'acct_1UXS1WPXTq5u2TLw';
+// Independently verified TEST subscription owned by QA_STRIPE_ACCOUNT_ID.
+// The subscription object has no parent account id. Binding is that Stripe
+// authenticates the key as its own account, and another account is reachable
+// only by sending a Stripe-Account header. This request must not send one.
+export const QA_STRIPE_SUBSCRIPTION_ID = 'sub_1UXdxePXTq5u2TLwUlI41ksK';
 export const QA_MARKER = 'PAYMENTS_QA_CREDENTIAL_ATTESTATION_REQUIRED';
 
 export class AttestationError extends Error {
@@ -82,19 +87,25 @@ export async function attestPaymentsPreviewCredentials(env = process.env, fetchI
 
   let stripeResponse;
   try {
-    stripeResponse = await fetchImpl('https://api.stripe.com/v1/account', {
-      method: 'GET',
-      headers: { authorization: 'Bearer ' + stripeKey, accept: 'application/json' },
-      cache: 'no-store',
-      redirect: 'error',
-      signal: timeout(),
-    });
+    stripeResponse = await fetchImpl(
+      'https://api.stripe.com/v1/subscriptions/' + QA_STRIPE_SUBSCRIPTION_ID,
+      {
+        method: 'GET',
+        headers: { authorization: 'Bearer ' + stripeKey, accept: 'application/json' },
+        cache: 'no-store',
+        redirect: 'error',
+        signal: timeout(),
+      },
+    );
   } catch { fail('STRIPE_IDENTITY'); }
   if (!stripeResponse.ok) fail('STRIPE_IDENTITY');
-  const stripeAccount = await safeJson(stripeResponse);
-  // Stripe's Account object does not provide livemode. Test mode is established
-  // by the key prefix, and account identity by the authenticated account ID.
-  if (!stripeAccount || stripeAccount.id !== QA_STRIPE_ACCOUNT_ID) fail('STRIPE_IDENTITY');
+  const subscription = await safeJson(stripeResponse);
+  // Pass only the exact verified TEST subscription. A 2xx status, the id, or
+  // livemode alone is not sufficient. No /v1/account fallback.
+  if (!subscription ||
+      subscription.id !== QA_STRIPE_SUBSCRIPTION_ID ||
+      subscription.object !== 'subscription' ||
+      subscription.livemode !== false) fail('STRIPE_IDENTITY');
   return { status: 'passed' };
 }
 
