@@ -49,6 +49,86 @@ function eventReferences(event) {
   return { subscriptionId, customerId };
 }
 
+const TEMP_CUSTOMER_ID = /^cus_[A-Za-z0-9]+$/;
+const TEMP_SUBSCRIPTION_ID = /^sub_[A-Za-z0-9]+$/;
+const TEMP_CHECKOUT_SESSION_ID = /^cs_test_[A-Za-z0-9]+$/;
+const TEMP_EXPIRES_AT = /^[1-9][0-9]{9}$/;
+const TEMP_SLOT_MAX_SECONDS = 7 * 24 * 60 * 60;
+
+function readSlotId(value, pattern) {
+  if (value == null || value === '') return { kind: 'absent' };
+  if (typeof value === 'string' && pattern.test(value)) return { kind: 'valid', value };
+  return { kind: 'invalid' };
+}
+
+function readExpiry(value, nowSeconds) {
+  if (value == null || value === '') return { kind: 'absent' };
+  if (typeof value !== 'string' || !TEMP_EXPIRES_AT.test(value)) return { kind: 'invalid' };
+  const expiresAt = Number(value);
+  if (!Number.isSafeInteger(expiresAt)) return { kind: 'invalid' };
+  if (expiresAt > nowSeconds + TEMP_SLOT_MAX_SECONDS) return { kind: 'invalid' };
+  return { kind: 'valid', expiresAt, expired: expiresAt <= nowSeconds };
+}
+
+// HTTP 403 and HTTP 503 are both failed deliveries. Stripe sandbox retries of
+// failed deliveries are limited, so neither status acknowledges the event.
+// The historical allowlist is decided before temporary configuration is read.
+// Before the synthetic subscription id is pinned, only the exact Checkout
+// Session is forwarded. Eligible subscription and invoice events for that
+// customer return 503. The slot requires a 10-digit Unix expiry no more than
+// seven days ahead. After that instant the temporary customer closes.
+function readTemporarySlot(env, primaryCustomer, primarySubscription, nowSeconds) {
+  const customer = readSlotId(env.STRIPE_QA_TEMP_CUSTOMER_ID, TEMP_CUSTOMER_ID);
+  const session = readSlotId(env.STRIPE_QA_TEMP_CHECKOUT_SESSION_ID, TEMP_CHECKOUT_SESSION_ID);
+  const subscription = readSlotId(env.STRIPE_QA_TEMP_SUBSCRIPTION_ID, TEMP_SUBSCRIPTION_ID);
+  const expiry = readExpiry(env.STRIPE_QA_TEMP_EXPIRES_AT, nowSeconds);
+  if (customer.kind === 'invalid' || session.kind === 'invalid' ||
+      subscription.kind === 'invalid' || expiry.kind === 'invalid') {
+    return { error: true };
+  }
+  const identityConfigured = customer.kind === 'valid' || session.kind === 'valid' ||
+    subscription.kind === 'valid' || expiry.kind === 'valid';
+  if (!identityConfigured) return { slot: null };
+  if (customer.kind !== 'valid' || session.kind !== 'valid' || expiry.kind !== 'valid') {
+    return { error: true };
+  }
+  if (customer.value === primaryCustomer) return { error: true };
+  if (subscription.kind === 'valid' && subscription.value === primarySubscription) return { error: true };
+  return {
+    slot: {
+      customerId: customer.value,
+      sessionId: session.value,
+      subscriptionId: subscription.kind === 'valid' ? subscription.value : null,
+      expired: expiry.expired,
+    },
+  };
+}
+
+function checkoutSessionId(event) {
+  if (!event?.type?.startsWith('checkout.session.')) return null;
+  const id = event.data?.object?.id;
+  return typeof id === 'string' ? id : null;
+}
+
+function temporarySlotDecision(event, slot, primarySubscription) {
+  if (!slot || slot.expired) return 'deny';
+  const { subscriptionId, customerId } = eventReferences(event);
+  if (customerId !== slot.customerId) return 'deny';
+  if (subscriptionId === primarySubscription) return 'deny';
+  if (subscriptionId && !validId(subscriptionId, 'sub_')) return 'deny';
+
+  if (event.type.startsWith('checkout.session.')) {
+    if (checkoutSessionId(event) !== slot.sessionId) return 'deny';
+    if (slot.subscriptionId && subscriptionId && subscriptionId !== slot.subscriptionId) return 'deny';
+    return 'allow';
+  }
+
+  if (!subscriptionId) return 'deny';
+  if (!slot.subscriptionId) return 'retry';
+  if (subscriptionId !== slot.subscriptionId) return 'deny';
+  return 'allow';
+}
+
 function verifyStripeSignature(rawBody, header, secret) {
   if (typeof header !== 'string' || !secret) return false;
 
@@ -159,7 +239,26 @@ export default async function handler(req, res) {
   const lifecycleEventAllowed = subscriptionId === expectedSubscription &&
     customerId === expectedCustomer;
   if (!checkoutEventAllowed && !lifecycleEventAllowed) {
-    return respond(res, 403, 'event_not_allowed');
+    const temporarySlot = readTemporarySlot(
+      process.env,
+      expectedCustomer,
+      expectedSubscription,
+      Math.floor(Date.now() / 1000),
+    );
+    if (temporarySlot.error) {
+      console.warn('payments_qa_relay_rejected', { reason: 'temporary_allowlist_invalid' });
+      return respond(res, 503, 'temporarily_unavailable');
+    }
+    const temporaryDecision = temporarySlotDecision(
+      event, temporarySlot.slot, expectedSubscription,
+    );
+    if (temporaryDecision === 'retry') {
+      console.warn('payments_qa_relay_rejected', { reason: 'temporary_subscription_unpinned' });
+      return respond(res, 503, 'temporarily_unavailable');
+    }
+    if (temporaryDecision !== 'allow') {
+      return respond(res, 403, 'event_not_allowed');
+    }
   }
 
   const targetUrl = getFixedTargetUrl(process.env.PAYMENTS_TARGET_URL);
