@@ -97,6 +97,12 @@ describe('Stripe webhook event claims', () => {
     mockFrom.mockReturnValue(chain({ data: [], error: null }));
     await expect(completeStripeEvent(event.id, 'lost-token')).rejects.toThrow('exclusive claim');
   });
+  it('writes a request-scoped client without touching the shared admin client', async () => {
+    const requestFrom = jest.fn(() => chain({ error: null }));
+    expect(await claimStripeEvent(event, { db: { from: requestFrom } })).toEqual({ status: 'claimed', token: 'claim-token' });
+    expect(requestFrom).toHaveBeenCalledWith('stripe_events');
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
   it('releases failed claims for retry with token and completion guards', async () => {
     const update = chain({ data: [], error: null });
     mockFrom.mockReturnValue(update);

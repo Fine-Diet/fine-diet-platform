@@ -4,6 +4,7 @@
  */
 import type Stripe from 'stripe';
 import { stripe } from './stripeServer';
+import { stripeWebhookRequestOptions } from './stripeWebhookBudget';
 import { stripeReferenceId, subscriptionAccessState, type PurchaseAccessState } from './stripeLifecyclePolicy';
 
 type JsonObject = Record<string, unknown>;
@@ -97,7 +98,7 @@ export async function resolveRenewalAccess(
         budget();
         const response = page(await stripe.invoices.listLineItems(invoice.id as string, {
           limit: 100, ...(cursor ? { starting_after: cursor } : {}),
-        }));
+        }, stripeWebhookRequestOptions));
         lines.push(...response.data);
         if (!response.has_more) break;
         const next = response.data[response.data.length - 1]?.id;
@@ -124,7 +125,7 @@ export async function resolveRenewalAccess(
     budget();
     const response = page(await stripe.invoices.list({ customer, subscription: subscription.id,
       status: 'paid', limit: 20, ...(cursor ? { starting_after: cursor } : {}),
-    }));
+    }, stripeWebhookRequestOptions));
     for (const invoice of response.data) {
       const end = await covers(invoice);
       if (end !== null) return { state: 'active', paidThrough: new Date(end * 1000).toISOString() };

@@ -46,7 +46,7 @@ describe('verified paid service periods', () => {
   it.each(['draft', 'open'])('preserves still-paid access when newest invoice is %s', async status => {
     mockInvoices.mockResolvedValue({ data: [invoice({ id: 'in_prior' })], has_more: false });
     expect(await resolve(subscription({ latest_invoice: invoice({ status }) }))).toBe('active');
-    expect(mockInvoices).toHaveBeenCalledWith({ customer: 'cus_fixture', subscription: 'sub_fixture', status: 'paid', limit: 20 });
+    expect(mockInvoices).toHaveBeenCalledWith({ customer: 'cus_fixture', subscription: 'sub_fixture', status: 'paid', limit: 20 }, { timeout: 5000 });
   });
   it('preserves paid coverage even if provider has entered past_due', async () => {
     expect(await resolve(subscription({ status: 'past_due' }))).toBe('active');
@@ -142,7 +142,7 @@ describe('verified paid service periods', () => {
     mockLines.mockResolvedValueOnce({ data: [line({ id: 'il_one', period: { start: 1, end: 2 } })], has_more: true })
       .mockResolvedValueOnce({ data: [line({ id: 'il_two' })], has_more: false });
     expect(await resolve(subscription({ latest_invoice: invoice({ lines: { data: [], has_more: true } }) }))).toBe('active');
-    expect(mockLines).toHaveBeenLastCalledWith('in_current', { limit: 100, starting_after: 'il_one' });
+    expect(mockLines).toHaveBeenLastCalledWith('in_current', { limit: 100, starting_after: 'il_one' }, { timeout: 5000 });
   });
   it('requires full pagination even if the first truncated page looks paid', async () => {
     mockLines.mockResolvedValue({ data: [line()], has_more: true });
@@ -155,7 +155,7 @@ describe('verified paid service periods', () => {
     mockInvoices.mockResolvedValueOnce({ data: [invoice({ id: 'in_old', lines: { data: [], has_more: false } })], has_more: true })
       .mockResolvedValueOnce({ data: [invoice({ id: 'in_covering' })], has_more: false });
     expect(await resolve(subscription({ latest_invoice: invoice({ status: 'open' }) }))).toBe('active');
-    expect(mockInvoices).toHaveBeenLastCalledWith(expect.objectContaining({ starting_after: 'in_old' }));
+    expect(mockInvoices).toHaveBeenLastCalledWith(expect.objectContaining({ starting_after: 'in_old' }), { timeout: 5000 });
   });
   it('does not interpret exhausted history limits as proof of nonpayment', async () => {
     mockInvoices.mockImplementation(async () => ({ data: [invoice({ id: `in_${mockInvoices.mock.calls.length}`, lines: { data: [], has_more: false } })], has_more: true }));

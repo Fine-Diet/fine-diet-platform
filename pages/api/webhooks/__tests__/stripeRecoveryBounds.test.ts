@@ -16,7 +16,10 @@ jest.mock('@/lib/stripe/stripeWebhookEventStore', () => ({
   completeStripeEvent: (...args: unknown[]) => mockComplete(...args),
   releaseStripeEvent: (...args: unknown[]) => mockRelease(...args),
 }));
-jest.mock('@/lib/supabaseServerClient', () => ({ supabaseAdmin: { from: (...args: unknown[]) => mockFrom(...args) } }));
+jest.mock('@/lib/supabaseServerClient', () => ({
+  supabaseAdmin: { from: (...args: unknown[]) => mockFrom(...args) },
+  createSupabaseAdmin: () => ({ from: (...args: unknown[]) => mockFrom(...args) }),
+}));
 jest.mock('@/lib/plans/programAssignmentAutomationServerService', () => ({ handleStripeCheckoutCompleted: async () => ({ action: 'skipped_unmapped' }) }));
 jest.mock('@/lib/access/offerEntitlementMappings', () => ({ resolveEffectiveOfferEntitlementMappings: (_key: string, rows: unknown[]) => rows }));
 

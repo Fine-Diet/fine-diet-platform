@@ -25,7 +25,10 @@ jest.mock('@/lib/stripe/stripeWebhookEventStore', () => ({
   completeStripeEvent: (...args: unknown[]) => mockComplete(...args),
   releaseStripeEvent: (...args: unknown[]) => mockRelease(...args),
 }));
-jest.mock('@/lib/supabaseServerClient', () => ({ supabaseAdmin: { from: (...args: unknown[]) => mockFrom(...args) } }));
+jest.mock('@/lib/supabaseServerClient', () => ({
+  supabaseAdmin: { from: (...args: unknown[]) => mockFrom(...args) },
+  createSupabaseAdmin: () => ({ from: (...args: unknown[]) => mockFrom(...args) }),
+}));
 jest.mock('@/lib/plans/programAssignmentAutomationServerService', () => ({ handleStripeCheckoutCompleted: (...args: unknown[]) => mockAssign(...args) }));
 jest.mock('@/lib/access/offerEntitlementMappings', () => ({ resolveEffectiveOfferEntitlementMappings: (_key: string, rows: unknown[]) => rows }));
 
@@ -177,7 +180,7 @@ describe('Stripe webhook route failure and isolation contracts', () => {
   it('completes the receipt only after the purchased access is granted', async () => {
     const res = response(); await handler(request(), res);
     expect(res.statusCode).toBe(200); expect(entitlements).toHaveLength(1);
-    expect(mockComplete).toHaveBeenCalledWith('evt_fixture', 'token_fixture'); expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockComplete).toHaveBeenCalledWith('evt_fixture', 'token_fixture', expect.anything()); expect(mockRelease).not.toHaveBeenCalled();
   });
   it.each([
     ['stripe_offer_instances', 'update'], ['offer_entitlements', 'select'],
@@ -185,7 +188,7 @@ describe('Stripe webhook route failure and isolation contracts', () => {
     ['checkout_events', 'select'], ['checkout_events', 'insert'],
   ])('does not acknowledge a failed %s %s operation', async (table, operation) => {
     failures[`${table}:${operation}`] = true; const res = response(); await handler(request(), res);
-    expect(res.statusCode).toBe(500); expect(mockComplete).not.toHaveBeenCalled(); expect(mockRelease).toHaveBeenCalledWith('evt_fixture', 'token_fixture');
+    expect(res.statusCode).toBe(500); expect(mockComplete).not.toHaveBeenCalled(); expect(mockRelease).toHaveBeenCalledWith('evt_fixture', 'token_fixture', expect.anything());
   });
   it('does not grant access when the checkout instance update matches no row', async () => {
     zeroUpdates = true; const res = response(); await handler(request(), res);
@@ -231,8 +234,8 @@ describe('Stripe webhook route failure and isolation contracts', () => {
 describe('Current-state payment lifecycle', () => {
   it('retrieves current session and subscription instead of trusting the event snapshot', async () => {
     const res = response(); await handler(request(), res);
-    expect(res.statusCode).toBe(200); expect(mockSessionRetrieve).toHaveBeenCalledWith('cs_test_fixture');
-    expect(mockSubscriptionRetrieve).toHaveBeenCalledWith('sub_fixture', { expand: ['latest_invoice'] });
+    expect(res.statusCode).toBe(200); expect(mockSessionRetrieve).toHaveBeenCalledWith('cs_test_fixture', {}, { timeout: 5000 });
+    expect(mockSubscriptionRetrieve).toHaveBeenCalledWith('sub_fixture', { expand: ['latest_invoice'] }, { timeout: 5000 });
   });
   it('does not grant on an unpaid completed checkout', async () => {
     currentSession.payment_status = 'unpaid'; event.data.object.payment_status = 'unpaid';

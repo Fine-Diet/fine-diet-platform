@@ -34,6 +34,9 @@ if (!supabaseServiceRoleKey) {
   );
 }
 
+const adminUrl: string = supabaseUrl;
+const adminKey: string = supabaseServiceRoleKey;
+
 /**
  * Server-side Supabase client with admin privileges.
  * Uses SERVICE_ROLE_KEY to bypass Row Level Security (RLS).
@@ -43,10 +46,18 @@ if (!supabaseServiceRoleKey) {
  * - Never expose SERVICE_ROLE_KEY to the client
  * - Only use in server-side code (API routes, getServerSideProps, etc.)
  */
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
+type AdminFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+/** A caller-supplied fetch stays on that caller's request. The shared client does not. */
+export function createSupabaseAdmin(fetchImpl?: AdminFetch) {
+  return createClient(adminUrl, adminKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    ...(fetchImpl ? { global: { fetch: fetchImpl } } : {}),
+  });
+}
+
+export const supabaseAdmin = createSupabaseAdmin();
 

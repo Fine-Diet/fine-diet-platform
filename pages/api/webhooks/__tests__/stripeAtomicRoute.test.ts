@@ -1,6 +1,8 @@
 /** Actual route + RPC adapter + paid-period resolver; transports are synthetic. */
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { WEBHOOK_ATTEMPT_BUDGET_MS, WEBHOOK_RELEASE_BUDGET_MS } from '@/lib/stripe/stripeWebhookBudget';
 const mockFrom=jest.fn(), mockRpc=jest.fn(), mockSession=jest.fn(), mockSubscription=jest.fn(), mockCharge=jest.fn();
+const mockBoundFetches: Array<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>> = [];
 const mockClaim=jest.fn(), mockComplete=jest.fn(), mockRelease=jest.fn(), mockAssign=jest.fn();
 const mockInvoices=jest.fn(), mockLines=jest.fn();
 let event: any, instance: any, session: any, subscription: any, model: string, live: boolean, order: string[], paid: any;
@@ -12,7 +14,13 @@ jest.mock('@/lib/stripe/stripeServer',()=>({stripe:{
   invoices:{list:(...args:unknown[])=>mockInvoices(...args),listLineItems:(...args:unknown[])=>mockLines(...args)},
 }}));
 jest.mock('@/lib/stripe/stripeAccountContext',()=>({getStripeAccountContext:()=>({accountId:'acct_Fixture',livemode:live})}));
-jest.mock('@/lib/supabaseServerClient',()=>({supabaseAdmin:{from:(...args:unknown[])=>mockFrom(...args),rpc:(...args:unknown[])=>mockRpc(...args)}}));
+jest.mock('@/lib/supabaseServerClient',()=>({
+  supabaseAdmin:{from:(...args:unknown[])=>mockFrom(...args),rpc:(...args:unknown[])=>mockRpc(...args)},
+  createSupabaseAdmin:(fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>)=>{
+    if (fetchImpl) mockBoundFetches.push(fetchImpl);
+    return {from:(...args:unknown[])=>mockFrom(...args),rpc:(...args:unknown[])=>mockRpc(...args)};
+  },
+}));
 jest.mock('@/lib/stripe/stripeWebhookEventStore',()=>({
   claimStripeEvent:(...args:unknown[])=>mockClaim(...args),completeStripeEvent:(...args:unknown[])=>mockComplete(...args),releaseStripeEvent:(...args:unknown[])=>mockRelease(...args),
 }));
@@ -42,7 +50,7 @@ afterAll(()=>{
   if(priorFlag===undefined)delete process.env.STRIPE_ATOMIC_FULFILLMENT;else process.env.STRIPE_ATOMIC_FULFILLMENT=priorFlag;
 });
 beforeEach(()=>{
-  jest.resetAllMocks();jest.spyOn(console,'error').mockImplementation(()=>{});
+  jest.resetAllMocks();mockBoundFetches.length=0;jest.spyOn(console,'error').mockImplementation(()=>{});
   process.env.STRIPE_ATOMIC_FULFILLMENT='1';live=false;model='subscription';order=[];
   instance={id:'instance_fixture',person_id:'person_fixture',offer_key:'method',stripe_customer_id:'cus_fixture',stripe_checkout_session_id:'cs_fixture',stripe_subscription_id:'sub_fixture',stripe_payment_intent_id:null,price_option_key:null,status:'pending',fulfillment_revision:'7'};
   session={id:'cs_fixture',customer:'cus_fixture',livemode:false,mode:'subscription',status:'complete',payment_status:'paid',subscription:'sub_fixture',payment_intent:null,metadata:{person_id:'person_fixture',offer_key:'method',billing_model:'subscription'}};
@@ -78,7 +86,7 @@ describe('atomic webhook integration',()=>{
   });
   it('requires a fresh delivery after revision conflict rather than replaying stale provider data',async()=>{
     mockRpc.mockResolvedValue({data:null,error:{code:'40001',message:'revision changed'}});
-    expect(await deliver()).toBe(500);expect(mockRpc).toHaveBeenCalledTimes(1);expect(mockComplete).not.toHaveBeenCalled();expect(mockRelease).toHaveBeenCalledWith('evt_fixture','claim_fixture');
+    expect(await deliver()).toBe(500);expect(mockRpc).toHaveBeenCalledTimes(1);expect(mockComplete).not.toHaveBeenCalled();expect(mockRelease).toHaveBeenCalledWith('evt_fixture','claim_fixture', expect.anything());
   });
   it('does not silently switch back when the atomic schema is missing',async()=>{
     delete instance.fulfillment_revision;expect(await deliver()).toBe(500);expect(mockRpc).not.toHaveBeenCalled();expect(mockAssign).not.toHaveBeenCalled();expect(mockComplete).not.toHaveBeenCalled();
@@ -140,11 +148,68 @@ describe('atomic webhook integration',()=>{
   ])('queues verified %s for review without direct access writes',async(type,riskKind,obj)=>{
     event.type=type;event.data.object=obj;
     expect(await deliver()).toBe(200);
-    expect(mockCharge).toHaveBeenCalledWith('ch_fixture',{expand:['invoice']});
+    expect(mockCharge).toHaveBeenCalledWith('ch_fixture',{expand:['invoice']},{timeout:5000});
     expect(mockRpc.mock.calls[0][0]).toBe('fd_record_stripe_risk_review');
     expect(mockRpc.mock.calls[0][1].p_input).toEqual(expect.objectContaining({risk_kind:riskKind,source_ref:'sub_fixture',instance_id:'instance_fixture',person_id:'person_fixture'}));
     expect(mockFrom.mock.calls.every(call=>call[0]==='stripe_offer_instances')).toBe(true);
     expect(mockComplete).not.toHaveBeenCalled();
+  });
+  it('releases the claim when provider work exceeds the relay budget',async()=>{
+    jest.useFakeTimers();
+    mockSubscription.mockImplementation(()=>new Promise(()=>{}));
+    invoiceEvent('invoice.paid');
+    const pending=deliver();
+    await jest.advanceTimersByTimeAsync(WEBHOOK_ATTEMPT_BUDGET_MS);
+    await expect(pending).resolves.toBe(500);
+    expect(mockRelease).toHaveBeenCalledWith('evt_fixture','claim_fixture', expect.anything());
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockComplete).not.toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+  it('returns before the relay abort when lease release also hangs',async()=>{
+    jest.useFakeTimers();
+    mockSubscription.mockImplementation(()=>new Promise(()=>{}));
+    mockRelease.mockImplementation(()=>new Promise(()=>{}));
+    invoiceEvent('invoice.paid');
+    const pending=deliver();
+    await jest.advanceTimersByTimeAsync(WEBHOOK_ATTEMPT_BUDGET_MS+WEBHOOK_RELEASE_BUDGET_MS);
+    await expect(pending).resolves.toBe(500);
+    expect(mockRelease).toHaveBeenCalledWith('evt_fixture','claim_fixture', expect.anything());
+    jest.useRealTimers();
+  });
+  it('cancels only the attempt fetch and releases through a separate signal',async()=>{
+    jest.useFakeTimers();
+    mockSubscription.mockImplementation(()=>new Promise(()=>{}));
+    invoiceEvent('invoice.paid');
+    const signals: AbortSignal[]=[];
+    const fetchMock=jest.spyOn(global,'fetch').mockImplementation(async(_input, init)=>{
+      signals.push(init!.signal!);
+      return new Response('{}');
+    });
+    const pending=deliver();
+    await jest.advanceTimersByTimeAsync(WEBHOOK_ATTEMPT_BUDGET_MS);
+    await expect(pending).resolves.toBe(500);
+    expect(mockBoundFetches.length).toBeGreaterThanOrEqual(2);
+    await mockBoundFetches[0]('https://attempt.test');
+    await mockBoundFetches[mockBoundFetches.length-1]('https://release.test');
+    expect(signals[0].aborted).toBe(true);
+    expect(signals[1].aborted).toBe(false);
+    expect(signals[0]).not.toBe(signals[1]);
+    fetchMock.mockRestore();
+    jest.useRealTimers();
+  });
+  it('accepts a retry of a budget failure without a second fulfillment',async()=>{
+    jest.useFakeTimers();
+    mockSubscription.mockImplementation(()=>new Promise(()=>{}));
+    invoiceEvent('invoice.paid');
+    const first=deliver();
+    await jest.advanceTimersByTimeAsync(WEBHOOK_ATTEMPT_BUDGET_MS+WEBHOOK_RELEASE_BUDGET_MS);
+    await expect(first).resolves.toBe(500);
+    jest.useRealTimers();
+    mockClaim.mockResolvedValue({status:'processed'});
+    mockSubscription.mockResolvedValue(subscription);
+    expect(await deliver()).toBe(200);
+    expect(mockRpc).not.toHaveBeenCalled();
   });
   it('does not reopen a terminal purchase even with current paid coverage',async()=>{
     invoiceEvent('invoice.paid');instance.status='ended';expect(await deliver()).toBe(200);
