@@ -27,6 +27,27 @@ function invoiceSubscription(invoice: JsonObject): string | null {
 }
 interface Scope { subscription: string; customer: string; livemode: boolean; item: string; price: string; currency: string; }
 export interface RenewalAccessDecision { state: PurchaseAccessState; paidThrough: string | null; }
+const TEST_CLOCK_ID = /^clock_[A-Za-z0-9]+$/;
+
+function testClockReference(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  const row = object(value);
+  return typeof row?.id === 'string' ? row.id : null;
+}
+
+/** Wall-clock coverage stays in force unless a TEST subscription's clock is retrieved and ready. */
+async function verifiedTestClockTime(subscription: Stripe.Subscription, budget: () => void): Promise<number | null> {
+  if (subscription.test_clock == null) return null;
+  if (subscription.livemode !== false) throw new Error('Invalid test clock evidence');
+  const id = testClockReference(subscription.test_clock);
+  if (!id || !TEST_CLOCK_ID.test(id)) throw new Error('Invalid test clock evidence');
+  budget();
+  const testClock = await stripe.testHelpers.testClocks.retrieve(id, {}, stripeWebhookRequestOptions);
+  if (testClock.id !== id || testClock.livemode !== false || testClock.status !== 'ready' || !epoch(testClock.frozen_time)) {
+    throw new Error('Invalid test clock evidence');
+  }
+  return testClock.frozen_time;
+}
 
 function checkInvoiceIdentity(invoice: JsonObject, scope: Scope): void {
   if (typeof invoice.id !== 'string' || !invoice.id || invoice.livemode !== scope.livemode ||
@@ -54,19 +75,25 @@ export async function resolveRenewalAccess(
   subscription: Stripe.Subscription, previousState: string,
   clock: () => number = () => Date.now() / 1000,
 ): Promise<RenewalAccessDecision> {
-  const now = clock();
-  if (!Number.isFinite(now) || now < 0) throw new Error('Invalid reconciliation clock');
+  const wall = clock();
+  if (!Number.isFinite(wall) || wall < 0) throw new Error('Invalid reconciliation clock');
+  let reads = 0;
+  const budget = () => { if (++reads > 12) throw new Error('Paid-period evidence read budget exceeded'); };
+  const frozen = await verifiedTestClockTime(subscription, budget);
+  const now = () => frozen ?? clock();
+  const at = now();
+  if (!Number.isFinite(at) || at < 0) throw new Error('Invalid reconciliation clock');
   if (subscription.schedule || subscription.pause_collection || subscription.pending_update) {
     throw new Error('Scheduled, paused-collection or pending-change subscriptions require review');
   }
   if (subscription.status === 'trialing' && previousState !== 'ended') {
     const end = subscription.trial_end;
-    return typeof end === 'number' && Number.isSafeInteger(end) && end > now
+    return typeof end === 'number' && Number.isSafeInteger(end) && end > at
       ? { state: 'active', paidThrough: new Date(end * 1000).toISOString() }
       : { state: 'canceled', paidThrough: null };
   }
   if (previousState === 'ended' || !['active', 'past_due'].includes(subscription.status)) {
-    return { state: subscriptionAccessState(subscription, previousState, now), paidThrough: null };
+    return { state: subscriptionAccessState(subscription, previousState, at), paidThrough: null };
   }
   const items = page(subscription.items);
   const item = items.data[0], price = object(item?.price);
@@ -78,14 +105,12 @@ export async function resolveRenewalAccess(
   }
   const scope: Scope = { subscription: subscription.id, customer, livemode: subscription.livemode,
     item: item.id, price: priceId, currency: price.currency };
-  let reads = 0;
-  const budget = () => { if (++reads > 12) throw new Error('Paid-period evidence read budget exceeded'); };
 
   async function covers(invoice: JsonObject): Promise<number | null> {
     checkInvoiceIdentity(invoice, scope);
     if (invoice.status !== 'paid' || invoice.amount_remaining !== 0) return null;
     const paidAt = object(invoice.status_transitions)?.paid_at;
-    if (!epoch(paidAt) || paidAt > clock()) throw new Error('Paid invoice has invalid settlement timestamp');
+    if (!epoch(paidAt) || paidAt > now()) throw new Error('Paid invoice has invalid settlement timestamp');
     // Credited/refunded purchase policies are separate; do not infer coverage
     // from an adjusted invoice. Charge-level refunds/disputes still need review.
     if (typeof invoice.post_payment_credit_notes_amount !== 'number' || invoice.post_payment_credit_notes_amount !== 0) return null;
@@ -109,7 +134,7 @@ export async function resolveRenewalAccess(
     for (const line of lines) {
       if (line.invoice != null && stripeReferenceId(line.invoice) !== invoice.id) throw new Error('Invoice line ownership mismatch');
     }
-    const matching = lines.find(line => lineCovers(line, scope, clock()));
+    const matching = lines.find(line => lineCovers(line, scope, now()));
     const end = object(matching?.period)?.end;
     return epoch(end) ? end : null;
   }
