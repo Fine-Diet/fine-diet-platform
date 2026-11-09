@@ -7,18 +7,18 @@
  * Access model:
  *   - Reads are scoped by person_id. Callers must pre-resolve the
  *     person for the signed-in user (the journal helpers already do).
- *   - Writes additionally verify that the person has access to the
- *     program that owns the item (entitlement OR any existing
- *     `program_assignments` row for that slug). This mirrors Packet 11
- *     access semantics so progress can't be fabricated for programs
- *     the user never acquired.
+ *   - Writes additionally verify current curriculum access (current
+ *     program entitlement, active in-window independent assignment, or a
+ *     purchase assignment correlated to a current Stripe entitlement).
+ *     A stale purchase assignment cannot write progress or receive the
+ *     published content summary.
  *
  * Progress stays separate from `program_plan_guidance` and plan
  * runtime: no call from here touches guidance or assignments.
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { listAssignments } from '@/lib/plans/programAssignmentServerService';
+import { personHasCurrentProgramCurriculumAccess } from './programCurriculumAccess';
 import type {
   PublishedProgram,
   PublishedContentItem,
@@ -76,35 +76,7 @@ async function hasProgramAccess(
   personId: string,
   programSlug: string,
 ): Promise<boolean> {
-  const slug = programSlug.trim().toLowerCase();
-  if (!slug) return false;
-
-  // Entitlement check: person_entitlements.is_active with matching key.
-  const nowIso = new Date().toISOString();
-  const entitlementKey = `program:${slug}`;
-  const { data: entRows, error: entErr } = await supabaseAdmin
-    .from('person_entitlements')
-    .select('id')
-    .eq('person_id', personId)
-    .eq('entitlement_key', entitlementKey)
-    .eq('is_active', true)
-    .lte('starts_at', nowIso)
-    .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
-    .limit(1);
-  if (entErr) {
-    console.warn('[progress] hasProgramAccess entitlements warn:', entErr.message);
-  } else if ((entRows ?? []).length > 0) {
-    return true;
-  }
-
-  // Assignment check: any program_assignments row is enough (assigned_only
-  // access state in Packet 11 still counts as "user has this program").
-  const { rows } = await listAssignments({
-    personId,
-    programSlug: slug,
-    limit: 1,
-  });
-  return rows.length > 0;
+  return personHasCurrentProgramCurriculumAccess(personId, programSlug);
 }
 
 /**

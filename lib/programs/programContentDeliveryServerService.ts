@@ -3,11 +3,10 @@
  *
  * User-facing read path over programs / program_modules /
  * program_content_items. Only published rows are returned, and only
- * when the slug has a matching managed program. Callers pair this with
- * the Packet 11 access check (entitled OR assigned) before delivering.
- *
- * Returns `null` when no managed content exists for the slug, so the
- * catalogue layer can fall back to the in-code stub.
+ * when the slug has a matching managed program. Callers must apply
+ * current curriculum access before using service_role. This function
+ * does not authorize. It returns null when no published managed program
+ * exists so drafts never leak.
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';

@@ -204,7 +204,11 @@ async function handleCheckoutCompleted(
       ? session.payment_intent
       : session.payment_intent?.id ?? null;
 
-  // The source_ref for entitlements: subscription ID if recurring, else payment intent
+  // One shared source_ref is stored on person_entitlements and the
+  // purchase program_assignments row. Curriculum authorization compares
+  // those strings exactly: subscription id, otherwise payment intent id,
+  // otherwise this checkout session id. A session id is not a substitute
+  // for a subscription id.
   const sourceRef = subscriptionId || paymentIntentId || session.id;
 
   // Upsert stripe_offer_instances -> active. Backfill price_option_key

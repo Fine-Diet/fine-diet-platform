@@ -2,9 +2,9 @@
  * GET /api/journal/programs/[slug]/progress
  *
  * Returns the Packet 13 progress + resume summary for the signed-in
- * user and the given program slug. Returns 404 when the user doesn't
- * have the program (entitled or assigned) so we don't leak catalogue
- * metadata to unauthorized users.
+ * user and the given program slug. Returns 404 when current curriculum
+ * access is absent so a stale purchase assignment cannot load the
+ * published content summary.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
