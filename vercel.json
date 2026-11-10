@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/reconcile-entitlements",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/process-nds-queue",
       "schedule": "* * * * *"
     }
@@ -19,7 +23,9 @@
       "codex/baseline-day-circle-alignment": false,
       "codex/final-baseline-day-circle-corrections": false,
       "codex/food-log-nutrition-integration-2026-10-24": false,
-      "codex/program-content-entitlement-rls-20261109": false
+      "codex/payments-reconstruction-20261106": false,
+      "codex/program-content-entitlement-rls-20261109": false,
+      "codex/payments-release-integration-20261109": false
     }
   }
 }

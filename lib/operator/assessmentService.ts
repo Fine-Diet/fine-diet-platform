@@ -12,6 +12,7 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { validateQuestionSet, hashQuestionSetJson } from '@/lib/questionSet/validateQuestionSet';
 import { validateResultsPack, hashPackJson } from '@/lib/resultsPack/validateResultsPack';
 import questionsV2Template from '@/content/assessments/gut-check/questions_v2.json';
+import { getSiteOriginOrDefault } from '@/lib/siteOrigin';
 
 // ============================================================================
 // Types
@@ -585,7 +586,7 @@ export function buildReviewLinks(
   questionSetId: string,
   packs: { level1: string; level2: string; level3: string; level4: string }
 ): OperatorAssessmentCreateResult['reviewLinks'] {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://myfinediet.com';
+  const base = getSiteOriginOrDefault('https://myfinediet.com');
   return {
     questionSet: `${base}/admin/question-sets/${questionSetId}`,
     resultsPacks: {

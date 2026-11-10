@@ -1,0 +1,102 @@
+name: Stripe pre-live source and isolated SQL validation
+on:
+  push:
+    branches:
+      - codex/stripe-webhook-reliability-prelive-20261101
+      - codex/payments-release-integration-20261109
+    paths:
+      - '.github/workflows/stripe-prelive-validation.yml'
+      - 'lib/stripe/**'
+      - 'pages/api/webhooks/**'
+      - 'pages/api/billing/**'
+      - 'pages/api/checkout/**'
+      - 'scripts/sql/stripe*Prelive.sql'
+      - 'scripts/sql/tests/stripePrelive*'
+      - 'scripts/payments/testStripe*.cjs'
+      - 'scripts/payments/qaSchemaExportGuard.cjs'
+      - 'scripts/payments/testQaSchemaExportGuard.cjs'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-jest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Guard schema export against credential leaks, wrong accounts, and row-data dumps
+        run: node --test scripts/payments/testQaSchemaExportGuard.cjs
+      - name: Run Stripe unit, webhook, billing portal, and checkout contract tests
+        run: ./node_modules/.bin/jest --runInBand lib/stripe/__tests__ pages/api/webhooks/__tests__ pages/api/billing/__tests__ pages/api/checkout/__tests__
+
+  isolated-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: isolated_fixture_only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: isolated_fixture_only
+      PGDATABASE: postgres
+      FD_STRIPE_LOCAL_DB_TEST: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Initialize disposable fixtures
+        run: |
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveFixture.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveAtomicFixture.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveHttpFixture.sql
+      - name: Install proposed isolated migrations twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
+          # Disposable fixture only. This backfill is not part of the production apply.
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsLegacySandboxBackfill.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeAtomicFulfillmentPrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeEntitlementExpiryPrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsPrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeCustomerAccountsLegacySandboxBackfill.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeWebhookProcessingLeasePrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeAtomicFulfillmentPrelive.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/sql/stripeEntitlementExpiryPrelive.sql
+      - name: Assert isolation, RLS, identity uniqueness, lease schema
+        run: psql -v ON_ERROR_STOP=1 -f scripts/sql/tests/stripePreliveVerify.sql
+      - name: Exercise actual event store against concurrent PostgreSQL connections
+        run: node scripts/payments/testStripeLeaseConcurrency.cjs
+      - name: Exercise atomic business fulfillment, rollback, lease expiry and access controls
+        run: node scripts/payments/testStripeAtomicFulfillment.cjs
+      - name: Verify actual worker death rolls back business fulfillment
+        run: node scripts/payments/testStripeAtomicCrash.cjs
+      - name: Exercise application, SDK signatures and PostgREST over disposable HTTP
+        run: node scripts/payments/testStripeHttpBoundary.cjs

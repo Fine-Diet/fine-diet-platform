@@ -38,6 +38,10 @@ import detailHandler from '../[slug]';
 import deliveryHandler from '../[slug]/delivery-modules';
 import progressHandler from '../[slug]/progress';
 import libraryHandler from '../library';
+import {
+  getProgramRuntimeSummaryForPerson,
+  listEnrollmentsForPerson,
+} from '@/lib/programs/programRuntimeServerService';
 
 function response() {
   const res: {
@@ -84,6 +88,7 @@ describe('journal program routes using service-role curriculum', () => {
   });
 
   it('does not call the service-role delivery query after a stale purchase denial', async () => {
+    (listEnrollmentsForPerson as jest.Mock).mockResolvedValue([]);
     detailMock.mockResolvedValue(null);
     const res = response();
 
@@ -93,7 +98,37 @@ describe('journal program routes using service-role curriculum', () => {
     );
 
     expect(res.statusCode).toBe(404);
+    expect(detailMock).toHaveBeenCalledWith('person-b', 'guided');
     expect(deliveryMock).not.toHaveBeenCalled();
+    expect(adminFromMock).not.toHaveBeenCalled();
+  });
+
+  it('does not deliver modules when an open enrollment has lost paid access', async () => {
+    (listEnrollmentsForPerson as jest.Mock).mockResolvedValue([
+      {
+        id: 'enr-1',
+        program_slug: 'guided',
+        status: 'active',
+        updated_at: '2026-11-01T00:00:00.000Z',
+      },
+    ]);
+    (getProgramRuntimeSummaryForPerson as jest.Mock).mockResolvedValue({
+      enrollment: { id: 'enr-1', program_slug: 'guided', status: 'active' },
+      resolved_status: 'cancelled',
+      version: { id: 'ver-1', status: 'published' },
+      current_day: 3,
+      program: { slug: 'guided' },
+    });
+    const res = response();
+
+    await deliveryHandler(
+      { method: 'GET', query: { slug: 'guided' } } as never,
+      res as never,
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(deliveryMock).not.toHaveBeenCalled();
+    expect(detailMock).not.toHaveBeenCalled();
     expect(adminFromMock).not.toHaveBeenCalled();
   });
 

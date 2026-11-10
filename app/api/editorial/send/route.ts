@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { buildUnsubscribeUrl } from '@/lib/emailLinks';
 import { renderCampaignEmail } from '@/lib/emailTemplates';
+import { getSiteOriginOrDefault } from '@/lib/siteOrigin';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -173,7 +174,7 @@ export async function POST(request: NextRequest) {
   }
 
   const campaign = parsed.data;
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://myfinediet.com';
+  const siteUrl = getSiteOriginOrDefault('https://myfinediet.com');
 
   // Fetch audience from view (all 4 eligibility conditions enforced by view)
   const { data: audience, error: audienceError } = await supabaseAdmin

@@ -6,6 +6,7 @@
  */
 
 import Stripe from 'stripe';
+import { getAbsoluteSiteUrl } from '@/lib/siteOrigin';
 
 if (typeof window !== 'undefined') {
   throw new Error(
@@ -23,13 +24,10 @@ export const stripe = new Stripe(secretKey, {
 });
 
 /**
- * Build an absolute URL from a relative path using NEXT_PUBLIC_SITE_URL.
- * Falls back to localhost in development.
+ * Build an absolute URL from a relative path. The exact QA Preview resolves
+ * its generated branch origin from Vercel system variables and fails closed
+ * rather than falling back to Production or localhost.
  */
 export function absoluteUrl(path: string): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.SITE_URL ||
-    'http://localhost:3000';
-  return `${base.replace(/\/$/, '')}${path}`;
+  return getAbsoluteSiteUrl(path, { includeServerSiteUrl: true });
 }

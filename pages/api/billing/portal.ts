@@ -12,6 +12,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { stripe, absoluteUrl } from '@/lib/stripe/stripeServer';
+import { findStripeCustomerForPerson } from '@/lib/stripe/stripeCustomerService';
 
 export default async function handler(
   req: NextApiRequest,
@@ -37,20 +38,22 @@ export default async function handler(
     return res.status(400).json({ error: 'No person record linked to this account' });
   }
 
-  // Look up Stripe customer
-  const { data: customerRow } = await supabaseAdmin
-    .from('stripe_customers')
-    .select('stripe_customer_id')
-    .eq('person_id', personRow.id)
-    .maybeSingle();
+  // Never use a sandbox customer ID in the live Billing Portal.
+  let customerId: string | null;
+  try {
+    customerId = await findStripeCustomerForPerson(personRow.id);
+  } catch (error) {
+    console.error('[billing/portal] Stripe customer identity lookup failed:', error);
+    return res.status(503).json({ error: 'Billing account temporarily unavailable' });
+  }
 
-  if (!customerRow?.stripe_customer_id) {
+  if (!customerId) {
     return res.status(400).json({ error: 'No billing account found. Make a purchase first.' });
   }
 
   try {
     const portalSession = await stripe.billingPortal.sessions.create({
-      customer: customerRow.stripe_customer_id,
+      customer: customerId,
       return_url: absoluteUrl('/account'),
     });
 

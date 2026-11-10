@@ -14,6 +14,7 @@ import { requireRoleFromApi } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import type { EmailCampaign, CampaignContentJson } from '@/lib/emailCampaignTypes';
 import { renderCampaignEmail } from '@/lib/emailTemplates';
+import { getSiteOriginOrDefault } from '@/lib/siteOrigin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -51,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Campaign subject is required before sending a proof.' });
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://myfinediet.com';
+  const siteUrl = getSiteOriginOrDefault('https://myfinediet.com');
   const unsubscribeUrl = `${siteUrl}/unsubscribe?preview=true`;
 
   const { html, text } = renderCampaignEmail(c.template_key, {
