@@ -2,7 +2,7 @@
 import { pathToFileURL } from 'node:url';
 
 export const QA_PROJECT_ID = 'prj_dhm3g8xGGRQaPbpcgQmQwnSe7qU2';
-export const QA_BRANCH = 'codex/payments-reconstruction-20261106';
+export const QA_BRANCH = 'codex/payments-release-integration-20261109';
 export const QA_SUPABASE_URL = 'https://ikvkqpbwlpevqlshdkdz.supabase.co';
 export const QA_STRIPE_ACCOUNT_ID = 'acct_1UXS1WPXTq5u2TLw';
 // Independently verified TEST subscription owned by QA_STRIPE_ACCOUNT_ID.
