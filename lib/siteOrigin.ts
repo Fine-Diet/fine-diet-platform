@@ -8,7 +8,7 @@
  */
 
 export const PAYMENTS_QA_PROJECT_ID = 'prj_dhm3g8xGGRQaPbpcgQmQwnSe7qU2';
-export const PAYMENTS_QA_BRANCH = 'codex/payments-reconstruction-20261106';
+export const PAYMENTS_QA_BRANCH = 'codex/payments-release-integration-20261109';
 
 const PAYMENTS_QA_BRANCH_HOST_PREFIX = 'fine-diet-payments-qa-target-git-';
 

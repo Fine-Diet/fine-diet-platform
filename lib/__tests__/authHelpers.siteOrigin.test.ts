@@ -11,8 +11,14 @@ jest.mock('@/lib/supabaseBrowser', () => ({
 import { resetPasswordForEmail, signInWithOAuth, signUp } from '@/lib/authHelpers';
 import { getSiteUrl, PAYMENTS_QA_BRANCH, PAYMENTS_QA_PROJECT_ID } from '@/lib/siteOrigin';
 
+// Vercel supplies the branch URL and Git ref for the same deployment. These
+// hostnames are synthetic fixtures. The resolver independently validates
+// project, Preview, branch-ref identity, URL format, and explicit-origin
+// conflicts.
 const branchUrl =
-  'fine-diet-payments-qa-target-git-codex-payments-reconstruct-fine-diet.vercel.app';
+  'fine-diet-payments-qa-target-git-synthetic-payments-integration-fine-diet.vercel.app';
+const retiredBranchUrl =
+  'fine-diet-payments-qa-target-git-synthetic-payments-reconstruction-fine-diet.vercel.app';
 const origin = `https://${branchUrl}`;
 const envKeys = [
   'NEXT_PUBLIC_SITE_URL',
@@ -78,6 +84,24 @@ describe('Supabase auth return URLs in the QA Preview', () => {
     await resetPasswordForEmail('qa@example.test');
     expect(mockAuth.resetPasswordForEmail.mock.calls[0][1].redirectTo)
       .toBe(`${origin}/auth/reset-password`);
+  });
+
+  it('denies the retired reconstruction branch before issuing an auth redirect', async () => {
+    const retiredReconstructionBranch = 'codex/payments-reconstruction-20261106';
+    // The retired ref and hostname represent one deployment. Denial is the
+    // branch-ref identity check.
+    process.env.VERCEL_GIT_COMMIT_REF = retiredReconstructionBranch;
+    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_REF = retiredReconstructionBranch;
+    process.env.VERCEL_BRANCH_URL = retiredBranchUrl;
+    process.env.NEXT_PUBLIC_VERCEL_BRANCH_URL = retiredBranchUrl;
+
+    await expect(signUp('qa@example.test', 'synthetic-password')).rejects.toThrow(
+      'Site origin resolution failed [SERVER_CONTEXT_MISMATCH]',
+    );
+    expect(mockAuth.signUp).not.toHaveBeenCalled();
+    expect(() => getSiteUrl('/checkout/success', { includeServerSiteUrl: true })).toThrow(
+      'Site origin resolution failed [SERVER_CONTEXT_MISMATCH]',
+    );
   });
 
   it('uses the generated origin for OAuth callback', async () => {

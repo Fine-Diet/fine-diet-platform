@@ -8,8 +8,14 @@ import {
   type SiteOriginContext,
 } from '@/lib/siteOrigin';
 
+// Vercel supplies the branch URL and Git ref for the same deployment. These
+// hostnames are synthetic fixtures. The resolver independently validates
+// project, Preview, branch-ref identity, URL format, and explicit-origin
+// conflicts.
 const branchUrl =
-  'fine-diet-payments-qa-target-git-codex-payments-reconstruct-fine-diet.vercel.app';
+  'fine-diet-payments-qa-target-git-synthetic-payments-integration-fine-diet.vercel.app';
+const retiredBranchUrl =
+  'fine-diet-payments-qa-target-git-synthetic-payments-reconstruction-fine-diet.vercel.app';
 const origin = `https://${branchUrl}`;
 
 function serverQaContext(overrides: Partial<SiteOriginContext> = {}): SiteOriginContext {
@@ -25,6 +31,25 @@ function serverQaContext(overrides: Partial<SiteOriginContext> = {}): SiteOrigin
 describe('QA Preview origin resolver', () => {
   it('uses Vercel generated branch origin for exact project, Preview, and branch', () => {
     expect(resolveSiteOrigin(serverQaContext())).toBe(origin);
+  });
+
+  it('denies the retired reconstruction branch', () => {
+    const retiredReconstructionBranch = 'codex/payments-reconstruction-20261106';
+
+    expect(PAYMENTS_QA_BRANCH).toBe('codex/payments-release-integration-20261109');
+    // The retired ref and hostname represent one deployment. Denial is the
+    // branch-ref identity check.
+    expect(() => resolveSiteOrigin(serverQaContext({
+      vercelGitBranch: retiredReconstructionBranch,
+      vercelBranchUrl: retiredBranchUrl,
+    }))).toThrow('Site origin resolution failed [SERVER_CONTEXT_MISMATCH]');
+    expect(() => resolveSiteOrigin({
+      publicVercelProjectId: PAYMENTS_QA_PROJECT_ID,
+      publicVercelEnvironment: 'preview',
+      publicVercelGitBranch: retiredReconstructionBranch,
+      publicVercelBranchUrl: retiredBranchUrl,
+      explicitSiteUrl: 'https://myfinediet.com',
+    })).toThrow('Site origin resolution failed [PUBLIC_CONTEXT_MISMATCH]');
   });
 
   it('accepts an explicit matching origin after URL normalization', () => {
