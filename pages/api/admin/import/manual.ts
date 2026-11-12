@@ -24,6 +24,7 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getSiteOriginOrDefault } from '@/lib/siteOrigin';
 import { requireRoleFromApi } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { emitN8nWebhook } from '@/lib/peopleService';
@@ -274,7 +275,7 @@ export default async function handler(
   let nurtureTriggered = false;
 
   if (input.triggerNurtureNow && !alreadyGloballyUnsubscribed) {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://myfinediet.com';
+    const siteUrl = getSiteOriginOrDefault('https://myfinediet.com');
     const unsubscribeUrl = buildUnsubscribeUrl(siteUrl, personId, email);
 
     // Fetch latest person data for the webhook payload

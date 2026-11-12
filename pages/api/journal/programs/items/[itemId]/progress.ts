@@ -10,8 +10,10 @@
  * Returns the updated row plus a fresh program progress summary so the
  * client can re-render CTA + completion counts in one round trip.
  *
- * 403 is returned when the item belongs to a program the user has no
- * access to (no active `program:<slug>` entitlement and no assignment).
+ * 403 is returned when current curriculum access is absent. A stale
+ * purchase assignment does not authorize the write or the returned
+ * content summary. The item lookup used to resolve the program slug
+ * selects id, module id, and slug only.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';

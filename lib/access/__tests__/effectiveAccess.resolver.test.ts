@@ -66,6 +66,16 @@ describe('resolveJournalGrant', () => {
     });
   });
 
+  it('requires a bounded paid-through cutoff for recurring Stripe grants', async () => {
+    const chain = tableChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+    await resolveJournalGrant('person-1');
+    const predicate = String(chain.or.mock.calls[0][0]);
+    expect(predicate).toContain('source.eq.stripe,stripe_is_recurring.eq.true,ends_at.gt.');
+    expect(predicate).toContain('source.eq.stripe,stripe_is_recurring.eq.false,ends_at.is.null');
+    expect(predicate).not.toContain('stripe_is_recurring.eq.true,ends_at.is.null');
+  });
+
   it('falls back to legacy subscription when no entitlement row exists', async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'person_entitlements') {

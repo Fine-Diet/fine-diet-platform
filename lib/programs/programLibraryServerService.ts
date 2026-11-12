@@ -15,6 +15,10 @@
  *     (so a scheduled or completed program is still visible in the
  *     library, matching Packet 11 §3a)
  *
+ * Published progress and managed curriculum are attached only when the
+ * shared current-access rule allows it. A stale Stripe purchase
+ * assignment can remain on the card, but it does not load content items.
+ *
  * Packet 10 logic is reused for impact bullets and slug→title rendering.
  * This is read-only derived state; nothing here mutates a table.
  */
@@ -55,6 +59,12 @@ import {
   computeProgramAvailabilityForPerson,
   type ProgramAvailabilityEntry,
 } from './programAvailabilityServerService';
+import {
+  hasCurrentProgramCurriculumAccess,
+  personHasCurrentProgramCurriculumAccess,
+  toCurriculumAssignmentRef,
+  type CurriculumEntitlementRef,
+} from './programCurriculumAccess';
 
 // ============================================================================
 // Public shapes
@@ -218,29 +228,47 @@ function headlineFromBullets(
 }
 
 /**
- * Read active `program:<slug>` entitlements as a set of slugs. Uses the
- * same "is_active + window" gating as hasEntitlement().
+ * Read active in-window `program:<slug>` entitlements. Query errors fail
+ * closed to an empty list; independent assignments are evaluated separately.
  */
-async function listEntitledProgramSlugs(personId: string): Promise<Set<string>> {
-  const nowIso = new Date().toISOString();
+async function listCurrentProgramEntitlements(
+  personId: string,
+  now: Date,
+): Promise<CurriculumEntitlementRef[]> {
+  const nowIso = now.toISOString();
   const { data, error } = await supabaseAdmin
     .from('person_entitlements')
-    .select('entitlement_key')
+    .select('entitlement_key, source, source_ref, is_active, starts_at, ends_at')
     .eq('person_id', personId)
     .eq('is_active', true)
     .lte('starts_at', nowIso)
     .or(`ends_at.is.null,ends_at.gt.${nowIso}`);
   if (error) {
     console.warn(
-      '[programs/library] listEntitledProgramSlugs error:',
+      '[programs/library] listCurrentProgramEntitlements error:',
       error.message,
     );
-    return new Set();
+    return [];
   }
+  return ((data ?? []) as CurriculumEntitlementRef[]).map((row) => ({
+    entitlement_key: row.entitlement_key ?? '',
+    source: row.source ?? null,
+    source_ref: row.source_ref ?? null,
+    is_active: row.is_active === true,
+    starts_at: row.starts_at,
+    ends_at: row.ends_at ?? null,
+  }));
+}
+
+function entitledProgramSlugs(
+  entitlements: readonly CurriculumEntitlementRef[],
+): Set<string> {
   const slugs = new Set<string>();
-  for (const row of (data ?? []) as { entitlement_key: string }[]) {
-    const m = (row.entitlement_key ?? '').match(/^program:([a-z0-9][a-z0-9-]*)$/i);
-    if (m) slugs.add(m[1].toLowerCase());
+  for (const row of entitlements) {
+    const match = (row.entitlement_key ?? '').match(
+      /^program:([a-z0-9][a-z0-9-]*)$/i,
+    );
+    if (match) slugs.add(match[1].toLowerCase());
   }
   return slugs;
 }
@@ -269,13 +297,14 @@ export async function listLibraryForPerson(
 ): Promise<ProgramLibrary> {
   const now = new Date();
 
-  const [entitledSlugs, assignmentList, resolution, availability] =
+  const [entitlements, assignmentList, resolution, availability] =
     await Promise.all([
-      listEntitledProgramSlugs(personId),
+      listCurrentProgramEntitlements(personId, now),
       listAssignments({ personId, limit: 200 }),
       resolveInheritedGuidanceForPerson(personId),
       computeProgramAvailabilityForPerson(personId),
     ]);
+  const entitledSlugs = entitledProgramSlugs(entitlements);
 
   const bySlug = groupAssignmentsBySlug(assignmentList.rows);
 
@@ -295,9 +324,17 @@ export async function listLibraryForPerson(
   }
 
   const slugList = Array.from(slugSet);
+  const curriculumSlugs = slugList.filter((slug) =>
+    hasCurrentProgramCurriculumAccess({
+      programSlug: slug,
+      entitlements,
+      assignments: (bySlug.get(slug) ?? []).map(toCurriculumAssignmentRef),
+      now,
+    }),
+  );
   const [catalogueEntries, progressHeadlines] = await Promise.all([
     resolveProgramCatalogueEntries(slugList),
-    listProgressHeadlinesForPerson(personId, slugList),
+    listProgressHeadlinesForPerson(personId, curriculumSlugs),
   ]);
   const catalogueBySlug = new Map(
     catalogueEntries.map((e) => [e.slug.toLowerCase(), e]),
@@ -370,10 +407,11 @@ export async function listLibraryForPerson(
 // ============================================================================
 
 /**
- * Detailed view for a single program. Returns null when the user has no
- * access to that slug (no entitlement AND no assignment). Callers
- * should 404 in that case so we don't leak catalogue metadata to
- * unauthorized users.
+ * Detailed view for a single program. Returns null unless the person has
+ * current curriculum access: a current program entitlement, an active
+ * in-window independent assignment, or a purchase assignment correlated
+ * to a current Stripe entitlement. Callers 404 so service-role curriculum
+ * queries do not run for a stale purchase assignment.
  */
 export async function getLibraryDetailForPerson(
   personId: string,
@@ -383,11 +421,19 @@ export async function getLibraryDetailForPerson(
   const trimmed = slug.trim().toLowerCase();
   if (!trimmed) return null;
 
-  const [entitledSlugs, assignmentList, resolution] = await Promise.all([
-    listEntitledProgramSlugs(personId),
+  const allowed = await personHasCurrentProgramCurriculumAccess(
+    personId,
+    trimmed,
+    now,
+  );
+  if (!allowed) return null;
+
+  const [entitlements, assignmentList, resolution] = await Promise.all([
+    listCurrentProgramEntitlements(personId, now),
     listAssignments({ personId, programSlug: trimmed, limit: 200 }),
     resolveInheritedGuidanceForPerson(personId),
   ]);
+  const entitledSlugs = entitledProgramSlugs(entitlements);
 
   const hasEntitlement = entitledSlugs.has(trimmed);
   const assignments = assignmentList.rows;

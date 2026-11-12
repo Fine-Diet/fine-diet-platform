@@ -1,9 +1,9 @@
 /**
  * GET /api/journal/programs/[slug]
  *
- * User-facing detail for a single program the signed-in user has access
- * to (either entitled or assigned). Returns 404 when neither applies so
- * we don't leak catalogue metadata to unauthorized users.
+ * User-facing detail for a single program the signed-in user can read
+ * now. Returns 404 when current curriculum access is absent so a stale
+ * purchase assignment cannot load service-role content.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';

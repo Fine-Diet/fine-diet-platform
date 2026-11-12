@@ -76,4 +76,22 @@ describe('/auth/callback (PKCE) is unchanged', () => {
     const res = await GET(req('/auth/callback?code=abc'));
     expect(res.headers.get('location')).toBe(`${ORIGIN}/?auth_error=exchange_failed`);
   });
+
+  it('links the verified user on a QA origin and does not call the public link route', async () => {
+    const qaOrigin =
+      'https://fine-diet-payments-qa-target-git-codex-payments-reconstruct-fine-diet.vercel.app';
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 500 }));
+    const res = await GET(new NextRequest(`${qaOrigin}/auth/callback?code=abc&next=/app`));
+    expect(mockLinkPerson).toHaveBeenCalledWith({ id: 'auth-1', email: 'u@example.com' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(res.headers.get('location')).toBe(`${qaOrigin}/app`);
+  });
+
+  it('fails closed on a QA origin when verified linking fails', async () => {
+    const qaOrigin =
+      'https://fine-diet-payments-qa-target-git-codex-payments-reconstruct-fine-diet.vercel.app';
+    mockLinkPerson.mockRejectedValueOnce(new Error('identity conflict'));
+    const res = await GET(new NextRequest(`${qaOrigin}/auth/callback?code=abc&next=/app`));
+    expect(res.headers.get('location')).toBe(`${qaOrigin}/?auth_error=link_failed`);
+  });
 });

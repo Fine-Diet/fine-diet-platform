@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Vercel's project ID is not included in its public framework variables.
+  // Expose this non-secret build identity so browser origin resolution can
+  // bind the generated branch URL to the dedicated QA project.
+  env: {
+    NEXT_PUBLIC_VERCEL_PROJECT_ID: process.env.VERCEL_PROJECT_ID || '',
+  },
   eslint: {
     // The tracked tree had no ESLint config, so production builds did not run
     // ESLint. NDS-01C added .eslintrc.json so `next lint` is executable. Keep

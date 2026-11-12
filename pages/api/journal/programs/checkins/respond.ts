@@ -128,10 +128,10 @@ export default async function handler(
     const status =
       code === 'PROGRAM_ENROLLMENT_NOT_FOUND'
         ? 404
-        : code === 'PROGRAM_CHECKIN_TEMPLATE_DENIED'
+        : code === 'PROGRAM_ACCESS_DENIED'
+          || code === 'PROGRAM_CHECKIN_TEMPLATE_DENIED'
+          || code === 'PROGRAM_CHECKIN_NOT_AVAILABLE'
           ? 403
-          : code === 'PROGRAM_CHECKIN_NOT_AVAILABLE'
-            ? 403
           : 500;
     console.error('[journal/programs/checkins/respond] error:', err);
     return res.status(status).json({

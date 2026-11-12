@@ -21,6 +21,11 @@ import {
 } from './enrollmentAuthorization';
 import { listAssignments } from '@/lib/plans/programAssignmentServerService';
 import {
+  memberResolvedProgramStatus,
+  unpaidOpenEnrollmentBlocksAccess,
+} from './programPaidAccess';
+import { personHasCurrentProgramAccess } from './programPaidAccessServer';
+import {
   BASELINE_RECOMMENDATION_PROGRAM_DAY,
   BASELINE_RECOMMENDATION_TYPE,
   evaluateBaselineRecommendation,
@@ -1137,6 +1142,23 @@ export async function getProgramRuntimeSummary(
   };
 }
 
+async function restrictUnpaidOpenSummary(
+  personId: string,
+  summary: ProgramRuntimeSummary | null,
+): Promise<ProgramRuntimeSummary | null> {
+  if (!summary) return null;
+  const open = summary.resolved_status === 'pre_start'
+    || summary.resolved_status === 'active'
+    || summary.resolved_status === 'paused';
+  if (!open) return summary;
+  const visible = memberResolvedProgramStatus(
+    summary.resolved_status,
+    await personHasCurrentProgramAccess(personId, summary.enrollment.program_slug),
+  );
+  if (visible === summary.resolved_status) return summary;
+  return { ...summary, resolved_status: visible, next_checkin_template: null };
+}
+
 export async function getProgramRuntimeSummaryForPerson(
   personId: string,
   enrollmentId: string,
@@ -1151,7 +1173,7 @@ export async function getProgramRuntimeSummaryForPerson(
     throw new Error(`runtime summary ownership lookup failed: ${error.message}`);
   }
   if (!data) return null;
-  return getProgramRuntimeSummary(enrollmentId);
+  return restrictUnpaidOpenSummary(personId, await getProgramRuntimeSummary(enrollmentId));
 }
 
 export async function listProgramRuntimeSummariesForPerson(
@@ -1159,7 +1181,10 @@ export async function listProgramRuntimeSummariesForPerson(
 ): Promise<ProgramRuntimeSummaryList> {
   const enrollments = await listEnrollmentsForPerson(personId);
   const summaries = await Promise.all(
-    enrollments.map((enrollment) => getProgramRuntimeSummary(enrollment.id)),
+    enrollments.map(async (enrollment) => restrictUnpaidOpenSummary(
+      personId,
+      await getProgramRuntimeSummary(enrollment.id),
+    )),
   );
   return {
     person_id: personId,
@@ -1222,6 +1247,14 @@ export async function respondToProgramCheckin(
     now,
     version.duration_days,
   );
+  if (unpaidOpenEnrollmentBlocksAccess(
+    resolvedStatus,
+    await personHasCurrentProgramAccess(input.personId, enrollment.program_slug),
+  )) {
+    const err = new Error('Program access is not active.');
+    (err as Error & { code?: string }).code = 'PROGRAM_ACCESS_DENIED';
+    throw err;
+  }
   if (resolvedStatus !== 'active') {
     const err = new Error('Check-ins are unavailable in this enrollment state.');
     (err as Error & { code?: string }).code = 'PROGRAM_CHECKIN_NOT_AVAILABLE';

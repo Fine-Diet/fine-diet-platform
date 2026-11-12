@@ -54,14 +54,10 @@ export default async function handler(
   if (!personId) return;
 
   try {
-    const detail = await getLibraryDetailForPerson(personId, slug);
-    if (!detail) {
-      return res.status(404).json({ error: 'Program not found for user' });
-    }
-
     // A client-supplied version is only a consistency hint. The server binds
     // delivery to the signed-in person's enrollment and never selects a
-    // different version from request data.
+    // different version from request data. Paid access is resolved before the
+    // library read so an open enrollment cannot expose curriculum.
     const enrollments = await listEnrollmentsForPerson(personId);
     const matching = enrollments
       .filter((enrollment) => enrollment.program_slug === slug.toLowerCase())
@@ -74,7 +70,7 @@ export default async function handler(
     let versionId: string;
     let maximumAccessibleDay = 0;
     let authorizedStatus: ProgramEnrollmentStatus = 'pre_start';
-    let trustedProgramSlug = detail.slug;
+    let trustedProgramSlug = slug.toLowerCase();
     if (enrollment) {
       const summary = await getProgramRuntimeSummaryForPerson(
         personId,
@@ -96,7 +92,16 @@ export default async function handler(
         return res.status(403).json({ error: 'Enrolled program version unavailable' });
       }
       if (summary.resolved_status === 'cancelled') {
-        return res.status(403).json({ error: 'Program access is cancelled' });
+        const storedOpen = summary.enrollment.status === 'pre_start'
+          || summary.enrollment.status === 'active'
+          || summary.enrollment.status === 'paused';
+        return res.status(403).json({
+          error: storedOpen ? 'Program access is not active' : 'Program access is cancelled',
+        });
+      }
+      const detail = await getLibraryDetailForPerson(personId, slug);
+      if (!detail) {
+        return res.status(404).json({ error: 'Program not found for user' });
       }
       versionId = summary.version.id;
       authorizedStatus = summary.resolved_status;
@@ -106,6 +111,11 @@ export default async function handler(
         summary.current_day,
       );
     } else {
+      const detail = await getLibraryDetailForPerson(personId, slug);
+      if (!detail) {
+        return res.status(404).json({ error: 'Program not found for user' });
+      }
+      trustedProgramSlug = detail.slug;
       const version = await getLatestPublishedProgramVersionForSlug(slug);
       if (!version || version.status !== 'published') {
         return res.status(404).json({ error: 'Published program version unavailable' });

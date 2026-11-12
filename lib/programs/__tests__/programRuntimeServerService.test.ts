@@ -1108,6 +1108,7 @@ describe('program runtime enrollment writes', () => {
 
   test('person-scoped summary omits the check-in prompt and keeps the submitted response', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-05-27T12:00:00.000Z'));
+    mockHasEntitlement.mockResolvedValue(true);
     const paused = baseEnrollment({
       status: 'paused',
       selected_start_date: '2026-05-20',
@@ -1164,6 +1165,29 @@ describe('program runtime enrollment writes', () => {
     expect(completed?.resolved_status).toBe('completed');
     expect(completed?.next_checkin_template).toBeNull();
     expect(completed?.latest_checkin_response?.checkin_day).toBe(7);
+  });
+
+  test('an open enrollment without current program access is not paid access', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T12:00:00.000Z'));
+    const active = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-20',
+    });
+    mockHasEntitlement.mockResolvedValue(false);
+    mockListAssignments.mockResolvedValue({ rows: [], total: 0, limit: 20, offset: 0 });
+    mockFrom
+      .mockReturnValueOnce(query({ data: { id: active.id } }))
+      .mockReturnValueOnce(query({ data: active }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: null }));
+
+    const summary = await getProgramRuntimeSummaryForPerson('person-1', active.id);
+    expect(summary?.enrollment.status).toBe('active');
+    expect(summary?.resolved_status).toBe('cancelled');
+    expect(summary?.next_checkin_template).toBeNull();
   });
 
   test('future/pre-start and in-window active enrollments are not auto-completed', async () => {
@@ -1601,6 +1625,7 @@ describe('program runtime check-in responses', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    mockHasEntitlement.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -1708,6 +1733,18 @@ describe('program runtime check-in responses', () => {
       responseStatus: 'skipped', skippedReason: 'No template available',
     })).rejects.toMatchObject({ code: 'PROGRAM_CHECKIN_TEMPLATE_DENIED' });
     expect(mockFrom).toHaveBeenCalledTimes(3);
+
+    mockHasEntitlement.mockResolvedValue(false);
+    mockListAssignments.mockResolvedValue({ rows: [], total: 0, limit: 20, offset: 0 });
+    mockFrom.mockReset();
+    mockFrom
+      .mockReturnValueOnce(query({ data: enrollment }))
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }));
+    await expect(respondToProgramCheckin({
+      personId: 'person-1', enrollmentId: enrollment.id, checkinDay: 7,
+      responseStatus: 'skipped', skippedReason: 'Payment ended',
+    })).rejects.toMatchObject({ code: 'PROGRAM_ACCESS_DENIED' });
+    expect(mockFrom).toHaveBeenCalledTimes(2);
   });
 
   test('refuses new check-in writes for paused and completed enrollments', async () => {

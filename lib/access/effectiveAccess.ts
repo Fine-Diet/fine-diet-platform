@@ -42,12 +42,12 @@ export async function resolveJournalGrant(personId: string): Promise<JournalGran
 
   const { data: ents, error: entError } = await supabaseAdmin
     .from('person_entitlements')
-    .select('id, entitlement_key')
+    .select('id, entitlement_key, source, stripe_is_recurring, ends_at')
     .eq('person_id', personId)
     .eq('entitlement_key', 'journal')
     .eq('is_active', true)
     .lte('starts_at', now)
-    .or(`ends_at.is.null,ends_at.gt.${now}`)
+    .or(`and(source.neq.stripe,ends_at.is.null),and(source.neq.stripe,ends_at.gt.${now}),and(source.eq.stripe,stripe_is_recurring.eq.false,ends_at.is.null),and(source.eq.stripe,stripe_is_recurring.eq.false,ends_at.gt.${now}),and(source.eq.stripe,stripe_is_recurring.eq.true,ends_at.gt.${now})`)
     .limit(1);
 
   if (entError) {
@@ -105,11 +105,11 @@ export async function personHasEffectiveEntitlementKeys(
   const now = new Date().toISOString();
   const { data: existingEnts, error } = await supabaseAdmin
     .from('person_entitlements')
-    .select('entitlement_key')
+    .select('entitlement_key, source, stripe_is_recurring, ends_at')
     .eq('person_id', personId)
     .eq('is_active', true)
     .lte('starts_at', now)
-    .or(`ends_at.is.null,ends_at.gt.${now}`)
+    .or(`and(source.neq.stripe,ends_at.is.null),and(source.neq.stripe,ends_at.gt.${now}),and(source.eq.stripe,stripe_is_recurring.eq.false,ends_at.is.null),and(source.eq.stripe,stripe_is_recurring.eq.false,ends_at.gt.${now}),and(source.eq.stripe,stripe_is_recurring.eq.true,ends_at.gt.${now})`)
     .in('entitlement_key', keys);
 
   if (error) {
