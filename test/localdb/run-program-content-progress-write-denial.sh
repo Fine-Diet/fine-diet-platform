@@ -4,13 +4,12 @@ set -euo pipefail
 PG_BIN="${PG_BIN:-/opt/homebrew/opt/postgresql@17/bin}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 RUN_ROOT="$(mktemp -d /private/tmp/fd-progress-write-denial.XXXXXX)"
-DATA_DIR="$RUN_ROOT/data"
-SOCKET_DIR="$RUN_ROOT/socket"
 PORT="${PG_TEST_PORT:-55447}"
-mkdir -m 700 "$SOCKET_DIR"
-
+DATA_DIR=""
 cleanup() {
-  "$PG_BIN/pg_ctl" -D "$DATA_DIR" -m immediate stop >/dev/null 2>&1 || true
+  if [[ -n "$DATA_DIR" && -d "$DATA_DIR" ]]; then
+    "$PG_BIN/pg_ctl" -D "$DATA_DIR" -m immediate stop >/dev/null 2>&1 || true
+  fi
   rm -rf "$RUN_ROOT"
 }
 trap cleanup EXIT
@@ -40,38 +39,56 @@ then
   exit 1
 fi
 
-"$PG_BIN/initdb" -D "$DATA_DIR" -U postgres --auth-local=trust --auth-host=reject -E UTF8 >/dev/null
-"$PG_BIN/pg_ctl" -D "$DATA_DIR" -l "$RUN_ROOT/postgres.log" \
-  -o "-k $SOCKET_DIR -p $PORT -c listen_addresses='' -c fsync=off -c full_page_writes=off" \
-  start >/dev/null
-
-PSQL=("$PG_BIN/psql" -X -v ON_ERROR_STOP=1 -h "$SOCKET_DIR" -p "$PORT" -U postgres -d postgres)
 SQL_FILE="$ROOT/test/localdb/sql/programContentProgressWriteDenial.sql"
 
-"${PSQL[@]}" -v migration_path="$MIGRATION" -f "$SQL_FILE"
+run_configuration() {
+  local label="$1"
+  local neg_status=0
+  DATA_DIR="$RUN_ROOT/data-$label"
+  SOCKET_DIR="$RUN_ROOT/socket-$label"
+  mkdir -m 700 "$SOCKET_DIR"
+  local -a psql=(
+    "$PG_BIN/psql" -X -v ON_ERROR_STOP=1 -h "$SOCKET_DIR" -p "$PORT" -U postgres -d postgres
+  )
 
-"${PSQL[@]}" -v negative_plant=1 -f "$SQL_FILE"
-set +e
-"${PSQL[@]}" -f "$MIGRATION" >"$RUN_ROOT/unexpected-select.log" 2>&1
-neg_status=$?
-set -e
-if [[ "$neg_status" -eq 0 ]]; then
-  printf 'unexpected permissive SELECT policy did not reject the migration\n' >&2
-  exit 1
-fi
-if ! grep -F 'progress write denial requires exactly the own-person SELECT policy' \
-  "$RUN_ROOT/unexpected-select.log" >/dev/null
-then
-  printf 'unexpected SELECT rejection had the wrong error\n' >&2
-  cat "$RUN_ROOT/unexpected-select.log" >&2
-  exit 1
-fi
-if grep -E -q '^COMMIT$' "$RUN_ROOT/unexpected-select.log"; then
-  printf 'unexpected SELECT rejection committed\n' >&2
-  cat "$RUN_ROOT/unexpected-select.log" >&2
-  exit 1
-fi
-"${PSQL[@]}" -v negative_assert=1 -f "$SQL_FILE"
-printf 'PASS: unexpected permissive SELECT policy rolled back\n'
+  "$PG_BIN/initdb" -D "$DATA_DIR" -U postgres --auth-local=trust --auth-host=reject -E UTF8 >/dev/null
+  "$PG_BIN/pg_ctl" -D "$DATA_DIR" -l "$RUN_ROOT/postgres-$label.log" \
+    -o "-k $SOCKET_DIR -p $PORT -c listen_addresses='' -c fsync=off -c full_page_writes=off" \
+    start >/dev/null
+
+  if [[ "$label" == "authenticated" ]]; then
+    "${psql[@]}" -v authenticated_select=1 -v migration_path="$MIGRATION" -f "$SQL_FILE"
+  else
+    "${psql[@]}" -v migration_path="$MIGRATION" -f "$SQL_FILE"
+  fi
+
+  "${psql[@]}" -v negative_plant=1 -f "$SQL_FILE"
+  set +e
+  "${psql[@]}" -f "$MIGRATION" >"$RUN_ROOT/unexpected-select-$label.log" 2>&1
+  neg_status=$?
+  set -e
+  if [[ "$neg_status" -eq 0 ]]; then
+    printf 'unexpected permissive SELECT policy did not reject the %s migration\n' "$label" >&2
+    exit 1
+  fi
+  if ! grep -F 'progress write denial requires exactly the own-person SELECT policy' \
+    "$RUN_ROOT/unexpected-select-$label.log" >/dev/null
+  then
+    printf 'unexpected SELECT rejection had the wrong error for %s\n' "$label" >&2
+    cat "$RUN_ROOT/unexpected-select-$label.log" >&2
+    exit 1
+  fi
+  if grep -E -q '^COMMIT$' "$RUN_ROOT/unexpected-select-$label.log"; then
+    printf 'unexpected SELECT rejection committed for %s\n' "$label" >&2
+    cat "$RUN_ROOT/unexpected-select-$label.log" >&2
+    exit 1
+  fi
+  "${psql[@]}" -v negative_assert=1 -f "$SQL_FILE"
+  "$PG_BIN/pg_ctl" -D "$DATA_DIR" -m immediate stop >/dev/null
+  printf 'PASS: %s-start unexpected permissive SELECT policy rolled back\n' "$label"
+}
+
+run_configuration public
+run_configuration authenticated
 
 printf 'PASS: program content progress write denial on %s\n' "$("$PG_BIN/postgres" --version)"

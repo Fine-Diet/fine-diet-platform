@@ -8,7 +8,9 @@
 --
 -- Authenticated own-person SELECT, service_role CRUD, and
 -- programs_private.current_user_has_program_access are preserved.
--- Exactly one policy may survive: the permissive PUBLIC own-person SELECT.
+-- Exactly one policy may survive: the permissive own-person SELECT for
+-- either PUBLIC or authenticated. The ownership predicate and role set are
+-- preserved, so an authenticated policy is not widened to PUBLIC.
 -- Any other policy, including an additional permissive SELECT, aborts and rolls back.
 -- Progress rows are not modified. The migration ledger is not modified.
 --
@@ -285,6 +287,7 @@ DECLARE
   v_select_policies text;
   v_service_privileges text;
   v_rls_flags text;
+  v_authenticated oid;
 BEGIN
   SELECT *
     INTO v_snapshot
@@ -436,6 +439,18 @@ BEGIN
       'progress INSERT, UPDATE, DELETE, or ALL policies remain';
   END IF;
 
+  SELECT oid
+    INTO v_authenticated
+  FROM pg_roles
+  WHERE rolname = 'authenticated';
+
+  IF v_authenticated IS NULL THEN
+    RAISE EXCEPTION
+      'progress write denial requires Supabase roles: authenticated';
+  END IF;
+
+  -- PUBLIC ({0}) and authenticated are the only accepted role sets. The
+  -- policy is not rewritten, so this normalization cannot widen reads.
   IF (
     SELECT count(*)
     FROM pg_policy
@@ -448,7 +463,10 @@ BEGIN
       AND polname = 'Users can read own program_content_progress'
       AND polpermissive
       AND polcmd = 'r'
-      AND polroles = ARRAY[0]::oid[]
+      AND (
+        polroles = ARRAY[0]::oid[]
+        OR polroles = ARRAY[v_authenticated]::oid[]
+      )
       AND polwithcheck IS NULL
       AND pg_get_expr(polqual, polrelid) = $own$(person_id IN ( SELECT people.id
    FROM people

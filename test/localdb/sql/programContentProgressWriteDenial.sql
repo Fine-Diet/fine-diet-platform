@@ -285,6 +285,11 @@ CREATE POLICY "Users can read own program_content_progress"
   USING (
     person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
   );
+\if :{?authenticated_select}
+ALTER POLICY "Users can read own program_content_progress"
+  ON public.program_content_progress
+  TO authenticated;
+\endif
 CREATE POLICY "Users can insert own program_content_progress"
   ON public.program_content_progress
   FOR INSERT
@@ -306,7 +311,7 @@ GRANT SELECT, INSERT, UPDATE ON public.program_content_progress TO authenticated
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.program_content_progress TO service_role;
 GRANT INSERT, UPDATE ON public.program_content_progress TO PUBLIC;
 GRANT UPDATE ON public.program_content_progress TO anon;
-GRANT TRUNCATE ON public.program_content_progress TO authenticated;
+GRANT TRUNCATE ON public.program_content_progress TO anon, authenticated, PUBLIC;
 GRANT DELETE ON public.program_content_progress TO anon;
 GRANT UPDATE (notes) ON public.program_content_progress TO authenticated;
 
@@ -369,7 +374,8 @@ CREATE TEMP TABLE preserved_identity (
   progress_values text NOT NULL,
   helper_identity text NOT NULL,
   ledger_identity text NOT NULL,
-  select_policy text NOT NULL
+  select_policy text NOT NULL,
+  select_roles text NOT NULL
 );
 INSERT INTO preserved_identity
 SELECT
@@ -382,19 +388,45 @@ SELECT
     FROM pg_policy AS policy
     WHERE policy.polrelid = 'public.program_content_progress'::regclass
       AND policy.polname = 'Users can read own program_content_progress'
+  ),
+  (
+    SELECT policy.polroles::text
+    FROM pg_policy AS policy
+    WHERE policy.polrelid = 'public.program_content_progress'::regclass
+      AND policy.polname = 'Users can read own program_content_progress'
   );
 
 DO $before_privileges$
+DECLARE
+  v_authenticated_roles text;
 BEGIN
+  SELECT ARRAY[(SELECT oid FROM pg_roles WHERE rolname = 'authenticated')]::text
+    INTO v_authenticated_roles;
+  IF (SELECT select_roles FROM preserved_identity) IS DISTINCT FROM '{0}'
+     AND (SELECT select_roles FROM preserved_identity) IS DISTINCT FROM v_authenticated_roles
+  THEN
+    RAISE EXCEPTION
+      'fixture SELECT roles % are not PUBLIC or authenticated',
+      (SELECT select_roles FROM preserved_identity);
+  END IF;
   IF NOT has_table_privilege('public', 'public.program_content_progress', 'INSERT')
      OR NOT has_table_privilege('public', 'public.program_content_progress', 'UPDATE')
+     OR NOT has_table_privilege('public', 'public.program_content_progress', 'TRUNCATE')
      OR NOT has_table_privilege('authenticated', 'public.program_content_progress', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.program_content_progress', 'TRUNCATE')
      OR NOT has_table_privilege('anon', 'public.program_content_progress', 'UPDATE')
+     OR NOT has_table_privilege('anon', 'public.program_content_progress', 'DELETE')
+     OR NOT has_table_privilege('anon', 'public.program_content_progress', 'TRUNCATE')
      OR NOT has_column_privilege(
        'authenticated', 'public.program_content_progress'::regclass, 'notes'::name, 'UPDATE'
      )
   THEN
     RAISE EXCEPTION 'PUBLIC write grant was not seeded';
+  END IF;
+  IF (SELECT select_roles FROM preserved_identity) = '{0}' THEN
+    RAISE NOTICE 'PASS starting SELECT policy is PUBLIC';
+  ELSE
+    RAISE NOTICE 'PASS starting SELECT policy is authenticated';
   END IF;
   RAISE NOTICE 'PASS PUBLIC write grant seeded';
 END;
@@ -465,15 +497,29 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'first migration changed the own-person SELECT policy';
   END IF;
+  IF (SELECT select_roles FROM preserved_identity) IS DISTINCT FROM (
+    SELECT policy.polroles::text
+    FROM pg_policy AS policy
+    WHERE policy.polrelid = 'public.program_content_progress'::regclass
+      AND policy.polname = 'Users can read own program_content_progress'
+  ) THEN
+    RAISE EXCEPTION 'first migration changed the own-person SELECT policy roles';
+  END IF;
   IF has_table_privilege('anon', 'public.program_content_progress', 'INSERT')
      OR has_table_privilege('anon', 'public.program_content_progress', 'UPDATE')
+     OR has_table_privilege('anon', 'public.program_content_progress', 'DELETE')
+     OR has_table_privilege('anon', 'public.program_content_progress', 'TRUNCATE')
      OR has_table_privilege('authenticated', 'public.program_content_progress', 'INSERT')
      OR has_table_privilege('authenticated', 'public.program_content_progress', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.program_content_progress', 'DELETE')
      OR has_table_privilege('authenticated', 'public.program_content_progress', 'TRUNCATE')
      OR has_table_privilege('public', 'public.program_content_progress', 'INSERT')
      OR has_table_privilege('public', 'public.program_content_progress', 'UPDATE')
+     OR has_table_privilege('public', 'public.program_content_progress', 'DELETE')
+     OR has_table_privilege('public', 'public.program_content_progress', 'TRUNCATE')
      OR has_column_privilege('authenticated', 'public.program_content_progress'::regclass, 'notes'::name, 'UPDATE')
      OR NOT has_table_privilege('authenticated', 'public.program_content_progress', 'SELECT')
+     OR NOT has_table_privilege('service_role', 'public.program_content_progress', 'SELECT')
      OR NOT has_table_privilege('service_role', 'public.program_content_progress', 'INSERT')
      OR NOT has_table_privilege('service_role', 'public.program_content_progress', 'UPDATE')
      OR NOT has_table_privilege('service_role', 'public.program_content_progress', 'DELETE')
@@ -507,6 +553,23 @@ EXCEPTION WHEN insufficient_privilege THEN
   RAISE NOTICE 'PASS anon update denied';
 END;
 $anon_update_denied$;
+DO $anon_delete_denied$
+BEGIN
+  DELETE FROM public.program_content_progress
+  WHERE content_item_id = '60000000-0000-4000-8000-000000000601';
+  RAISE EXCEPTION 'anon delete was allowed';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'PASS anon delete denied';
+END;
+$anon_delete_denied$;
+DO $anon_truncate_denied$
+BEGIN
+  TRUNCATE public.program_content_progress;
+  RAISE EXCEPTION 'anon truncate was allowed';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'PASS anon truncate denied';
+END;
+$anon_truncate_denied$;
 RESET ROLE;
 
 SET ROLE public_writer;
@@ -524,6 +587,14 @@ EXCEPTION WHEN insufficient_privilege THEN
   RAISE NOTICE 'PASS PUBLIC-only insert denied';
 END;
 $public_denied$;
+DO $public_truncate_denied$
+BEGIN
+  TRUNCATE public.program_content_progress;
+  RAISE EXCEPTION 'PUBLIC truncate was allowed';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'PASS PUBLIC truncate denied';
+END;
+$public_truncate_denied$;
 RESET ROLE;
 
 SET ROLE authenticated;
@@ -551,6 +622,23 @@ EXCEPTION WHEN insufficient_privilege THEN
   RAISE NOTICE 'PASS authenticated update denied';
 END;
 $member_update_denied$;
+DO $member_delete_denied$
+BEGIN
+  DELETE FROM public.program_content_progress
+  WHERE content_item_id = '60000000-0000-4000-8000-000000000601';
+  RAISE EXCEPTION 'authenticated delete was allowed';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'PASS authenticated delete denied';
+END;
+$member_delete_denied$;
+DO $member_truncate_denied$
+BEGIN
+  TRUNCATE public.program_content_progress;
+  RAISE EXCEPTION 'authenticated truncate was allowed';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'PASS authenticated truncate denied';
+END;
+$member_truncate_denied$;
 DO $member_upsert_denied$
 BEGIN
   INSERT INTO public.program_content_progress (person_id, program_slug, content_item_id, status, notes)
@@ -656,9 +744,22 @@ BEGIN
   IF (SELECT ledger_identity FROM preserved_identity) IS DISTINCT FROM test.ledger_identity() THEN
     RAISE EXCEPTION 'repeat migration changed the migration ledger';
   END IF;
+  IF (SELECT select_roles FROM preserved_identity) IS DISTINCT FROM (
+    SELECT policy.polroles::text
+    FROM pg_policy AS policy
+    WHERE policy.polrelid = 'public.program_content_progress'::regclass
+      AND policy.polname = 'Users can read own program_content_progress'
+  ) THEN
+    RAISE EXCEPTION 'repeat migration changed the own-person SELECT policy roles';
+  END IF;
   IF has_table_privilege('authenticated', 'public.program_content_progress', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.program_content_progress', 'DELETE')
+     OR has_table_privilege('authenticated', 'public.program_content_progress', 'TRUNCATE')
+     OR has_table_privilege('anon', 'public.program_content_progress', 'TRUNCATE')
      OR has_table_privilege('public', 'public.program_content_progress', 'UPDATE')
+     OR has_table_privilege('public', 'public.program_content_progress', 'TRUNCATE')
      OR NOT has_table_privilege('authenticated', 'public.program_content_progress', 'SELECT')
+     OR NOT has_table_privilege('service_role', 'public.program_content_progress', 'DELETE')
   THEN
     RAISE EXCEPTION 'repeat migration did not keep the denied privilege state';
   END IF;
@@ -725,6 +826,14 @@ BEGIN
   END IF;
   IF test.ledger_identity() IS DISTINCT FROM '1:20261109220000' THEN
     RAISE EXCEPTION 'final ledger identity is %', test.ledger_identity();
+  END IF;
+  IF (SELECT select_roles FROM preserved_identity) IS DISTINCT FROM (
+    SELECT policy.polroles::text
+    FROM pg_policy AS policy
+    WHERE policy.polrelid = 'public.program_content_progress'::regclass
+      AND policy.polname = 'Users can read own program_content_progress'
+  ) THEN
+    RAISE EXCEPTION 'final migration changed the own-person SELECT policy roles';
   END IF;
   IF EXISTS (
     SELECT 1 FROM pg_policy
